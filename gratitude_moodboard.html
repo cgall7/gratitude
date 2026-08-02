@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>gratitude - Brand Mood Board</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@600&family=Inter:wght@400;800&family=Plus+Jakarta+Sans:wght@300;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-deep: #1A0B2E;
+            --accent-lavender: #BF94FF;
+            --pop-mint: #00FFC3;
+            --pop-gold: #FFD700;
+            --text-main: #FFFFFF;
+            --text-dim: #A29BFE;
+        }
+
+        body {
+            background-color: var(--bg-deep);
+            color: var(--text-main);
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        header {
+            padding: 60px 20px;
+            text-align: center;
+        }
+
+        .logo {
+            font-family: 'Dancing Script', cursive;
+            font-size: 5rem;
+            color: var(--text-main);
+            margin: 0;
+            letter-spacing: -1px;
+            text-shadow: 0 0 20px rgba(191, 148, 255, 0.4);
+        }
+
+        .tagline {
+            font-family: 'Inter', sans-serif;
+            font-weight: 300;
+            color: var(--text-dim);
+            font-size: 1.2rem;
+            margin-top: 10px;
+        }
+
+        .container {
+            max-width: 1000px;
+            width: 90%;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            padding-bottom: 100px;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 32px;
+            padding: 30px;
+            transition: transform 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-10px);
+            border-color: var(--accent-lavender);
+        }
+
+        .color-swatch {
+            height: 120px;
+            width: 100%;
+            border-radius: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+
+        .swatch-deep { background-color: var(--bg-deep); border: 1px solid var(--accent-lavender); }
+        .swatch-lavender { background-color: var(--accent-lavender); }
+        .swatch-mint { background-color: var(--pop-mint); }
+        .swatch-gold { background-color: var(--pop-gold); }
+
+        h3 {
+            font-family: 'Inter', sans-serif;
+            font-weight: 800;
+            margin-bottom: 10px;
+            font-size: 1.5rem;
+        }
+
+        p {
+            color: var(--text-dim);
+            line-height: 1.6;
+        }
+
+        .ui-preview {
+            grid-column: 1 / -1;
+            background: linear-gradient(135deg, #2D1B4E 0%, #1A0B2E 100%);
+            text-align: center;
+            padding: 60px;
+            border: 2px solid var(--accent-lavender);
+        }
+
+        .btn {
+            background-color: var(--pop-mint);
+            color: #1A0B2E;
+            padding: 16px 32px;
+            border-radius: 50px;
+            font-weight: 800;
+            text-transform: uppercase;
+            font-size: 0.9rem;
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 0 20px rgba(0, 255, 195, 0.4);
+            transition: all 0.2s ease;
+        }
+
+        .btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 30px rgba(0, 255, 195, 0.6);
+        }
+
+        .btn-gold {
+            background-color: var(--pop-gold);
+            box-shadow: 0 0 20px rgba(255, 215, 0, 0.4);
+        }
+
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1 class="logo">gratitude</h1>
+        <div class="tagline">intentionality through reflection</div>
+    </header>
+
+    <div class="container">
+        <!-- Background Color -->
+        <div class="card">
+            <div class="color-swatch swatch-deep"></div>
+            <h3>Midnight Obsidian</h3>
+            <p>The foundation. A deep, rich purple that creates a focused, premium environment and allows accent colors to glow.</p>
+        </div>
+
+        <!-- Accent Color -->
+        <div class="card">
+            <div class="color-swatch swatch-lavender"></div>
+            <h3>Electric Lavender</h3>
+            <p>The bridge. Used for borders, soft glows, and secondary UI elements to maintain the spiritual theme.</p>
+        </div>
+
+        <!-- Pop Color 1 -->
+        <div class="card">
+            <div class="color-swatch swatch-mint"></div>
+            <h3>Neon Mint</h3>
+            <p>The "Unlock" color. High contrast, fresh, and rewarding. Perfect for the final action of the morning.</p>
+        </div>
+
+        <!-- Pop Color 2 -->
+        <div class="card">
+            <div class="color-swatch swatch-gold"></div>
+            <h3>Liquid Gold</h3>
+            <p>The "Premium" alternative. Represents warmth, value, and the "Wrapped" end-of-year celebration.</p>
+        </div>
+
+        <!-- UI Mockup Concept -->
+        <div class="card ui-preview">
+            <h2 style="font-family: 'Dancing Script'; font-size: 3rem; margin-bottom: 20px;">What are you grateful for today?</h2>
+            <div style="background: rgba(255,255,255,0.1); padding: 20px; border-radius: 20px; margin-bottom: 30px; color: var(--text-dim); font-style: italic;">
+                "The smell of fresh coffee and a quiet house..."
+            </div>
+            <button class="btn">Unlock Apps</button>
+            <button class="btn btn-gold" style="margin-left: 10px;">Save Memory</button>
+        </div>
+    </div>
+
+</body>
+</html>
