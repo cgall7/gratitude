@@ -231,7 +231,7 @@ const styles = StyleSheet.create({
   },
   tapHint: {
     position: 'absolute',
-    bottom: 60,
+    bottom: 120,
     fontFamily: theme.fonts.body,
     color: theme.colors.textSecondary,
     fontSize: 14,

@@ -12,32 +12,12 @@ import {
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { theme } from '../constants/theme';
+import { getDailyPrompt } from '../constants/prompts';
 import { PressableScale } from '../components/PressableScale';
+import { StaggeredItem } from '../components/StaggeredItem';
+import { SparkChips } from '../components/SparkChips';
 
 const { width } = Dimensions.get('window');
-
-// Fades + slides an item in with a per-index delay so lists of choices
-// arrive one at a time instead of all snapping in at once.
-const StaggeredItem = ({ index, children }) => {
-  const anim = useRef(new Animated.Value(0)).current;
-
-  React.useEffect(() => {
-    Animated.timing(anim, {
-      toValue: 1,
-      duration: 380,
-      delay: index * 70,
-      useNativeDriver: true,
-    }).start();
-  }, []);
-
-  const translateY = anim.interpolate({ inputRange: [0, 1], outputRange: [14, 0] });
-
-  return (
-    <Animated.View style={{ opacity: anim, transform: [{ translateY }] }}>
-      {children}
-    </Animated.View>
-  );
-};
 
 // Illustrative daily-check habits used to personalize the Impact step.
 // Framed positively (time reclaimed for gratitude), not as screen-time shame.
@@ -202,6 +182,7 @@ const TryItStep = ({ onNext, onBack, onSave }) => {
   const formAnim = useRef(new Animated.Value(1)).current;
   const badgeScale = useRef(new Animated.Value(0)).current;
   const badgeOpacity = useRef(new Animated.Value(0)).current;
+  const dailyPrompt = getDailyPrompt();
 
   const handleUnlock = () => {
     if (!text.trim() || unlocking) return;
@@ -237,7 +218,12 @@ const TryItStep = ({ onNext, onBack, onSave }) => {
       <Animated.View style={[styles.fillBetween, { opacity: formAnim }]}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <Text style={styles.question}>Try it right now.</Text>
-          <Text style={styles.questionSub}>What's one thing you're grateful for today?</Text>
+          <Text style={styles.questionSub}>{dailyPrompt.question}</Text>
+          <SparkChips
+            sparks={dailyPrompt.sparks}
+            visible={!text.trim()}
+            onPick={(spark) => setText(`I am grateful for ${spark}.`)}
+          />
           <View style={styles.inputCard}>
             <TextInput
               style={styles.textInput}

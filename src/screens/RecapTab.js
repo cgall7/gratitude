@@ -90,6 +90,7 @@ const styles = StyleSheet.create({
   content: {
     padding: 24,
     paddingTop: 60,
+    paddingBottom: 140,
   },
   loadingContainer: {
     flex: 1,

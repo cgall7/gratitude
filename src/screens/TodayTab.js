@@ -69,6 +69,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 24,
+    paddingBottom: 120,
   },
   header: {
     fontFamily: theme.fonts.body,

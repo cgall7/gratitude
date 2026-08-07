@@ -15,6 +15,7 @@ import { getDailyPrompt } from '../constants/prompts';
 import { EntryStore } from '../services/EntryStore';
 import { tagEntry } from '../utils/themeTagger';
 import { PressableScale } from '../components/PressableScale';
+import { SparkChips } from '../components/SparkChips';
 
 const { width, height } = Dimensions.get('window');
 
@@ -114,7 +115,13 @@ export const InputScreen = ({ onUnlock }) => {
 
       <Animated.View style={[styles.content, { opacity: formAnim }]}>
         <Text style={styles.logoSmall}>gratitude</Text>
-        <Text style={styles.promptHint}>Not sure where to start? {dailyPrompt}</Text>
+        <Text style={styles.promptQuestion}>{dailyPrompt.question}</Text>
+
+        <SparkChips
+          sparks={dailyPrompt.sparks}
+          visible={!text.trim()}
+          onPick={(spark) => setText(`I am grateful for ${spark}.`)}
+        />
 
         <View style={styles.inputCard}>
           <TextInput
@@ -184,14 +191,13 @@ const styles = StyleSheet.create({
     lineHeight: 32,
     marginBottom: 50,
   },
-  promptHint: {
-    fontFamily: theme.fonts.body,
-    fontSize: 15,
-    color: theme.colors.textSecondary,
+  promptQuestion: {
+    fontFamily: theme.fonts.header,
+    fontSize: 19,
+    color: theme.colors.textPrimary,
     textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 24,
-    fontStyle: 'italic',
+    lineHeight: 26,
+    marginBottom: 20,
   },
   inputCard: {
     width: '100%',
