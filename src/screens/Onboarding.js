@@ -10,9 +10,34 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { theme } from '../constants/theme';
+import { PressableScale } from '../components/PressableScale';
 
 const { width } = Dimensions.get('window');
+
+// Fades + slides an item in with a per-index delay so lists of choices
+// arrive one at a time instead of all snapping in at once.
+const StaggeredItem = ({ index, children }) => {
+  const anim = useRef(new Animated.Value(0)).current;
+
+  React.useEffect(() => {
+    Animated.timing(anim, {
+      toValue: 1,
+      duration: 380,
+      delay: index * 70,
+      useNativeDriver: true,
+    }).start();
+  }, []);
+
+  const translateY = anim.interpolate({ inputRange: [0, 1], outputRange: [14, 0] });
+
+  return (
+    <Animated.View style={{ opacity: anim, transform: [{ translateY }] }}>
+      {children}
+    </Animated.View>
+  );
+};
 
 // Illustrative daily-check habits used to personalize the Impact step.
 // Framed positively (time reclaimed for gratitude), not as screen-time shame.
@@ -80,9 +105,9 @@ const WelcomeStep = ({ onNext }) => (
         and name one thing you're grateful for. Then your day unlocks.
       </Text>
     </View>
-    <TouchableOpacity style={styles.primaryButton} onPress={onNext}>
+    <PressableScale style={styles.primaryButton} onPress={onNext}>
       <Text style={styles.primaryButtonText}>Show Me How</Text>
-    </TouchableOpacity>
+    </PressableScale>
   </StepShell>
 );
 
@@ -92,18 +117,19 @@ const HabitStep = ({ onNext, onBack, onPick }) => (
     <Text style={styles.question}>What pulls you in first every morning?</Text>
     <Text style={styles.questionSub}>We'll use this to show what you could reclaim.</Text>
     <View style={styles.choiceList}>
-      {HABITS.map((habit) => (
-        <TouchableOpacity
-          key={habit.key}
-          style={styles.choiceCard}
-          onPress={() => {
-            onPick(habit);
-            onNext();
-          }}
-        >
-          <Text style={styles.choiceText}>{habit.label}</Text>
-          <Text style={styles.choiceChevron}>→</Text>
-        </TouchableOpacity>
+      {HABITS.map((habit, index) => (
+        <StaggeredItem key={habit.key} index={index}>
+          <PressableScale
+            style={styles.choiceCard}
+            onPress={() => {
+              onPick(habit);
+              onNext();
+            }}
+          >
+            <Text style={styles.choiceText}>{habit.label}</Text>
+            <Text style={styles.choiceChevron}>→</Text>
+          </PressableScale>
+        </StaggeredItem>
       ))}
     </View>
   </StepShell>
@@ -112,6 +138,19 @@ const HabitStep = ({ onNext, onBack, onPick }) => (
 // --- Step 3: make it personal — mirror their answer back as a concrete, positive stat ---
 const ImpactStep = ({ habit, onNext, onBack }) => {
   const hoursPerYear = Math.round(habit.hoursPerDay * 365);
+  const popScale = useRef(new Animated.Value(0.5)).current;
+  const popOpacity = useRef(new Animated.Value(0)).current;
+
+  React.useEffect(() => {
+    Animated.sequence([
+      Animated.delay(500),
+      Animated.parallel([
+        Animated.spring(popScale, { toValue: 1, friction: 5, tension: 120, useNativeDriver: true }),
+        Animated.timing(popOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
+      ]),
+    ]).start(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light));
+  }, []);
+
   return (
     <StepShell step={2} total={6} onBack={onBack}>
       <View style={styles.centerFill}>
@@ -119,12 +158,16 @@ const ImpactStep = ({ habit, onNext, onBack }) => {
         <Text style={styles.statBig}>{habit.checksPerDay}x</Text>
         <Text style={styles.statCaption}>a day, on average</Text>
         <View style={styles.statDivider} />
-        <Text style={styles.statBig}>{hoursPerYear} hrs</Text>
+        <Animated.Text
+          style={[styles.statBig, { opacity: popOpacity, transform: [{ scale: popScale }] }]}
+        >
+          {hoursPerYear} hrs
+        </Animated.Text>
         <Text style={styles.statCaption}>you could give back to what matters this year</Text>
       </View>
-      <TouchableOpacity style={styles.primaryButton} onPress={onNext}>
+      <PressableScale style={styles.primaryButton} onPress={onNext}>
         <Text style={styles.primaryButtonText}>I Want That Back</Text>
-      </TouchableOpacity>
+      </PressableScale>
     </StepShell>
   );
 };
@@ -135,17 +178,18 @@ const ScheduleStep = ({ onNext, onBack, onPick }) => (
     <Text style={styles.question}>When should gratitude start your day?</Text>
     <Text style={styles.questionSub}>Your chosen apps lock until you reflect.</Text>
     <View style={styles.chipGrid}>
-      {RITUAL_TIMES.map((t) => (
-        <TouchableOpacity
-          key={t}
-          style={styles.chip}
-          onPress={() => {
-            onPick(t);
-            onNext();
-          }}
-        >
-          <Text style={styles.chipText}>{t}</Text>
-        </TouchableOpacity>
+      {RITUAL_TIMES.map((t, index) => (
+        <StaggeredItem key={t} index={index}>
+          <PressableScale
+            style={styles.chip}
+            onPress={() => {
+              onPick(t);
+              onNext();
+            }}
+          >
+            <Text style={styles.chipText}>{t}</Text>
+          </PressableScale>
+        </StaggeredItem>
       ))}
     </View>
   </StepShell>
@@ -154,23 +198,44 @@ const ScheduleStep = ({ onNext, onBack, onPick }) => (
 // --- Step 5: the activation moment — let them actually do the core action now ---
 const TryItStep = ({ onNext, onBack, onSave }) => {
   const [text, setText] = useState('');
-  const unlockAnim = useRef(new Animated.Value(0)).current;
+  const [unlocking, setUnlocking] = useState(false);
+  const formAnim = useRef(new Animated.Value(1)).current;
+  const badgeScale = useRef(new Animated.Value(0)).current;
+  const badgeOpacity = useRef(new Animated.Value(0)).current;
 
   const handleUnlock = () => {
-    if (!text.trim()) return;
-    Animated.timing(unlockAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start(() => {
-      onSave(text.trim());
-      onNext();
+    if (!text.trim() || unlocking) return;
+    setUnlocking(true);
+    Animated.timing(formAnim, { toValue: 0, duration: 250, useNativeDriver: true }).start(() => {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Animated.parallel([
+        Animated.spring(badgeScale, { toValue: 1, friction: 5, tension: 140, useNativeDriver: true }),
+        Animated.timing(badgeOpacity, { toValue: 1, duration: 300, useNativeDriver: true }),
+      ]).start(() => {
+        setTimeout(() => {
+          onSave(text.trim());
+          onNext();
+        }, 900);
+      });
     });
   };
 
   return (
     <StepShell step={4} total={6} onBack={onBack}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.fillBetween}
-      >
-        <View>
+      {unlocking && (
+        <View style={styles.unlockOverlay} pointerEvents="none">
+          <Animated.View
+            style={[styles.unlockBadge, { opacity: badgeOpacity, transform: [{ scale: badgeScale }] }]}
+          >
+            <Text style={styles.unlockCheck}>✓</Text>
+          </Animated.View>
+          <Animated.Text style={[styles.unlockedText, { opacity: badgeOpacity }]}>
+            That's the whole ritual.
+          </Animated.Text>
+        </View>
+      )}
+      <Animated.View style={[styles.fillBetween, { opacity: formAnim }]}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <Text style={styles.question}>Try it right now.</Text>
           <Text style={styles.questionSub}>What's one thing you're grateful for today?</Text>
           <View style={styles.inputCard}>
@@ -182,46 +247,57 @@ const TryItStep = ({ onNext, onBack, onSave }) => {
               value={text}
               onChangeText={setText}
               autoFocus
+              editable={!unlocking}
             />
           </View>
-        </View>
-        <Animated.View style={{ opacity: text.trim() ? 1 : 0.4 }}>
-          <TouchableOpacity
-            style={[styles.primaryButton, { backgroundColor: theme.colors.pop }]}
-            onPress={handleUnlock}
-            disabled={!text.trim()}
-          >
-            <Text style={[styles.primaryButtonText, { color: theme.colors.textInverse }]}>
-              Unlock My Day
-            </Text>
-          </TouchableOpacity>
-        </Animated.View>
-      </KeyboardAvoidingView>
+        </KeyboardAvoidingView>
+        <PressableScale
+          style={[styles.primaryButton, { backgroundColor: theme.colors.pop }]}
+          onPress={handleUnlock}
+          disabled={!text.trim() || unlocking}
+          haptic={Haptics.ImpactFeedbackStyle.Medium}
+        >
+          <Text style={[styles.primaryButtonText, { color: theme.colors.textInverse }]}>
+            Unlock My Day
+          </Text>
+        </PressableScale>
+      </Animated.View>
     </StepShell>
   );
 };
 
 // --- Step 6: end with a meaningful result, not a blank "you're all set" screen ---
-const CompleteStep = ({ entry, ritualTime, onDone }) => (
-  <StepShell step={5} total={6}>
-    <View style={styles.centerFill}>
-      <View style={styles.badge}>
-        <Text style={styles.badgeText}>DAY 1</Text>
+const CompleteStep = ({ entry, ritualTime, onDone }) => {
+  const badgeScale = useRef(new Animated.Value(0)).current;
+
+  React.useEffect(() => {
+    Animated.sequence([
+      Animated.delay(200),
+      Animated.spring(badgeScale, { toValue: 1, friction: 4, tension: 160, useNativeDriver: true }),
+    ]).start(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success));
+  }, []);
+
+  return (
+    <StepShell step={5} total={6}>
+      <View style={styles.centerFill}>
+        <Animated.View style={[styles.badge, { transform: [{ scale: badgeScale }] }]}>
+          <Text style={styles.badgeText}>DAY 1</Text>
+        </Animated.View>
+        <Text style={styles.completeHeadline}>Your first moment is locked in.</Text>
+        <View style={styles.recapCard}>
+          <Text style={styles.recapQuote}>"{entry}"</Text>
+        </View>
+        <Text style={styles.completeSub}>
+          gratitude will greet you at {ritualTime} tomorrow. Show up, reflect, and the rest of your
+          day unlocks.
+        </Text>
       </View>
-      <Text style={styles.completeHeadline}>Your first moment is locked in.</Text>
-      <View style={styles.recapCard}>
-        <Text style={styles.recapQuote}>"{entry}"</Text>
-      </View>
-      <Text style={styles.completeSub}>
-        gratitude will greet you at {ritualTime} tomorrow. Show up, reflect, and the rest of your
-        day unlocks.
-      </Text>
-    </View>
-    <TouchableOpacity style={styles.primaryButton} onPress={onDone}>
-      <Text style={styles.primaryButtonText}>Enter gratitude</Text>
-    </TouchableOpacity>
-  </StepShell>
-);
+      <PressableScale style={styles.primaryButton} onPress={onDone}>
+        <Text style={styles.primaryButtonText}>Enter gratitude</Text>
+      </PressableScale>
+    </StepShell>
+  );
+};
 
 // --- Controller: owns the answers, drives the six single-action steps ---
 export const OnboardingFlow = ({ onDone }) => {
@@ -418,6 +494,36 @@ const styles = StyleSheet.create({
     fontSize: 19,
     color: theme.colors.textPrimary,
     textAlignVertical: 'top',
+  },
+  unlockOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  unlockBadge: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: theme.colors.pop,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+    shadowColor: theme.colors.pop,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.35,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  unlockCheck: {
+    fontSize: 40,
+    color: theme.colors.textInverse,
+    fontWeight: '700',
+  },
+  unlockedText: {
+    fontFamily: theme.fonts.header,
+    color: theme.colors.textPrimary,
+    fontSize: 17,
+    textAlign: 'center',
   },
   badge: {
     backgroundColor: theme.colors.gold,

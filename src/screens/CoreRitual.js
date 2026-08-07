@@ -1,39 +1,52 @@
-import React, { useState } from 'react';
-import { 
-  StyleSheet, 
-  View, 
-  Text, 
-  TextInput, 
-  TouchableOpacity, 
-  Animated, 
-  Dimensions, 
-  KeyboardAvoidingView, 
-  Platform 
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  StyleSheet,
+  View,
+  Text,
+  TextInput,
+  Animated,
+  Dimensions,
+  KeyboardAvoidingView,
+  Platform
 } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { theme } from '../constants/theme';
 import { getDailyPrompt } from '../constants/prompts';
 import { EntryStore } from '../services/EntryStore';
 import { tagEntry } from '../utils/themeTagger';
+import { PressableScale } from '../components/PressableScale';
 
 const { width, height } = Dimensions.get('window');
 
 // --- COMPONENT: LockScreen ---
 export const LockScreen = ({ onEnterRitual }) => {
+  const breathe = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(breathe, { toValue: 1, duration: 2400, useNativeDriver: true }),
+        Animated.timing(breathe, { toValue: 0, duration: 2400, useNativeDriver: true }),
+      ])
+    ).start();
+  }, []);
+
+  const glowScale = breathe.interpolate({ inputRange: [0, 1], outputRange: [1, 1.08] });
+  const glowOpacity = breathe.interpolate({ inputRange: [0, 1], outputRange: [0.15, 0.25] });
+
   return (
     <View style={styles.container}>
-      {/* Background Glow */}
-      <View style={styles.glow} />
-      
+      <Animated.View
+        style={[styles.glow, { opacity: glowOpacity, transform: [{ scale: glowScale }] }]}
+      />
+
       <View style={styles.content}>
         <Text style={styles.logo}>gratitude</Text>
         <Text style={styles.prompt}>Pause.{"\n"}What are you grateful for today?</Text>
-        
-        <TouchableOpacity 
-          style={styles.primaryButton} 
-          onPress={onEnterRitual}
-        >
+
+        <PressableScale style={styles.primaryButton} onPress={onEnterRitual}>
           <Text style={styles.buttonText}>Enter Ritual</Text>
-        </TouchableOpacity>
+        </PressableScale>
       </View>
     </View>
   );
@@ -42,18 +55,40 @@ export const LockScreen = ({ onEnterRitual }) => {
 // --- COMPONENT: InputScreen ---
 export const InputScreen = ({ onUnlock }) => {
   const [text, setText] = useState('');
-  const [fadeAnim] = useState(new Animated.Value(0));
+  const [unlocking, setUnlocking] = useState(false);
+  const formAnim = useRef(new Animated.Value(1)).current;
+  const badgeScale = useRef(new Animated.Value(0)).current;
+  const badgeOpacity = useRef(new Animated.Value(0)).current;
   const dailyPrompt = getDailyPrompt();
 
   const handleSave = () => {
+    if (!text.trim() || unlocking) return;
     const themeTag = tagEntry(text);
     EntryStore.saveEntry(new Date(), text, themeTag);
-    // Trigger unlock animation/logic
-    Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 800,
-      useNativeDriver: 'opacity',
-    }).start(() => onUnlock(text));
+    setUnlocking(true);
+
+    Animated.timing(formAnim, {
+      toValue: 0,
+      duration: 250,
+      useNativeDriver: true,
+    }).start(() => {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Animated.parallel([
+        Animated.spring(badgeScale, {
+          toValue: 1,
+          friction: 5,
+          tension: 140,
+          useNativeDriver: true,
+        }),
+        Animated.timing(badgeOpacity, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+      ]).start(() => {
+        setTimeout(() => onUnlock(text), 900);
+      });
+    });
   };
 
   return (
@@ -61,7 +96,23 @@ export const InputScreen = ({ onUnlock }) => {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
     >
-      <View style={styles.content}>
+      {unlocking && (
+        <View style={styles.unlockOverlay} pointerEvents="none">
+          <Animated.View
+            style={[
+              styles.unlockBadge,
+              { opacity: badgeOpacity, transform: [{ scale: badgeScale }] },
+            ]}
+          >
+            <Text style={styles.unlockCheck}>✓</Text>
+          </Animated.View>
+          <Animated.Text style={[styles.unlockingText, { opacity: badgeOpacity }]}>
+            Unlocked. Enjoy your day.
+          </Animated.Text>
+        </View>
+      )}
+
+      <Animated.View style={[styles.content, { opacity: formAnim }]}>
         <Text style={styles.logoSmall}>gratitude</Text>
         <Text style={styles.promptHint}>Not sure where to start? {dailyPrompt}</Text>
 
@@ -74,20 +125,19 @@ export const InputScreen = ({ onUnlock }) => {
             value={text}
             onChangeText={setText}
             autoFocus
+            editable={!unlocking}
           />
         </View>
 
-        <Animated.View style={[styles.buttonWrapper, { opacity: fadeAnim }]}>
-          <Text style={styles.unlockingText}>Unlocking your world...</Text>
-        </Animated.View>
-
-        <TouchableOpacity 
-          style={[styles.primaryButton, { backgroundColor: theme.colors.pop }]} 
+        <PressableScale
+          style={[styles.primaryButton, { backgroundColor: theme.colors.pop }]}
           onPress={handleSave}
+          disabled={!text.trim() || unlocking}
+          haptic={Haptics.ImpactFeedbackStyle.Medium}
         >
           <Text style={[styles.buttonText, { color: theme.colors.textInverse }]}>Unlock Apps</Text>
-        </TouchableOpacity>
-      </View>
+        </PressableScale>
+      </Animated.View>
     </KeyboardAvoidingView>
   );
 };
@@ -105,9 +155,7 @@ const styles = StyleSheet.create({
     height: width * 1.5,
     backgroundColor: theme.colors.accent,
     borderRadius: width,
-    opacity: 0.15,
     top: -width * 0.2,
-    filter: 'blur(60px)', // Note: blur varies by platform, usually handled via a library like react-native-blur
   },
   content: {
     width: '85%',
@@ -181,16 +229,35 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
-  buttonWrapper: {
-    position: 'absolute',
-    top: '40%',
-    width: '100%',
+  unlockOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
     alignItems: 'center',
+    zIndex: 2,
+  },
+  unlockBadge: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: theme.colors.pop,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+    shadowColor: theme.colors.pop,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.35,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  unlockCheck: {
+    fontSize: 44,
+    color: theme.colors.textInverse,
+    fontWeight: '700',
   },
   unlockingText: {
-    fontFamily: theme.fonts.body,
-    color: theme.colors.pop,
-    fontSize: 16,
-    fontWeight: '500',
+    fontFamily: theme.fonts.header,
+    color: theme.colors.textPrimary,
+    fontSize: 18,
+    textAlign: 'center',
   }
 });
