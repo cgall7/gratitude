@@ -11,6 +11,9 @@ import {
   Platform 
 } from 'react-native';
 import { theme } from '../constants/theme';
+import { getDailyPrompt } from '../constants/prompts';
+import { EntryStore } from '../services/EntryStore';
+import { tagEntry } from '../utils/themeTagger';
 
 const { width, height } = Dimensions.get('window');
 
@@ -40,8 +43,11 @@ export const LockScreen = ({ onEnterRitual }) => {
 export const InputScreen = ({ onUnlock }) => {
   const [text, setText] = useState('');
   const [fadeAnim] = useState(new Animated.Value(0));
+  const dailyPrompt = getDailyPrompt();
 
   const handleSave = () => {
+    const themeTag = tagEntry(text);
+    EntryStore.saveEntry(new Date(), text, themeTag);
     // Trigger unlock animation/logic
     Animated.timing(fadeAnim, {
       toValue: 1,
@@ -51,13 +57,14 @@ export const InputScreen = ({ onUnlock }) => {
   };
 
   return (
-    <KeyboardAvoidingView 
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
     >
       <View style={styles.content}>
         <Text style={styles.logoSmall}>gratitude</Text>
-        
+        <Text style={styles.promptHint}>Not sure where to start? {dailyPrompt}</Text>
+
         <View style={styles.inputCard}>
           <TextInput
             style={styles.textInput}
@@ -128,6 +135,15 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 32,
     marginBottom: 50,
+  },
+  promptHint: {
+    fontFamily: theme.fonts.body,
+    fontSize: 15,
+    color: theme.colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 24,
+    fontStyle: 'italic',
   },
   inputCard: {
     width: '100%',

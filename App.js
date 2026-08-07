@@ -5,8 +5,7 @@ import { theme } from './src/constants/theme';
 import { OnboardingFlow } from './src/screens/Onboarding';
 import { LockScreen, InputScreen } from './src/screens/CoreRitual';
 import { EveningMirror } from './src/screens/EveningMirror';
-import { MonthlyRecap } from './src/screens/MonthlyRecap';
-import { GratitudeWrapped } from './src/screens/GratitudeWrapped';
+import { MainTabs } from './src/navigation/MainTabs';
 
 const Stack = createStackNavigator();
 
@@ -40,41 +39,21 @@ export default function App() {
 
         <Stack.Screen name="Input">
           {(props) => (
-            <InputScreen 
-              {...props} 
-              onUnlock={(text) => {
-                console.log('Unlocked with:', text);
-                props.navigation.navigate('Recap');
-              }} 
+            <InputScreen
+              {...props}
+              onUnlock={() => props.navigation.replace('Main')}
             />
           )}
         </Stack.Screen>
 
-        <Stack.Screen name="Recap">
-          {(props) => (
-            <MonthlyRecap 
-              {...props} 
-              monthName="July" 
-              entries={[{date: '2026-07-01', text: 'Coffee', category: 'Joy'}]} 
-            />
-          )}
-        </Stack.Screen>
+        <Stack.Screen name="Main" component={MainTabs} />
 
         <Stack.Screen name="Evening">
           {(props) => (
-            <EveningMirror 
-              {...props} 
-              gratitudeText="I am grateful for this beautiful day." 
-              onClose={() => props.navigation.navigate('Lock')} 
-            />
-          )}
-        </Stack.Screen>
-        
-        <Stack.Screen name="Wrapped">
-          {(props) => (
-            <GratitudeWrapped 
-              {...props} 
-              onComplete={() => props.navigation.navigate('Lock')} 
+            <EveningMirror
+              {...props}
+              gratitudeText="I am grateful for this beautiful day."
+              onClose={() => props.navigation.navigate('Main')}
             />
           )}
         </Stack.Screen>

@@ -1,29 +1,40 @@
 import React from 'react';
-import { 
-  StyleSheet, 
-  View, 
-  Text, 
-  ScrollView, 
-  TouchableOpacity, 
-  Dimensions 
+import {
+  StyleSheet,
+  View,
+  Text,
+  TouchableOpacity,
+  Dimensions
 } from 'react-native';
 import { theme } from '../constants/theme';
 
 const { width } = Dimensions.get('window');
 
-export const MonthlyRecap = ({ monthName, entries }) => {
-  // entries = [{ date: '2026-07-01', text: '...', category: 'Family' }, ...]
-  
+export const MonthlyRecap = ({
+  monthName,
+  entries,
+  daysInMonth = 31,
+  insightTheme,
+  insightDescription,
+  onPreviewWrapped,
+}) => {
+  // entries = [{ date: '2026-07-01', text: '...', theme: 'Family' }, ...]
+  const hasEntries = entries.length > 0;
+
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <View style={styles.content}>
       <Text style={styles.title}>{monthName}</Text>
-      
+
       {/* Theme Insight Card */}
       <View style={styles.insightCard}>
         <Text style={styles.insightLabel}>PRIMARY THEME</Text>
-        <Text style={styles.insightValue}>Connection & Growth</Text>
+        <Text style={styles.insightValue}>
+          {hasEntries ? insightTheme : 'No entries yet'}
+        </Text>
         <Text style={styles.insightDesc}>
-          You mentioned "Family" and "Health" most frequently this month.
+          {hasEntries
+            ? insightDescription
+            : 'Complete your morning ritual to start building this month\'s theme.'}
         </Text>
       </View>
 
@@ -36,26 +47,21 @@ export const MonthlyRecap = ({ monthName, entries }) => {
           </TouchableOpacity>
         ))}
         {/* Fill empty days for a full month grid */}
-        {Array.from({ length: 31 - entries.length }).map((_, i) => (
+        {Array.from({ length: Math.max(0, daysInMonth - entries.length) }).map((_, i) => (
           <View key={`empty-${i}`} style={[styles.gridItem, styles.emptyItem]} />
         ))}
       </View>
 
-      <TouchableOpacity style={styles.wrappedTeaser}>
+      <TouchableOpacity style={styles.wrappedTeaser} onPress={onPreviewWrapped}>
         <Text style={styles.teaserText}>Preview Your Annual Wrapped</Text>
       </TouchableOpacity>
-    </ScrollView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: theme.colors.background,
-  },
   content: {
-    padding: 24,
-    paddingTop: 60,
+    width: '100%',
     alignItems: 'center',
   },
   title: {

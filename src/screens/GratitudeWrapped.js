@@ -1,69 +1,139 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  StyleSheet, 
-  View, 
-  Text, 
-  Dimensions, 
-  Animated, 
-  TouchableOpacity 
+import React, { useState, useCallback } from 'react';
+import {
+  StyleSheet,
+  View,
+  Text,
+  Dimensions,
+  TouchableOpacity,
+  ActivityIndicator
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { theme } from '../constants/theme';
+import { EntryStore } from '../services/EntryStore';
+import { dominantTheme } from '../utils/themeTagger';
+import { startOfYear, endOfYear, longestStreak } from '../utils/dateRanges';
 
 const { width, height } = Dimensions.get('window');
 
-export const GratitudeWrapped = ({ userData, onComplete }) => {
-  const [currentSlide, setCurrentSlide] = useState(0);
-  const fadeAnim = new Animated.Value(0);
+// Shown the first time someone opens Wrapped before they have a year of
+// real entries, so the screen still demonstrates what it becomes.
+const DEMO_SLIDES = [
+  {
+    title: "Your Year in Gratitude",
+    subtitle: "Preview",
+    value: "312",
+    label: "Moments of reflection",
+    color: theme.colors.accent
+  },
+  {
+    title: "Your North Star",
+    subtitle: "Top Theme",
+    value: "Family",
+    label: "The heart of your year",
+    color: theme.colors.pop
+  },
+  {
+    title: "Pure Consistency",
+    subtitle: "Longest Streak",
+    value: "42 Days",
+    label: "Unstoppable positivity",
+    color: theme.colors.gold
+  },
+  {
+    title: "A Random Memory",
+    subtitle: "October 12th",
+    value: '"The way the sunlight hit the trees during my morning walk."',
+    label: "A spark of joy",
+    color: theme.colors.accent
+  }
+];
 
-  const slides = [
+const buildSlidesFromEntries = (entries, year) => {
+  if (entries.length === 0) return null;
+  const insight = dominantTheme(entries);
+  const streak = longestStreak(entries);
+  const memory = entries[Math.floor(Math.random() * entries.length)];
+
+  return [
     {
       title: "Your Year in Gratitude",
-      subtitle: "2026",
-      value: "312",
+      subtitle: String(year),
+      value: String(entries.length),
       label: "Moments of reflection",
       color: theme.colors.accent
     },
     {
       title: "Your North Star",
       subtitle: "Top Theme",
-      value: "Family",
+      value: insight.theme,
       label: "The heart of your year",
       color: theme.colors.pop
     },
     {
       title: "Pure Consistency",
       subtitle: "Longest Streak",
-      value: "42 Days",
+      value: `${streak} Day${streak === 1 ? '' : 's'}`,
       label: "Unstoppable positivity",
       color: theme.colors.gold
     },
     {
       title: "A Random Memory",
-      subtitle: "October 12th",
-      value: '"The way the sunlight hit the trees during my morning walk."',
+      subtitle: new Date(memory.date).toLocaleDateString('default', { month: 'long', day: 'numeric' }),
+      value: `"${memory.text}"`,
       label: "A spark of joy",
       color: theme.colors.accent
     }
   ];
+};
+
+export const GratitudeWrapped = ({ onComplete }) => {
+  const [currentSlide, setCurrentSlide] = useState(0);
+  const [slides, setSlides] = useState(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      (async () => {
+        const now = new Date();
+        const yearEntries = await EntryStore.getEntriesBetween(startOfYear(now), endOfYear(now));
+        if (cancelled) return;
+        setSlides(buildSlidesFromEntries(yearEntries, now.getFullYear()) || DEMO_SLIDES);
+        setCurrentSlide(0);
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }, [])
+  );
+
+  if (!slides) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator color={theme.colors.accent} size="large" />
+      </View>
+    );
+  }
 
   const nextSlide = () => {
     if (currentSlide < slides.length - 1) {
       setCurrentSlide(s => s + 1);
-    } else {
+    } else if (onComplete) {
       onComplete();
+    } else {
+      setCurrentSlide(0);
     }
   };
 
   return (
-    <TouchableOpacity 
-      activeOpacity={1} 
-      style={styles.container} 
+    <TouchableOpacity
+      activeOpacity={1}
+      style={styles.container}
       onPress={nextSlide}
     >
       <View style={styles.progressContainer}>
         {slides.map((_, i) => (
-          <View 
-            key={i} 
+          <View
+            key={i}
             style={[styles.progressBar, { backgroundColor: i <= currentSlide ? theme.colors.textPrimary : 'rgba(34,27,3,0.15)' }]}
           />
         ))}
@@ -88,6 +158,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: theme.colors.background,
+  },
+  loadingContainer: {
+    flex: 1,
+    backgroundColor: theme.colors.background,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   progressContainer: {
     flexDirection: 'row',
