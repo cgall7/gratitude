@@ -1,7 +1,10 @@
-import React from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
+import * as SplashScreen from 'expo-splash-screen';
+import * as Font from 'expo-font';
 import { theme } from './src/constants/theme';
+import { fontAssets } from './src/constants/fontAssets';
 import { OnboardingFlow } from './src/screens/Onboarding';
 import { LockScreen, InputScreen } from './src/screens/CoreRitual';
 import { EveningMirror } from './src/screens/EveningMirror';
@@ -9,9 +12,27 @@ import { MainTabs } from './src/navigation/MainTabs';
 
 const Stack = createStackNavigator();
 
+SplashScreen.preventAutoHideAsync();
+
 export default function App() {
+  const [fontsLoaded, setFontsLoaded] = useState(false);
+
+  useEffect(() => {
+    Font.loadAsync(fontAssets).then(() => setFontsLoaded(true));
+  }, []);
+
+  const onLayoutRootView = useCallback(() => {
+    if (fontsLoaded) {
+      SplashScreen.hideAsync();
+    }
+  }, [fontsLoaded]);
+
+  if (!fontsLoaded) {
+    return null;
+  }
+
   return (
-    <NavigationContainer>
+    <NavigationContainer onReady={onLayoutRootView}>
       <Stack.Navigator
         initialRouteName="Onboarding"
         screenOptions={{

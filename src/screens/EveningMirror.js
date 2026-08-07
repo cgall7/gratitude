@@ -81,11 +81,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   header: {
-    fontFamily: theme.fonts.body,
-    fontSize: 18,
+    ...theme.type.label,
+    fontSize: 14,
     color: theme.colors.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 2,
     marginBottom: 40,
     textAlign: 'center',
   },
@@ -114,13 +112,11 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   gratitudeText: {
-    fontFamily: theme.fonts.body,
+    fontFamily: theme.fonts.bodyItalic,
     fontSize: 28,
     color: theme.colors.textPrimary,
     textAlign: 'center',
     lineHeight: 38,
-    fontStyle: 'italic',
-    fontWeight: '300',
   },
   closeButton: {
     marginTop: 40,
@@ -132,10 +128,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   closeButtonText: {
-    fontFamily: theme.fonts.header,
+    ...theme.type.button,
     fontSize: 16,
     color: theme.colors.accent,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
   },
 });

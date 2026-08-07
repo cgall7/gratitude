@@ -41,9 +41,8 @@ export const MonthlyRecap = ({
       {/* Gratitude Grid */}
       <View style={styles.grid}>
         {entries.map((entry, index) => (
-          <TouchableOpacity key={index} style={styles.gridItem}>
-            <Text style={styles.dateText}>{entry.date.split('-')[2]}</Text>
-            <View style={styles.dot} />
+          <TouchableOpacity key={index} style={[styles.gridItem, styles.gridItemFilled]}>
+            <Text style={[styles.dateText, styles.dateTextFilled]}>{entry.date.split('-')[2]}</Text>
           </TouchableOpacity>
         ))}
         {/* Fill empty days for a full month grid */}
@@ -65,8 +64,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   title: {
-    fontFamily: theme.fonts.header,
-    fontSize: 32,
+    ...theme.type.h1,
     color: theme.colors.textPrimary,
     marginBottom: 30,
     textAlign: 'center',
@@ -77,31 +75,27 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: theme.colors.surfaceBorder,
     borderRadius: theme.borderRadius.large,
-    padding: 24,
+    padding: 28,
     marginBottom: 40,
     alignItems: 'center',
+    ...theme.shadows.card,
   },
   insightLabel: {
-    fontFamily: theme.fonts.body,
-    fontSize: 12,
+    ...theme.type.label,
     color: theme.colors.accent,
-    letterSpacing: 2,
     marginBottom: 8,
-    textTransform: 'uppercase',
   },
   insightValue: {
-    fontFamily: theme.fonts.header,
-    fontSize: 24,
+    ...theme.type.h1,
+    fontSize: 36,
     color: theme.colors.textPrimary,
     marginBottom: 8,
     textAlign: 'center',
   },
   insightDesc: {
-    fontFamily: theme.fonts.body,
-    fontSize: 16,
+    ...theme.type.body,
     color: theme.colors.textSecondary,
     textAlign: 'center',
-    lineHeight: 24,
   },
   grid: {
     flexDirection: 'row',
@@ -120,20 +114,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  gridItemFilled: {
+    backgroundColor: theme.colors.pop + '1F',
+    borderColor: theme.colors.pop + '40',
+  },
   emptyItem: {
     opacity: 0.3,
   },
   dateText: {
     fontSize: 12,
     color: theme.colors.textPrimary,
-    fontFamily: theme.fonts.body,
+    fontFamily: theme.fonts.bodyMedium,
   },
-  dot: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: theme.colors.pop,
-    marginTop: 2,
+  dateTextFilled: {
+    color: theme.colors.pop,
+    fontFamily: theme.fonts.bodySemiBold,
   },
   wrappedTeaser: {
     width: '100%',
@@ -142,11 +137,11 @@ const styles = StyleSheet.create({
     borderRadius: theme.borderRadius.large,
     alignItems: 'center',
     marginTop: 20,
+    ...theme.shadows.tinted(theme.colors.gold),
   },
   teaserText: {
-    fontFamily: theme.fonts.header,
+    ...theme.type.button,
     color: theme.colors.textInverse,
     fontSize: 16,
-    textTransform: 'uppercase',
   },
 });

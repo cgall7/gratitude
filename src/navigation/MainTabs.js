@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { theme } from '../constants/theme';
 import { TodayTab } from '../screens/TodayTab';
@@ -9,17 +10,23 @@ import { TabBarButton } from './TabBarButton';
 
 const Tab = createBottomTabNavigator();
 
+// Outline glyph at rest, filled glyph when active — the same weight shift
+// real iOS tab bars use to make the current tab unmistakable.
 const TAB_ICONS = {
-  Today: '☀️',
-  Recap: '📖',
-  Wrapped: '🎁',
+  Today: { active: 'sunny', inactive: 'sunny-outline' },
+  Recap: { active: 'book', inactive: 'book-outline' },
+  Wrapped: { active: 'gift', inactive: 'gift-outline' },
 };
 
 // A pill of accent color slides in behind the active icon instead of just
 // tinting it — makes the current tab unmistakable at a glance.
 const TabIcon = ({ routeName, focused }) => (
   <View style={[styles.iconPill, focused && styles.iconPillActive]}>
-    <Text style={{ fontSize: 18 }}>{TAB_ICONS[routeName]}</Text>
+    <Ionicons
+      name={focused ? TAB_ICONS[routeName].active : TAB_ICONS[routeName].inactive}
+      size={20}
+      color={focused ? theme.colors.textPrimary : theme.colors.textSecondary}
+    />
   </View>
 );
 
@@ -54,19 +61,14 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.surface,
     borderTopWidth: 0,
     paddingTop: 10,
-    shadowColor: theme.colors.textPrimary,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.1,
-    shadowRadius: 24,
-    elevation: 12,
+    ...theme.shadows.floating,
   },
   tabBarItem: {
     paddingTop: 2,
   },
   tabBarLabel: {
-    fontFamily: theme.fonts.body,
+    fontFamily: theme.fonts.bodySemiBold,
     fontSize: 11,
-    fontWeight: '600',
     marginTop: 2,
   },
   iconPill: {

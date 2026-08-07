@@ -21,7 +21,7 @@ export const SparkChips = ({ sparks, visible, onPick }) => {
 
   return (
     <Animated.View style={[styles.container, { opacity }]} pointerEvents={visible ? 'auto' : 'none'}>
-      <Text style={styles.label}>Need a nudge? Try one:</Text>
+      <Text style={styles.label}>Need a nudge?</Text>
       <View style={styles.chipRow}>
         {sparks.map((spark, index) => (
           <StaggeredItem key={spark} index={index}>
@@ -45,10 +45,8 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   label: {
-    fontFamily: theme.fonts.body,
-    fontSize: 13,
+    ...theme.type.label,
     color: theme.colors.textSecondary,
-    fontStyle: 'italic',
     marginBottom: 10,
   },
   chipRow: {
@@ -66,7 +64,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   chipText: {
-    fontFamily: theme.fonts.body,
+    fontFamily: theme.fonts.bodyMedium,
     fontSize: 13,
     color: theme.colors.textPrimary,
   },
