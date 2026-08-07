@@ -19,5 +19,5 @@ A digital discipline tool that replaces doomscrolling with spiritual mindfulness
 
 ## 🎨 Visual Identity
 - **Name:** gratitude (all lowercase)
-- **Colors:** Midnight Obsidian (#1A0B2E), Electric Lavender (#BF94FF), Neon Mint (#00FFC3).
-- **Style:** Neo-minimalism, Glassmorphism, High-contrast.
+- **Colors:** Sunlit Cream (#FFFBEB), Marigold (#FFC300), Fresh Green (#12B76A), Warm Amber (#FF8A00).
+- **Style:** Bright, joyful, vibrant — clean cards on a warm light backdrop, high-contrast dark ink text.

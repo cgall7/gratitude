@@ -78,7 +78,7 @@ export const InputScreen = ({ onUnlock }) => {
           style={[styles.primaryButton, { backgroundColor: theme.colors.pop }]} 
           onPress={handleSave}
         >
-          <Text style={[styles.buttonText, { color: theme.colors.background }]}>Unlock Apps</Text>
+          <Text style={[styles.buttonText, { color: theme.colors.textInverse }]}>Unlock Apps</Text>
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>

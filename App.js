@@ -1,6 +1,8 @@
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
+import { theme } from './src/constants/theme';
+import { OnboardingFlow } from './src/screens/Onboarding';
 import { LockScreen, InputScreen } from './src/screens/CoreRitual';
 import { EveningMirror } from './src/screens/EveningMirror';
 import { MonthlyRecap } from './src/screens/MonthlyRecap';
@@ -11,22 +13,31 @@ const Stack = createStackNavigator();
 export default function App() {
   return (
     <NavigationContainer>
-      <Stack.Navigator 
-        initialRouteName="Lock" 
-        screenOptions={{ 
-          headerShown: false, 
-          cardStyle: { backgroundColor: '#1A0B2E' } 
+      <Stack.Navigator
+        initialRouteName="Onboarding"
+        screenOptions={{
+          headerShown: false,
+          cardStyle: { backgroundColor: theme.colors.background }
         }}
       >
-        <Stack.Screen name="Lock">
+        <Stack.Screen name="Onboarding">
           {(props) => (
-            <LockScreen 
-              {...props} 
-              onEnterRitual={() => props.navigation.navigate('Input')} 
+            <OnboardingFlow
+              {...props}
+              onDone={() => props.navigation.replace('Lock')}
             />
           )}
         </Stack.Screen>
-        
+
+        <Stack.Screen name="Lock">
+          {(props) => (
+            <LockScreen
+              {...props}
+              onEnterRitual={() => props.navigation.navigate('Input')}
+            />
+          )}
+        </Stack.Screen>
+
         <Stack.Screen name="Input">
           {(props) => (
             <InputScreen 

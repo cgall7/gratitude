@@ -64,7 +64,7 @@ export const GratitudeWrapped = ({ userData, onComplete }) => {
         {slides.map((_, i) => (
           <View 
             key={i} 
-            style={[styles.progressBar, { backgroundColor: i <= currentSlide ? theme.colors.textPrimary : 'rgba(255,255,255,0.2)' }]} 
+            style={[styles.progressBar, { backgroundColor: i <= currentSlide ? theme.colors.textPrimary : 'rgba(34,27,3,0.15)' }]}
           />
         ))}
       </View>

@@ -139,7 +139,7 @@ const styles = StyleSheet.create({
   },
   teaserText: {
     fontFamily: theme.fonts.header,
-    color: theme.colors.background,
+    color: theme.colors.textInverse,
     fontSize: 16,
     textTransform: 'uppercase',
   },
