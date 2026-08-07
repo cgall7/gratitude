@@ -9,16 +9,18 @@
     <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@600&family=Inter:wght@400;800&family=Plus+Jakarta+Sans:wght@300;500&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg-deep: #1A0B2E;
-            --accent-lavender: #BF94FF;
-            --pop-mint: #00FFC3;
-            --pop-gold: #FFD700;
-            --text-main: #FFFFFF;
-            --text-dim: #A29BFE;
+            --bg-cream: #FFFBEB;
+            --surface: #FFFFFF;
+            --surface-border: rgba(26, 21, 0, 0.08);
+            --accent-marigold: #FFC300;
+            --pop-green: #12B76A;
+            --pop-amber: #FF8A00;
+            --text-main: #221B03;
+            --text-dim: #6B5F3D;
         }
 
         body {
-            background-color: var(--bg-deep);
+            background-color: var(--bg-cream);
             color: var(--text-main);
             font-family: 'Plus Jakarta Sans', sans-serif;
             margin: 0;
@@ -40,7 +42,6 @@
             color: var(--text-main);
             margin: 0;
             letter-spacing: -1px;
-            text-shadow: 0 0 20px rgba(191, 148, 255, 0.4);
         }
 
         .tagline {
@@ -61,17 +62,17 @@
         }
 
         .card {
-            background: rgba(255, 255, 255, 0.05);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: var(--surface);
+            border: 1px solid var(--surface-border);
             border-radius: 32px;
             padding: 30px;
             transition: transform 0.3s ease;
+            box-shadow: 0 10px 30px rgba(34, 27, 3, 0.05);
         }
 
         .card:hover {
-            transform: translateY(-10px);
-            border-color: var(--accent-lavender);
+            transform: translateY(-6px);
+            border-color: var(--accent-marigold);
         }
 
         .color-swatch {
@@ -79,13 +80,12 @@
             width: 100%;
             border-radius: 20px;
             margin-bottom: 20px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
         }
 
-        .swatch-deep { background-color: var(--bg-deep); border: 1px solid var(--accent-lavender); }
-        .swatch-lavender { background-color: var(--accent-lavender); }
-        .swatch-mint { background-color: var(--pop-mint); }
-        .swatch-gold { background-color: var(--pop-gold); }
+        .swatch-cream { background-color: var(--bg-cream); border: 1px solid var(--surface-border); }
+        .swatch-marigold { background-color: var(--accent-marigold); }
+        .swatch-green { background-color: var(--pop-green); }
+        .swatch-amber { background-color: var(--pop-amber); }
 
         h3 {
             font-family: 'Inter', sans-serif;
@@ -101,15 +101,15 @@
 
         .ui-preview {
             grid-column: 1 / -1;
-            background: linear-gradient(135deg, #2D1B4E 0%, #1A0B2E 100%);
+            background: linear-gradient(135deg, #FFF6D6 0%, #FFFBEB 100%);
             text-align: center;
             padding: 60px;
-            border: 2px solid var(--accent-lavender);
+            border: 2px solid var(--accent-marigold);
         }
 
         .btn {
-            background-color: var(--pop-mint);
-            color: #1A0B2E;
+            background-color: var(--accent-marigold);
+            color: var(--text-main);
             padding: 16px 32px;
             border-radius: 50px;
             font-weight: 800;
@@ -117,18 +117,18 @@
             font-size: 0.9rem;
             border: none;
             cursor: pointer;
-            box-shadow: 0 0 20px rgba(0, 255, 195, 0.4);
+            box-shadow: 0 10px 20px rgba(255, 195, 0, 0.35);
             transition: all 0.2s ease;
         }
 
         .btn:hover {
             transform: scale(1.05);
-            box-shadow: 0 0 30px rgba(0, 255, 195, 0.6);
+            box-shadow: 0 12px 24px rgba(255, 195, 0, 0.45);
         }
 
-        .btn-gold {
-            background-color: var(--pop-gold);
-            box-shadow: 0 0 20px rgba(255, 215, 0, 0.4);
+        .btn-green {
+            background-color: var(--pop-green);
+            box-shadow: 0 10px 20px rgba(18, 183, 106, 0.3);
         }
 
     </style>
@@ -143,40 +143,40 @@
     <div class="container">
         <!-- Background Color -->
         <div class="card">
-            <div class="color-swatch swatch-deep"></div>
-            <h3>Midnight Obsidian</h3>
-            <p>The foundation. A deep, rich purple that creates a focused, premium environment and allows accent colors to glow.</p>
+            <div class="color-swatch swatch-cream"></div>
+            <h3>Sunlit Cream</h3>
+            <p>The foundation. A soft, bright cream that keeps every screen feeling open and warm, letting the marigold accent do the work of being loud.</p>
         </div>
 
         <!-- Accent Color -->
         <div class="card">
-            <div class="color-swatch swatch-lavender"></div>
-            <h3>Electric Lavender</h3>
-            <p>The bridge. Used for borders, soft glows, and secondary UI elements to maintain the spiritual theme.</p>
+            <div class="color-swatch swatch-marigold"></div>
+            <h3>Marigold</h3>
+            <p>The primary brand yellow. Used for CTAs, progress states, and highlights — the color that makes gratitude read as bright and joyful at a glance.</p>
         </div>
 
         <!-- Pop Color 1 -->
         <div class="card">
-            <div class="color-swatch swatch-mint"></div>
-            <h3>Neon Mint</h3>
-            <p>The "Unlock" color. High contrast, fresh, and rewarding. Perfect for the final action of the morning.</p>
+            <div class="color-swatch swatch-green"></div>
+            <h3>Fresh Green</h3>
+            <p>The "Unlock" color. High contrast and rewarding — reserved for the moment the ritual completes and the day opens up.</p>
         </div>
 
         <!-- Pop Color 2 -->
         <div class="card">
-            <div class="color-swatch swatch-gold"></div>
-            <h3>Liquid Gold</h3>
-            <p>The "Premium" alternative. Represents warmth, value, and the "Wrapped" end-of-year celebration.</p>
+            <div class="color-swatch swatch-amber"></div>
+            <h3>Warm Amber</h3>
+            <p>The "Wrapped" color. Represents warmth and celebration — used for the end-of-year recap and milestone badges.</p>
         </div>
 
         <!-- UI Mockup Concept -->
         <div class="card ui-preview">
             <h2 style="font-family: 'Dancing Script'; font-size: 3rem; margin-bottom: 20px;">What are you grateful for today?</h2>
-            <div style="background: rgba(255,255,255,0.1); padding: 20px; border-radius: 20px; margin-bottom: 30px; color: var(--text-dim); font-style: italic;">
+            <div style="background: #FFFFFF; border: 1px solid var(--surface-border); padding: 20px; border-radius: 20px; margin-bottom: 30px; color: var(--text-dim); font-style: italic;">
                 "The smell of fresh coffee and a quiet house..."
             </div>
             <button class="btn">Unlock Apps</button>
-            <button class="btn btn-gold" style="margin-left: 10px;">Save Memory</button>
+            <button class="btn btn-green" style="margin-left: 10px;">Save Memory</button>
         </div>
     </div>
 

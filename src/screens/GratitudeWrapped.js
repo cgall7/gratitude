@@ -72,9 +72,9 @@ export const GratitudeWrapped = ({ userData, onComplete }) => {
       <View style={[styles.slideContent, { backgroundColor: slides[currentSlide].color + '20' }]}>
         <Text style={styles.subtitle}>{slides[currentSlide].subtitle}</Text>
         <Text style={styles.title}>{slides[currentSlide].title}</Text>
-        
-        <View style={styles.valueContainer}>
-          <Text style={styles.value}>{slides[currentSlide].value}</Text>
+
+        <View style={[styles.valueContainer, { borderColor: slides[currentSlide].color + '40' }]}>
+          <Text style={[styles.value, { color: slides[currentSlide].color }]}>{slides[currentSlide].value}</Text>
           <Text style={styles.label}>{slides[currentSlide].label}</Text>
         </View>
 
@@ -131,14 +131,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 40,
     borderRadius: theme.borderRadius.large,
-    backgroundColor: 'rgba(0,0,0,0.3)',
+    backgroundColor: theme.colors.surface,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: theme.colors.surfaceBorder,
     width: '100%',
+    shadowColor: theme.colors.textPrimary,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.06,
+    shadowRadius: 16,
+    elevation: 3,
   },
   value: {
     fontFamily: theme.fonts.header,
-    color: '#FFFFFF',
     fontSize: 56,
     textAlign: 'center',
     marginBottom: 10,

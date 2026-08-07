@@ -12,7 +12,7 @@ export const theme = {
 
     // Text
     textPrimary: '#221B03', // Warm near-black, softer than pure black
-    textSecondary: '#8A7F5C',
+    textSecondary: '#6B5F3D', // Darkened from #8A7F5C — that shade only hit 3.8:1 on Sunlit Cream, below WCAG AA for body text; this hits ~6.1:1
     textInverse: '#221B03', // Dark text for use on top of bright accent/gold surfaces
   },
   fonts: {
