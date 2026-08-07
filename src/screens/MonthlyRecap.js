@@ -7,6 +7,7 @@ import {
   Dimensions
 } from 'react-native';
 import { theme } from '../constants/theme';
+import { StaggeredItem } from '../components/StaggeredItem';
 
 const { width } = Dimensions.get('window');
 
@@ -41,9 +42,11 @@ export const MonthlyRecap = ({
       {/* Gratitude Grid */}
       <View style={styles.grid}>
         {entries.map((entry, index) => (
-          <TouchableOpacity key={index} style={[styles.gridItem, styles.gridItemFilled]}>
-            <Text style={[styles.dateText, styles.dateTextFilled]}>{entry.date.split('-')[2]}</Text>
-          </TouchableOpacity>
+          <StaggeredItem key={index} index={index}>
+            <TouchableOpacity style={[styles.gridItem, styles.gridItemFilled]}>
+              <Text style={[styles.dateText, styles.dateTextFilled]}>{entry.date.split('-')[2]}</Text>
+            </TouchableOpacity>
+          </StaggeredItem>
         ))}
         {/* Fill empty days for a full month grid */}
         {Array.from({ length: Math.max(0, daysInMonth - entries.length) }).map((_, i) => (

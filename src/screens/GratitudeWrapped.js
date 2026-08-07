@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { theme } from '../constants/theme';
+import { AnimatedStat } from '../components/AnimatedStat';
 import { EntryStore } from '../services/EntryStore';
 import { dominantTheme } from '../utils/themeTagger';
 import { startOfYear, endOfYear, longestStreak } from '../utils/dateRanges';
@@ -144,7 +145,11 @@ export const GratitudeWrapped = ({ onComplete }) => {
         <Text style={styles.title}>{slides[currentSlide].title}</Text>
 
         <View style={[styles.valueContainer, { borderColor: slides[currentSlide].color + '40' }]}>
-          <Text style={[styles.value, { color: slides[currentSlide].color }]}>{slides[currentSlide].value}</Text>
+          <AnimatedStat
+            key={currentSlide}
+            value={slides[currentSlide].value}
+            style={[styles.value, { color: slides[currentSlide].color }]}
+          />
           <Text style={styles.label}>{slides[currentSlide].label}</Text>
         </View>
 

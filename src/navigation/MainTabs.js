@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { View, StyleSheet, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { theme } from '../constants/theme';
@@ -19,16 +19,29 @@ const TAB_ICONS = {
 };
 
 // A pill of accent color slides in behind the active icon instead of just
-// tinting it — makes the current tab unmistakable at a glance.
-const TabIcon = ({ routeName, focused }) => (
-  <View style={[styles.iconPill, focused && styles.iconPillActive]}>
-    <Ionicons
-      name={focused ? TAB_ICONS[routeName].active : TAB_ICONS[routeName].inactive}
-      size={20}
-      color={focused ? theme.colors.textPrimary : theme.colors.textSecondary}
-    />
-  </View>
-);
+// tinting it — makes the current tab unmistakable at a glance. The icon
+// itself pops with a spring on the switch so landing on a tab feels alive.
+const TabIcon = ({ routeName, focused }) => {
+  const scale = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (!focused) return;
+    scale.setValue(0.7);
+    Animated.spring(scale, { toValue: 1, friction: 5, tension: 240, useNativeDriver: true }).start();
+  }, [focused]);
+
+  return (
+    <View style={[styles.iconPill, focused && styles.iconPillActive]}>
+      <Animated.View style={{ transform: [{ scale }] }}>
+        <Ionicons
+          name={focused ? TAB_ICONS[routeName].active : TAB_ICONS[routeName].inactive}
+          size={20}
+          color={focused ? theme.colors.textPrimary : theme.colors.textSecondary}
+        />
+      </Animated.View>
+    </View>
+  );
+};
 
 export const MainTabs = () => (
   <Tab.Navigator
