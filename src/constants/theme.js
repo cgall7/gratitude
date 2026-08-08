@@ -29,7 +29,6 @@ export const theme = {
     logo: 'DancingScript-Bold',
     header: 'Nunito-Bold',
     headerExtraBold: 'Nunito-ExtraBold',
-    headerSemiBold: 'Inter-SemiBold',
     body: 'PlusJakartaSans-Regular',
     bodyMedium: 'PlusJakartaSans-Medium',
     bodySemiBold: 'PlusJakartaSans-SemiBold',

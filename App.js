@@ -44,7 +44,7 @@ export default function App() {
           {(props) => (
             <OnboardingFlow
               {...props}
-              onDone={() => props.navigation.replace('Lock')}
+              onDone={() => props.navigation.replace('Main')}
             />
           )}
         </Stack.Screen>

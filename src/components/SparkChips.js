@@ -8,7 +8,7 @@ import { StaggeredItem } from './StaggeredItem';
 // Gentle, tappable example completions shown only while the input is
 // empty — fades out the moment someone starts typing their own words, so
 // it never fights for attention once it's done its job.
-export const SparkChips = ({ sparks, visible, onPick }) => {
+export const SparkChips = ({ sparks, visible, onPick, label = 'Need a nudge?' }) => {
   const opacity = useRef(new Animated.Value(visible ? 1 : 0)).current;
 
   useEffect(() => {
@@ -21,7 +21,7 @@ export const SparkChips = ({ sparks, visible, onPick }) => {
 
   return (
     <Animated.View style={[styles.container, { opacity }]} pointerEvents={visible ? 'auto' : 'none'}>
-      <Text style={styles.label}>Need a nudge?</Text>
+      {label ? <Text style={styles.label}>{label}</Text> : null}
       <View style={styles.chipRow}>
         {sparks.map((spark, index) => (
           <StaggeredItem key={spark} index={index}>
