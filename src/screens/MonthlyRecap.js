@@ -85,7 +85,7 @@ const styles = StyleSheet.create({
   },
   insightLabel: {
     ...theme.type.label,
-    color: theme.colors.accent,
+    color: theme.colors.inkSoft,
     marginBottom: 8,
   },
   insightValue: {
@@ -130,7 +130,7 @@ const styles = StyleSheet.create({
     fontFamily: theme.fonts.bodyMedium,
   },
   dateTextFilled: {
-    color: theme.colors.accent,
+    color: theme.colors.ink,
     fontFamily: theme.fonts.bodySemiBold,
   },
   wrappedTeaser: {
