@@ -118,8 +118,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   gridItemFilled: {
-    backgroundColor: theme.colors.pop + '1F',
-    borderColor: theme.colors.pop + '40',
+    backgroundColor: theme.colors.accent + '1F',
+    borderColor: theme.colors.accent + '40',
   },
   emptyItem: {
     opacity: 0.3,
@@ -130,17 +130,17 @@ const styles = StyleSheet.create({
     fontFamily: theme.fonts.bodyMedium,
   },
   dateTextFilled: {
-    color: theme.colors.pop,
+    color: theme.colors.accent,
     fontFamily: theme.fonts.bodySemiBold,
   },
   wrappedTeaser: {
     width: '100%',
-    backgroundColor: theme.colors.gold,
+    backgroundColor: theme.colors.accentDeep,
     padding: 20,
     borderRadius: theme.borderRadius.large,
     alignItems: 'center',
     marginTop: 20,
-    ...theme.shadows.tinted(theme.colors.gold),
+    ...theme.shadows.tinted(theme.colors.accentDeep),
   },
   teaserText: {
     ...theme.type.button,

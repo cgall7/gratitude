@@ -119,8 +119,8 @@ const styles = StyleSheet.create({
   },
   themeBadge: {
     ...theme.type.label,
-    color: theme.colors.pop,
-    backgroundColor: theme.colors.pop + '1A',
+    color: theme.colors.accentDeep,
+    backgroundColor: theme.colors.accentDeep + '1A',
     paddingVertical: 6,
     paddingHorizontal: 14,
     borderRadius: theme.borderRadius.full,

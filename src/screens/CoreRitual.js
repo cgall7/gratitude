@@ -137,12 +137,12 @@ export const InputScreen = ({ onUnlock }) => {
         </View>
 
         <PressableScale
-          style={[styles.primaryButton, { backgroundColor: theme.colors.pop }]}
+          style={[styles.primaryButton, { backgroundColor: theme.colors.ink }]}
           onPress={handleSave}
           disabled={!text.trim() || unlocking}
           haptic={Haptics.ImpactFeedbackStyle.Medium}
         >
-          <Text style={[styles.buttonText, { color: theme.colors.textInverse }]}>Unlock Apps</Text>
+          <Text style={[styles.buttonText, { color: theme.colors.background }]}>Unlock Apps</Text>
         </PressableScale>
       </Animated.View>
     </KeyboardAvoidingView>
@@ -238,11 +238,11 @@ const styles = StyleSheet.create({
     width: 96,
     height: 96,
     borderRadius: 48,
-    backgroundColor: theme.colors.pop,
+    backgroundColor: theme.colors.accent,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 24,
-    ...theme.shadows.tinted(theme.colors.pop),
+    ...theme.shadows.tinted(theme.colors.accent),
   },
   unlockCheck: {
     fontSize: 44,

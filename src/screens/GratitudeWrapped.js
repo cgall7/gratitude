@@ -31,14 +31,14 @@ const DEMO_SLIDES = [
     subtitle: "Top Theme",
     value: "Family",
     label: "The heart of your year",
-    color: theme.colors.pop
+    color: theme.colors.accentDeep
   },
   {
     title: "Pure Consistency",
     subtitle: "Longest Streak",
     value: "42 Days",
     label: "Unstoppable positivity",
-    color: theme.colors.gold
+    color: theme.colors.accentDeep
   },
   {
     title: "A Random Memory",
@@ -68,14 +68,14 @@ const buildSlidesFromEntries = (entries, year) => {
       subtitle: "Top Theme",
       value: insight.theme,
       label: "The heart of your year",
-      color: theme.colors.pop
+      color: theme.colors.accentDeep
     },
     {
       title: "Pure Consistency",
       subtitle: "Longest Streak",
       value: `${streak} Day${streak === 1 ? '' : 's'}`,
       label: "Unstoppable positivity",
-      color: theme.colors.gold
+      color: theme.colors.accentDeep
     },
     {
       title: "A Random Memory",

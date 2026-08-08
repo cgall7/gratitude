@@ -238,12 +238,12 @@ const TryItStep = ({ onNext, onBack, onSave }) => {
           </View>
         </KeyboardAvoidingView>
         <PressableScale
-          style={[styles.primaryButton, { backgroundColor: theme.colors.pop }]}
+          style={[styles.primaryButton, { backgroundColor: theme.colors.ink }]}
           onPress={handleUnlock}
           disabled={!text.trim() || unlocking}
           haptic={Haptics.ImpactFeedbackStyle.Medium}
         >
-          <Text style={[styles.primaryButtonText, { color: theme.colors.textInverse }]}>
+          <Text style={[styles.primaryButtonText, { color: theme.colors.background }]}>
             Unlock My Day
           </Text>
         </PressableScale>
@@ -483,11 +483,11 @@ const styles = StyleSheet.create({
     width: 88,
     height: 88,
     borderRadius: 44,
-    backgroundColor: theme.colors.pop,
+    backgroundColor: theme.colors.accent,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 20,
-    ...theme.shadows.tinted(theme.colors.pop),
+    ...theme.shadows.tinted(theme.colors.accent),
   },
   unlockCheck: {
     fontSize: 40,
@@ -501,12 +501,12 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   badge: {
-    backgroundColor: theme.colors.gold,
+    backgroundColor: theme.colors.accentDeep,
     borderRadius: theme.borderRadius.full,
     paddingVertical: 8,
     paddingHorizontal: 20,
     marginBottom: 24,
-    ...theme.shadows.tinted(theme.colors.gold),
+    ...theme.shadows.tinted(theme.colors.accentDeep),
   },
   badgeText: {
     ...theme.type.label,

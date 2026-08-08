@@ -111,7 +111,7 @@ const styles = StyleSheet.create({
   },
   weekLabel: {
     ...theme.type.label,
-    color: theme.colors.pop,
+    color: theme.colors.accentDeep,
     marginBottom: 8,
   },
   weekValue: {
