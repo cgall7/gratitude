@@ -21,9 +21,65 @@ import { SegmentedProgress } from '../components/SegmentedProgress';
 import { CelebrationBadge } from '../components/CelebrationBadge';
 import { CelebrationRays } from '../components/CelebrationRays';
 import { IdeasAccordion } from '../components/IdeasAccordion';
+import { BeeTransition } from '../components/BeeTransition';
+import { DevSettings } from '../services/devSettings';
 
-const TOTAL_STEPS = 6;
 const HIT_SLOP = { top: 12, bottom: 12, left: 12, right: 12 };
+
+// Flow B claim screens (GUIDES/GRATITUDE_FLOW_B_COPY.md, Pixel gate R5) —
+// frozen copy + frozen accentDeep phrase per screen. Slots between Welcome
+// and Name; everything after Name is shared with Flow A.
+const CLAIM_SCREENS = [
+  {
+    icon: 'moon',
+    label: 'ONE REASON',
+    h1: 'Your mind quiets down before it winds down.',
+    accent: 'quiets down',
+    bodyLg:
+      "Naming one good thing tonight gives your thoughts somewhere to land — so they're not still circling when your head hits the pillow.",
+    cta: 'Next',
+  },
+  {
+    icon: 'cloud',
+    label: 'ANOTHER REASON',
+    h1: 'Worry takes up less room when good things get named.',
+    accent: 'less room',
+    bodyLg:
+      "Naming one thing that went right doesn't erase a hard day. It just stops the hard part from being the whole story.",
+    cta: 'Next',
+  },
+  {
+    icon: 'leaf',
+    label: 'ANOTHER REASON',
+    h1: 'Bad days get easier to bounce back from.',
+    accent: 'bounce back',
+    bodyLg:
+      "The more good you've noticed on ordinary days, the more you have to stand on when a rough one shows up.",
+    cta: 'Next',
+  },
+  {
+    icon: 'heart',
+    label: 'LAST REASON',
+    h1: 'The people you notice, you hold onto.',
+    accent: 'hold onto',
+    bodyLg: 'Naming who made today a little better is a small habit that quietly keeps you close to them.',
+    cta: "Let's begin",
+  },
+];
+
+// Splits an h1 on its frozen accent phrase and renders that span in
+// accentDeep — ONE word/phrase may carry the color, per §9.
+const renderAccentH1 = (text, accent) => {
+  const i = text.indexOf(accent);
+  if (i === -1) return text;
+  return [
+    text.slice(0, i),
+    <Text key="accent" style={{ color: theme.colors.accentDeep }}>
+      {accent}
+    </Text>,
+    text.slice(i + accent.length),
+  ];
+};
 
 const WHY_OPTIONS = ['Sleep better', 'Less stress', 'Notice the good', 'Just curious'];
 
@@ -34,7 +90,7 @@ const RITUAL_TIMES = [
 ];
 
 // --- Shared shell: wash background + segmented progress + animated step transitions ---
-const StepShell = ({ step, wash, onBack, children }) => {
+const StepShell = ({ step, total, wash, onBack, children }) => {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(16)).current;
 
@@ -57,7 +113,7 @@ const StepShell = ({ step, wash, onBack, children }) => {
         ) : (
           <View style={styles.backSpacer} />
         )}
-        <SegmentedProgress total={TOTAL_STEPS} current={step} />
+        <SegmentedProgress total={total} current={step} />
       </View>
 
       <Animated.View style={[styles.stepBody, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
@@ -68,8 +124,8 @@ const StepShell = ({ step, wash, onBack, children }) => {
 };
 
 // --- Step 1: Welcome — show the value before asking for any effort ---
-const WelcomeStep = ({ onNext }) => (
-  <StepShell step={0} wash={theme.colors.washYellow}>
+const WelcomeStep = ({ step, total, onNext }) => (
+  <StepShell step={step} total={total} wash={theme.colors.washYellow}>
     <View style={styles.centerFill}>
       <Text style={styles.wordmark}>Gratitude</Text>
       <Text style={styles.h1Center}>A brighter way to end your day.</Text>
@@ -78,9 +134,27 @@ const WelcomeStep = ({ onNext }) => (
   </StepShell>
 );
 
+// --- Flow B, screens B1–B4: the case for why gratitude matters, one claim ---
+// --- per screen, before the Name ask (GUIDES/GRATITUDE_FLOW_B_COPY.md). ---
+const ClaimStep = ({ step, total, data, onNext, onBack }) => (
+  <StepShell step={step} total={total} wash={theme.colors.washYellow} onBack={onBack}>
+    <View style={styles.fillBetween}>
+      <View style={styles.topContent}>
+        <View style={styles.claimIconCircle}>
+          <Ionicons name={data.icon} size={22} color={theme.colors.ink} />
+        </View>
+        <Text style={styles.claimLabel}>{data.label}</Text>
+        <Text style={styles.h1}>{renderAccentH1(data.h1, data.accent)}</Text>
+        <Text style={styles.bodyLgClaim}>{data.bodyLg}</Text>
+      </View>
+      <PrimaryButton onPress={onNext}>{data.cta}</PrimaryButton>
+    </View>
+  </StepShell>
+);
+
 // --- Step 2: Name — one useful question, used to personalize later screens ---
-const NameStep = ({ name, onChangeName, onNext, onBack }) => (
-  <StepShell step={1} wash={theme.colors.washYellow} onBack={onBack}>
+const NameStep = ({ step, total, name, onChangeName, onNext, onBack }) => (
+  <StepShell step={step} total={total} wash={theme.colors.washYellow} onBack={onBack}>
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.fillBetween}>
       <View style={styles.topContent}>
         <Text style={styles.h1}>What should we call you?</Text>
@@ -102,8 +176,8 @@ const NameStep = ({ name, onChangeName, onNext, onBack }) => (
 );
 
 // --- Step 3: Why — one-tap chips, personalizes the activation screen's copy ---
-const WhyStep = ({ why, onPick, onNext, onBack }) => (
-  <StepShell step={2} wash={theme.colors.washYellow} onBack={onBack}>
+const WhyStep = ({ step, total, why, onPick, onNext, onBack }) => (
+  <StepShell step={step} total={total} wash={theme.colors.washYellow} onBack={onBack}>
     <View style={styles.fillBetween}>
       <View style={styles.topContent}>
         <Text style={styles.h1}>What brought you here?</Text>
@@ -127,8 +201,8 @@ const WhyStep = ({ why, onPick, onNext, onBack }) => (
 );
 
 // --- Step 4: Ritual time — one clear action, sets the daily check-in ---
-const RitualTimeStep = ({ ritualTime, onPick, onNext, onBack }) => (
-  <StepShell step={3} wash={theme.colors.washYellow} onBack={onBack}>
+const RitualTimeStep = ({ step, total, ritualTime, onPick, onNext, onBack }) => (
+  <StepShell step={step} total={total} wash={theme.colors.washYellow} onBack={onBack}>
     <View style={styles.fillBetween}>
       <View style={styles.topContent}>
         <Text style={styles.h1}>When's your moment?</Text>
@@ -161,7 +235,7 @@ const RitualTimeStep = ({ ritualTime, onPick, onNext, onBack }) => (
 );
 
 // --- Step 5: First entry — the activation moment. Everything funnels here. ---
-const FirstEntryStep = ({ name, onNext, onBack, onSave }) => {
+const FirstEntryStep = ({ step, total, name, onNext, onBack, onSave }) => {
   const [text, setText] = useState('');
   const canSave = !!text.trim();
 
@@ -172,7 +246,7 @@ const FirstEntryStep = ({ name, onNext, onBack, onSave }) => {
   };
 
   return (
-    <StepShell step={4} wash={theme.colors.washPeach} onBack={onBack}>
+    <StepShell step={step} total={total} wash={theme.colors.washPeach} onBack={onBack}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.fillBetween}>
         <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <Text style={styles.h1}>
@@ -201,8 +275,8 @@ const FirstEntryStep = ({ name, onNext, onBack, onSave }) => {
 
 // --- Step 6: Celebration — always the first-ever-save treatment (screen 5's ---
 // --- save IS the first-ever save), never the bare badge. ---
-const CelebrationStep = ({ name, onDone }) => (
-  <StepShell step={5} wash={theme.colors.washPeach}>
+const CelebrationStep = ({ step, total, name, onDone }) => (
+  <StepShell step={step} total={total} wash={theme.colors.washPeach}>
     <View style={styles.centerFill}>
       <View style={styles.badgeStage}>
         <CelebrationRays />
@@ -215,12 +289,20 @@ const CelebrationStep = ({ name, onDone }) => (
   </StepShell>
 );
 
-// --- Controller: owns the answers, drives the six single-action steps ---
-export const OnboardingFlow = ({ onDone }) => {
+// --- Controller: owns the answers, drives Flow A (6 steps) or Flow B (10 —
+// --- adds the four claim screens before Name). Flow read once from the
+// --- hidden dev toggle (DevSettings); Welcome is shared so there's no
+// --- flicker if it resolves a beat after mount. ---
+export const OnboardingFlow = ({ onDone, initialFlow = 'A' }) => {
+  const [flow, setFlow] = useState(initialFlow);
   const [step, setStep] = useState(0);
   const [name, setName] = useState('');
   const [why, setWhy] = useState(null);
   const [ritualTime, setRitualTime] = useState(null);
+
+  useEffect(() => {
+    DevSettings.getOnboardingFlow().then(setFlow);
+  }, []);
 
   const next = () => setStep((s) => s + 1);
   const back = () => setStep((s) => Math.max(0, s - 1));
@@ -229,28 +311,96 @@ export const OnboardingFlow = ({ onDone }) => {
     EntryStore.saveEntry(new Date(), text, tagEntry(text));
   };
 
-  switch (step) {
-    case 0:
-      return <WelcomeStep onNext={next} />;
-    case 1:
-      return <NameStep name={name} onChangeName={setName} onNext={next} onBack={back} />;
-    case 2:
-      return <WhyStep why={why} onPick={setWhy} onNext={next} onBack={back} />;
-    case 3:
-      return <RitualTimeStep ritualTime={ritualTime} onPick={setRitualTime} onNext={next} onBack={back} />;
-    case 4:
-      return <FirstEntryStep name={name} onNext={next} onBack={back} onSave={handleSaveEntry} />;
-    default:
-      return <CelebrationStep name={name} onDone={onDone} />;
+  const total = flow === 'B' ? 10 : 6;
+  const claimStart = 1; // first claim screen's index in Flow B
+  const isClaimStep = flow === 'B' && step >= claimStart && step < claimStart + CLAIM_SCREENS.length;
+  // Bee leads transitions BETWEEN claims only (B1→B2→B3→B4) — 3 flights,
+  // never on the Welcome→B1 or B4→Name boundary (§4 scarcity).
+  const beeKey = isClaimStep && step > claimStart ? step : null;
+
+  const sharedOffset = flow === 'B' ? claimStart + CLAIM_SCREENS.length : claimStart;
+
+  let body;
+  if (step === 0) {
+    body = <WelcomeStep step={0} total={total} onNext={next} />;
+  } else if (isClaimStep) {
+    body = (
+      <ClaimStep
+        step={step}
+        total={total}
+        data={CLAIM_SCREENS[step - claimStart]}
+        onNext={next}
+        onBack={back}
+      />
+    );
+  } else {
+    const sharedStep = step - sharedOffset; // 0=Name, 1=Why, 2=Ritual, 3=FirstEntry, 4+=Celebration
+    switch (sharedStep) {
+      case 0:
+        body = <NameStep step={step} total={total} name={name} onChangeName={setName} onNext={next} onBack={back} />;
+        break;
+      case 1:
+        body = <WhyStep step={step} total={total} why={why} onPick={setWhy} onNext={next} onBack={back} />;
+        break;
+      case 2:
+        body = (
+          <RitualTimeStep
+            step={step}
+            total={total}
+            ritualTime={ritualTime}
+            onPick={setRitualTime}
+            onNext={next}
+            onBack={back}
+          />
+        );
+        break;
+      case 3:
+        body = (
+          <FirstEntryStep step={step} total={total} name={name} onNext={next} onBack={back} onSave={handleSaveEntry} />
+        );
+        break;
+      default:
+        body = <CelebrationStep step={step} total={total} name={name} onDone={onDone} />;
+    }
   }
+
+  return (
+    <View style={styles.flowRoot}>
+      {body}
+      {flow === 'B' && <BeeTransition triggerKey={beeKey} />}
+    </View>
+  );
 };
 
 const styles = StyleSheet.create({
+  flowRoot: {
+    flex: 1,
+  },
   container: {
     flex: 1,
     paddingTop: 60,
     paddingBottom: 40,
     paddingHorizontal: theme.spacing.lg,
+  },
+  claimIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+    ...theme.shadows.card,
+  },
+  claimLabel: {
+    ...theme.type.label,
+    color: theme.colors.inkSoft,
+    marginBottom: 8,
+  },
+  bodyLgClaim: {
+    ...theme.type.bodyLg,
+    color: theme.colors.inkSoft,
+    marginTop: 12,
   },
   topBar: {
     flexDirection: 'row',

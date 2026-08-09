@@ -6,6 +6,7 @@ import { MonthlyRecap } from './MonthlyRecap';
 import { EntryStore } from '../services/EntryStore';
 import { dominantTheme } from '../utils/themeTagger';
 import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, monthName } from '../utils/dateRanges';
+import { DevVersionTag } from '../components/DevVersionTag';
 
 const describeTheme = (insight, periodLabel) => {
   if (!insight) return '';
@@ -78,6 +79,8 @@ export const RecapTab = ({ navigation }) => {
         insightDescription={monthInsight ? describeTheme(monthInsight, 'days this month') : null}
         onPreviewWrapped={() => navigation.navigate('Wrapped')}
       />
+
+      <DevVersionTag />
     </ScrollView>
   );
 };
