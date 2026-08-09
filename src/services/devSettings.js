@@ -8,7 +8,10 @@ const FLOW_KEY = 'dev:onboardingFlow';
 export const DevSettings = {
   async getOnboardingFlow() {
     const value = await AsyncStorage.getItem(FLOW_KEY);
-    return value === 'B' ? 'B' : 'A';
+    // Defaults to B (Colin, 2026-08-09): Flow B is the one with the claim
+    // screens + bee transitions, so a fresh install shows the full
+    // experience without anyone having to know to flip the toggle first.
+    return value === 'A' ? 'A' : 'B';
   },
   async setOnboardingFlow(flow) {
     await AsyncStorage.setItem(FLOW_KEY, flow === 'B' ? 'B' : 'A');

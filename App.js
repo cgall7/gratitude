@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { AppState } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import * as SplashScreen from 'expo-splash-screen';
@@ -15,11 +16,33 @@ const Stack = createStackNavigator();
 
 SplashScreen.preventAutoHideAsync();
 
+// Demo-mode only (Colin, 2026-08-09): every time the app comes back to the
+// foreground it should reopen at onboarding, even if someone finished it
+// or was sitting on Main a minute ago — the pitch should always be fresh
+// for whoever's about to see it. Flip this off once the app is past the
+// demo phase. Cold launches are already covered by initialRouteName below;
+// this covers backgrounding/resuming, which a cold launch alone misses.
+const DEMO_MODE = true;
+
 export default function App() {
   const [fontsLoaded, setFontsLoaded] = useState(false);
+  const navigationRef = useRef(null);
+  const appState = useRef(AppState.currentState);
 
   useEffect(() => {
     Font.loadAsync(fontAssets).then(() => setFontsLoaded(true));
+  }, []);
+
+  useEffect(() => {
+    if (!DEMO_MODE) return undefined;
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      const resuming = appState.current.match(/inactive|background/) && nextState === 'active';
+      if (resuming) {
+        navigationRef.current?.resetRoot({ index: 0, routes: [{ name: 'Onboarding' }] });
+      }
+      appState.current = nextState;
+    });
+    return () => subscription.remove();
   }, []);
 
   const onLayoutRootView = useCallback(() => {
@@ -34,7 +57,7 @@ export default function App() {
 
   return (
     <AuthProvider>
-      <NavigationContainer onReady={onLayoutRootView}>
+      <NavigationContainer ref={navigationRef} onReady={onLayoutRootView}>
         <Stack.Navigator
           initialRouteName="Onboarding"
           screenOptions={{

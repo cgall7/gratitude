@@ -146,7 +146,11 @@ const FlowToggle = ({ flow, onChange }) => (
   </View>
 );
 
-const WelcomeStep = ({ step, total, onNext, flow, onChangeFlow }) => (
+// Demo-mode only: lets Colin jump straight to the logged-in experience
+// without clicking through every step when he just wants to show that
+// side of the app. Sits under the main CTA so "Begin" stays the obvious
+// first choice.
+const WelcomeStep = ({ step, total, onNext, flow, onChangeFlow, onSkipDemo }) => (
   <StepShell step={step} total={total} wash={theme.colors.washYellow}>
     <View style={styles.centerFill}>
       <Text style={styles.wordmark}>Gratitude</Text>
@@ -154,6 +158,9 @@ const WelcomeStep = ({ step, total, onNext, flow, onChangeFlow }) => (
     </View>
     <FlowToggle flow={flow} onChange={onChangeFlow} />
     <PrimaryButton onPress={onNext}>Begin</PrimaryButton>
+    <PressableScale onPress={onSkipDemo} style={styles.skipDemoLink}>
+      <Text style={styles.skipDemoText}>Skip to the logged-in view (demo)</Text>
+    </PressableScale>
   </StepShell>
 );
 
@@ -316,7 +323,7 @@ const CelebrationStep = ({ step, total, name, onDone }) => (
 // --- adds the four claim screens before Name). Flow read once from the
 // --- hidden dev toggle (DevSettings); Welcome is shared so there's no
 // --- flicker if it resolves a beat after mount. ---
-export const OnboardingFlow = ({ onDone, initialFlow = 'A' }) => {
+export const OnboardingFlow = ({ onDone, initialFlow = 'B' }) => {
   const [flow, setFlow] = useState(initialFlow);
   const [step, setStep] = useState(0);
   const [name, setName] = useState('');
@@ -350,7 +357,16 @@ export const OnboardingFlow = ({ onDone, initialFlow = 'A' }) => {
 
   let body;
   if (step === 0) {
-    body = <WelcomeStep step={0} total={total} onNext={next} flow={flow} onChangeFlow={handleChangeFlow} />;
+    body = (
+      <WelcomeStep
+        step={0}
+        total={total}
+        onNext={next}
+        flow={flow}
+        onChangeFlow={handleChangeFlow}
+        onSkipDemo={onDone}
+      />
+    );
   } else if (isClaimStep) {
     body = (
       <ClaimStep
@@ -607,5 +623,14 @@ const styles = StyleSheet.create({
   flowToggleTextSelected: {
     fontFamily: theme.fonts.bodySemiBold,
     color: theme.colors.ink,
+  },
+  skipDemoLink: {
+    alignSelf: 'center',
+    marginTop: 14,
+  },
+  skipDemoText: {
+    ...theme.type.bodySm,
+    color: theme.colors.inkSoft,
+    textDecorationLine: 'underline',
   },
 });
