@@ -92,5 +92,15 @@ export const theme = {
       shadowRadius: 20,
       elevation: 10,
     }),
+    // Glass floats because it's translucent, not because it casts a slab
+    // shadow — lighter than `floating`, reserved for blurred surfaces
+    // (spec §10).
+    glass: {
+      shadowColor: '#221B03',
+      shadowOffset: { width: 0, height: 8 },
+      shadowOpacity: 0.1,
+      shadowRadius: 24,
+      elevation: 6,
+    },
   },
 };
