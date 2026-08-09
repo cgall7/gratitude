@@ -69,6 +69,7 @@ export default function App() {
             {(props) => (
               <OnboardingFlow
                 {...props}
+                startAt={props.route.params?.startAt}
                 onDone={() => props.navigation.replace('Main')}
               />
             )}

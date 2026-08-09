@@ -17,7 +17,7 @@ import { tagEntry } from '../utils/themeTagger';
 import { PressableScale } from '../components/PressableScale';
 import { StaggeredItem } from '../components/StaggeredItem';
 import { PrimaryButton } from '../components/PrimaryButton';
-import { SegmentedProgress } from '../components/SegmentedProgress';
+import { HoneycombJourneyMap } from '../components/HoneycombJourneyMap';
 import { CelebrationBadge } from '../components/CelebrationBadge';
 import { CelebrationRays } from '../components/CelebrationRays';
 import { IdeasAccordion } from '../components/IdeasAccordion';
@@ -69,6 +69,9 @@ const CLAIM_SCREENS = [
   },
 ];
 
+// First claim screen's index in Flow B (step 0 is always Welcome).
+const claimStart = 1;
+
 // Splits an h1 on its frozen accent phrase and renders that span in
 // accentDeep — ONE word/phrase may carry the color, per §9.
 const renderAccentH1 = (text, accent) => {
@@ -91,8 +94,8 @@ const RITUAL_TIMES = [
   { key: 'evening', icon: 'moon', label: 'Evening', caption: 'Wind down and reflect' },
 ];
 
-// --- Shared shell: wash background + segmented progress + animated step transitions ---
-const StepShell = ({ step, total, wash, onBack, children }) => {
+// --- Shared shell: wash background + honeycomb journey map + animated step transitions ---
+const StepShell = ({ step, stage, wash, onBack, children }) => {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(16)).current;
 
@@ -115,7 +118,7 @@ const StepShell = ({ step, total, wash, onBack, children }) => {
         ) : (
           <View style={styles.backSpacer} />
         )}
-        <SegmentedProgress total={total} current={step} />
+        <HoneycombJourneyMap stage={stage} />
       </View>
 
       <Animated.View style={[styles.stepBody, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
@@ -152,8 +155,8 @@ const FlowToggle = ({ flow, onChange }) => (
 // without clicking through every step when he just wants to show that
 // side of the app. Sits under the main CTA so "Begin" stays the obvious
 // first choice.
-const WelcomeStep = ({ step, total, onNext, flow, onChangeFlow, onSkipDemo }) => (
-  <StepShell step={step} total={total} wash={theme.colors.washYellow}>
+const WelcomeStep = ({ step, onNext, flow, onChangeFlow, onSkipDemo }) => (
+  <StepShell step={step} stage="welcome" wash={theme.colors.washYellow}>
     <View style={styles.centerFill}>
       <Text style={styles.wordmark}>Gratitude</Text>
       <Text style={styles.h1Center}>A brighter way to end your day.</Text>
@@ -168,8 +171,8 @@ const WelcomeStep = ({ step, total, onNext, flow, onChangeFlow, onSkipDemo }) =>
 
 // --- Flow B, screens B1–B4: the case for why gratitude matters, one claim ---
 // --- per screen, before the Name ask (GUIDES/GRATITUDE_FLOW_B_COPY.md). ---
-const ClaimStep = ({ step, total, data, onNext, onBack }) => (
-  <StepShell step={step} total={total} wash={theme.colors.washYellow} onBack={onBack}>
+const ClaimStep = ({ step, data, onNext, onBack }) => (
+  <StepShell step={step} stage="why" wash={theme.colors.washYellow} onBack={onBack}>
     <View style={styles.fillBetween}>
       <View style={styles.topContent}>
         <View style={styles.claimIconCircle}>
@@ -188,8 +191,19 @@ const ClaimStep = ({ step, total, data, onNext, onBack }) => (
 // --- account right here instead of gating it behind the Honeycomb tab
 // --- (Colin, 2026-08-09). Mirrors HoneycombAuth's create/sign-in toggle so
 // --- returning testers on the same device aren't stuck re-registering.
-const SignUpStep = ({ step, total, name, email, password, onChangeName, onChangeEmail, onChangePassword, onNext, onBack }) => {
-  const [mode, setMode] = useState('signup');
+const SignUpStep = ({
+  step,
+  name,
+  email,
+  password,
+  onChangeName,
+  onChangeEmail,
+  onChangePassword,
+  onNext,
+  onBack,
+  initialMode = 'signup',
+}) => {
+  const [mode, setMode] = useState(initialMode);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [confirmSent, setConfirmSent] = useState(false);
@@ -237,7 +251,7 @@ const SignUpStep = ({ step, total, name, email, password, onChangeName, onChange
 
   if (confirmSent) {
     return (
-      <StepShell step={step} total={total} wash={theme.colors.washYellow} onBack={onBack}>
+      <StepShell step={step} stage="you" wash={theme.colors.washYellow} onBack={onBack}>
         <View style={styles.centerFill}>
           <Text style={styles.h1Center}>Check your email</Text>
           <Text style={styles.bodyLgCenter}>
@@ -251,7 +265,7 @@ const SignUpStep = ({ step, total, name, email, password, onChangeName, onChange
   }
 
   return (
-    <StepShell step={step} total={total} wash={theme.colors.washYellow} onBack={onBack}>
+    <StepShell step={step} stage="you" wash={theme.colors.washYellow} onBack={onBack}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.fillBetween}>
         <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <Text style={styles.h1}>{isSignUp ? 'Create your account' : 'Welcome back'}</Text>
@@ -311,8 +325,8 @@ const SignUpStep = ({ step, total, name, email, password, onChangeName, onChange
 };
 
 // --- Step 3: Why — one-tap chips, personalizes the activation screen's copy ---
-const WhyStep = ({ step, total, why, onPick, onNext, onBack }) => (
-  <StepShell step={step} total={total} wash={theme.colors.washYellow} onBack={onBack}>
+const WhyStep = ({ step, why, onPick, onNext, onBack }) => (
+  <StepShell step={step} stage="why" wash={theme.colors.washYellow} onBack={onBack}>
     <View style={styles.fillBetween}>
       <View style={styles.topContent}>
         <Text style={styles.h1}>What brought you here?</Text>
@@ -336,8 +350,8 @@ const WhyStep = ({ step, total, why, onPick, onNext, onBack }) => (
 );
 
 // --- Step 4: Ritual time — one clear action, sets the daily check-in ---
-const RitualTimeStep = ({ step, total, ritualTime, onPick, onNext, onBack }) => (
-  <StepShell step={step} total={total} wash={theme.colors.washYellow} onBack={onBack}>
+const RitualTimeStep = ({ step, ritualTime, onPick, onNext, onBack }) => (
+  <StepShell step={step} stage="ritual" wash={theme.colors.washYellow} onBack={onBack}>
     <View style={styles.fillBetween}>
       <View style={styles.topContent}>
         <Text style={styles.h1}>When's your moment?</Text>
@@ -370,7 +384,7 @@ const RitualTimeStep = ({ step, total, ritualTime, onPick, onNext, onBack }) => 
 );
 
 // --- Step 5: First entry — the activation moment. Everything funnels here. ---
-const FirstEntryStep = ({ step, total, name, onNext, onBack, onSave }) => {
+const FirstEntryStep = ({ step, name, onNext, onBack, onSave }) => {
   const [text, setText] = useState('');
   const canSave = !!text.trim();
 
@@ -381,7 +395,7 @@ const FirstEntryStep = ({ step, total, name, onNext, onBack, onSave }) => {
   };
 
   return (
-    <StepShell step={step} total={total} wash={theme.colors.washPeach} onBack={onBack}>
+    <StepShell step={step} stage="entry" wash={theme.colors.washPeach} onBack={onBack}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.fillBetween}>
         <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <Text style={styles.h1}>
@@ -410,8 +424,8 @@ const FirstEntryStep = ({ step, total, name, onNext, onBack, onSave }) => {
 
 // --- Step 6: Celebration — always the first-ever-save treatment (screen 5's ---
 // --- save IS the first-ever save), never the bare badge. ---
-const CelebrationStep = ({ step, total, name, onDone }) => (
-  <StepShell step={step} total={total} wash={theme.colors.washPeach}>
+const CelebrationStep = ({ step, name, onDone }) => (
+  <StepShell step={step} stage="done" wash={theme.colors.washPeach}>
     <View style={styles.centerFill}>
       <View style={styles.badgeStage}>
         <CelebrationRays />
@@ -428,7 +442,7 @@ const CelebrationStep = ({ step, total, name, onDone }) => (
 // --- adds the four claim screens before Name). Flow read once from the
 // --- hidden dev toggle (DevSettings); Welcome is shared so there's no
 // --- flicker if it resolves a beat after mount. ---
-export const OnboardingFlow = ({ onDone, initialFlow = 'B' }) => {
+export const OnboardingFlow = ({ onDone, initialFlow = 'B', startAt }) => {
   const { session } = useAuth();
   const [flow, setFlow] = useState(initialFlow);
   const [step, setStep] = useState(0);
@@ -438,8 +452,17 @@ export const OnboardingFlow = ({ onDone, initialFlow = 'B' }) => {
   const [why, setWhy] = useState(null);
   const [ritualTime, setRitualTime] = useState(null);
 
+  // Honeycomb's empty state ("Finish signup" / "Sign in") lands here instead
+  // of a second auth form on the tab — jump straight to the account step at
+  // whichever flow is actually resolved, rather than assuming initialFlow.
   useEffect(() => {
-    DevSettings.getOnboardingFlow().then(setFlow);
+    DevSettings.getOnboardingFlow().then((resolvedFlow) => {
+      setFlow(resolvedFlow);
+      if (startAt === 'signup' || startAt === 'signin') {
+        const offset = resolvedFlow === 'B' ? claimStart + CLAIM_SCREENS.length : claimStart;
+        setStep(offset);
+      }
+    });
   }, []);
 
   const next = () => setStep((s) => s + 1);
@@ -454,8 +477,6 @@ export const OnboardingFlow = ({ onDone, initialFlow = 'B' }) => {
     EntryStore.saveEntry(new Date(), text, tagEntry(text));
   };
 
-  const total = flow === 'B' ? 10 : 6;
-  const claimStart = 1; // first claim screen's index in Flow B
   const isClaimStep = flow === 'B' && step >= claimStart && step < claimStart + CLAIM_SCREENS.length;
   // Bee leads transitions BETWEEN claims only (B1→B2→B3→B4) — 3 flights,
   // never on the Welcome→B1 or B4→Name boundary (§4 scarcity).
@@ -477,7 +498,6 @@ export const OnboardingFlow = ({ onDone, initialFlow = 'B' }) => {
     body = (
       <WelcomeStep
         step={0}
-        total={total}
         onNext={next}
         flow={flow}
         onChangeFlow={handleChangeFlow}
@@ -488,7 +508,6 @@ export const OnboardingFlow = ({ onDone, initialFlow = 'B' }) => {
     body = (
       <ClaimStep
         step={step}
-        total={total}
         data={CLAIM_SCREENS[step - claimStart]}
         onNext={next}
         onBack={back}
@@ -503,7 +522,6 @@ export const OnboardingFlow = ({ onDone, initialFlow = 'B' }) => {
         body = session ? null : (
           <SignUpStep
             step={step}
-            total={total}
             name={name}
             email={email}
             password={password}
@@ -512,17 +530,17 @@ export const OnboardingFlow = ({ onDone, initialFlow = 'B' }) => {
             onChangePassword={setPassword}
             onNext={next}
             onBack={back}
+            initialMode={startAt === 'signin' ? 'signin' : 'signup'}
           />
         );
         break;
       case 1:
-        body = <WhyStep step={step} total={total} why={why} onPick={setWhy} onNext={next} onBack={back} />;
+        body = <WhyStep step={step} why={why} onPick={setWhy} onNext={next} onBack={back} />;
         break;
       case 2:
         body = (
           <RitualTimeStep
             step={step}
-            total={total}
             ritualTime={ritualTime}
             onPick={setRitualTime}
             onNext={next}
@@ -532,11 +550,11 @@ export const OnboardingFlow = ({ onDone, initialFlow = 'B' }) => {
         break;
       case 3:
         body = (
-          <FirstEntryStep step={step} total={total} name={name} onNext={next} onBack={back} onSave={handleSaveEntry} />
+          <FirstEntryStep step={step} name={name} onNext={next} onBack={back} onSave={handleSaveEntry} />
         );
         break;
       default:
-        body = <CelebrationStep step={step} total={total} name={name} onDone={onDone} />;
+        body = <CelebrationStep step={step} name={name} onDone={onDone} />;
     }
   }
 

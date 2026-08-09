@@ -82,12 +82,12 @@ export const FeedCard = ({ share, onLikeToggled }) => {
             size={18}
             color={share.likedByMe ? theme.colors.accent : theme.colors.textSecondary}
           />
-          <Text style={styles.actionText}>{share.likeCount}</Text>
+          {share.likeCount > 0 && <Text style={styles.actionText}>{share.likeCount}</Text>}
         </PressableScale>
 
         <PressableScale onPress={toggleComments} style={styles.actionButton}>
           <Ionicons name="chatbubble-outline" size={17} color={theme.colors.textSecondary} />
-          <Text style={styles.actionText}>{commentCount}</Text>
+          {commentCount > 0 && <Text style={styles.actionText}>{commentCount}</Text>}
         </PressableScale>
       </View>
 

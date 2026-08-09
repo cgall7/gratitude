@@ -1,6 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import { StyleSheet, View, Text, TextInput, ScrollView, ActivityIndicator } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { theme } from '../constants/theme';
 import { useAuth } from '../contexts/AuthContext';
 import { HoneycombStore } from '../services/HoneycombStore';
@@ -11,7 +11,6 @@ import { PressableScale } from '../components/PressableScale';
 import { FeedCard } from '../components/FeedCard';
 import { HoneycombGrid } from '../components/HoneycombGrid';
 import { DEMO_HIVE_MEMBERS } from '../constants/demoHive';
-import { HoneycombAuth } from './HoneycombAuth';
 
 // Real shares go first (center of the spiral, full opacity) so they read as
 // the actual hive; demo members fill the outer rings behind them so the
@@ -180,9 +179,11 @@ const HoneycombFeed = () => {
             {addMessage.text}
           </Text>
         )}
-        <Text style={styles.connectionsCount}>
-          {connections.length} connection{connections.length === 1 ? '' : 's'}
-        </Text>
+        {connections.length > 0 && (
+          <Text style={styles.connectionsCount}>
+            {connections.length} connection{connections.length === 1 ? '' : 's'}
+          </Text>
+        )}
       </View>
 
       {incomingRequests.length > 0 && (
@@ -222,6 +223,32 @@ const HoneycombFeed = () => {
   );
 };
 
+// Shown instead of the feed when there's no session — demo-skip, or a
+// backgrounded/foregrounded resume that landed here before signup. Points
+// back to onboarding's SignUpStep rather than putting a second full
+// create-account form behind the honeycomb tab (Colin + Sage ruling,
+// 2026-08-09: account creation lives in onboarding only).
+const HoneycombEmptyState = () => {
+  const navigation = useNavigation();
+
+  return (
+    <View style={[styles.container, styles.gateContainer]}>
+      <Text style={styles.gateDisplay}>Your hive is waiting.</Text>
+      <Text style={styles.gateBody}>Finish setting up your account to open it — takes less than a minute.</Text>
+      <PrimaryButton onPress={() => navigation.getParent()?.navigate('Onboarding', { startAt: 'signup' })}>
+        Finish signup
+      </PrimaryButton>
+      <PressableScale
+        onPress={() => navigation.getParent()?.navigate('Onboarding', { startAt: 'signin' })}
+        haptic={null}
+        style={styles.gateSignInLink}
+      >
+        <Text style={styles.gateSignInText}>Already have an account? Sign in</Text>
+      </PressableScale>
+    </View>
+  );
+};
+
 export const HoneycombTab = () => {
   const { session, loading } = useAuth();
 
@@ -233,7 +260,7 @@ export const HoneycombTab = () => {
     );
   }
 
-  return session ? <HoneycombFeed /> : <HoneycombAuth />;
+  return session ? <HoneycombFeed /> : <HoneycombEmptyState />;
 };
 
 const styles = StyleSheet.create({
@@ -251,6 +278,30 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.background,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  gateContainer: {
+    backgroundColor: theme.colors.washYellow,
+    justifyContent: 'center',
+    paddingHorizontal: 28,
+  },
+  gateDisplay: {
+    ...theme.type.h2,
+    color: theme.colors.textPrimary,
+    marginBottom: 12,
+  },
+  gateBody: {
+    ...theme.type.bodyLg,
+    color: theme.colors.inkSoft,
+    marginBottom: 28,
+  },
+  gateSignInLink: {
+    alignSelf: 'center',
+    marginTop: 18,
+  },
+  gateSignInText: {
+    ...theme.type.bodySm,
+    color: theme.colors.inkSoft,
+    textDecorationLine: 'underline',
   },
   header: {
     ...theme.type.h1,

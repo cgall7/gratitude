@@ -127,7 +127,9 @@ export const HoneycombStore = {
       .eq('entry_date', date)
       .limit(1);
     if (error) throw error;
-    return Boolean(data?.[0]?.shares?.length);
+    // shares(id) is a to-one embed (unique entry_id) — PostgREST returns an
+    // object, not an array, so `.length` is always undefined here.
+    return Boolean(data?.[0]?.shares?.id);
   },
 
   // --- Feed ---------------------------------------------------------------
