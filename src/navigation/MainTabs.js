@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { View, StyleSheet, Animated } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { theme } from '../constants/theme';
 import { TodayTab } from '../screens/TodayTab';
@@ -15,9 +15,9 @@ const Tab = createBottomTabNavigator();
 // real iOS tab bars use to make the current tab unmistakable.
 const TAB_ICONS = {
   Today: { active: 'sunny', inactive: 'sunny-outline' },
+  Honeycomb: { active: 'hexagon', inactive: 'hexagon-outline', set: MaterialCommunityIcons },
   Recap: { active: 'book', inactive: 'book-outline' },
   Wrapped: { active: 'gift', inactive: 'gift-outline' },
-  Honeycomb: { active: 'people', inactive: 'people-outline' },
 };
 
 // A pill of accent color slides in behind the active icon instead of just
@@ -32,10 +32,12 @@ const TabIcon = ({ routeName, focused }) => {
     Animated.spring(scale, { toValue: 1, friction: 5, tension: 240, useNativeDriver: true }).start();
   }, [focused]);
 
+  const IconComponent = TAB_ICONS[routeName].set ?? Ionicons;
+
   return (
     <View style={[styles.iconPill, focused && styles.iconPillActive]}>
       <Animated.View style={{ transform: [{ scale }] }}>
-        <Ionicons
+        <IconComponent
           name={focused ? TAB_ICONS[routeName].active : TAB_ICONS[routeName].inactive}
           size={20}
           color={focused ? theme.colors.textPrimary : theme.colors.textSecondary}
@@ -60,9 +62,9 @@ export const MainTabs = () => (
     })}
   >
     <Tab.Screen name="Today" component={TodayTab} />
+    <Tab.Screen name="Honeycomb" component={HoneycombTab} />
     <Tab.Screen name="Recap" component={RecapTab} />
     <Tab.Screen name="Wrapped" component={GratitudeWrapped} />
-    <Tab.Screen name="Honeycomb" component={HoneycombTab} />
   </Tab.Navigator>
 );
 

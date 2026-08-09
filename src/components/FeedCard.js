@@ -80,7 +80,7 @@ export const FeedCard = ({ share, onLikeToggled }) => {
           <Ionicons
             name={share.likedByMe ? 'heart' : 'heart-outline'}
             size={18}
-            color={share.likedByMe ? theme.colors.accentDeep : theme.colors.textSecondary}
+            color={share.likedByMe ? theme.colors.accent : theme.colors.textSecondary}
           />
           <Text style={styles.actionText}>{share.likeCount}</Text>
         </PressableScale>
@@ -106,14 +106,14 @@ export const FeedCard = ({ share, onLikeToggled }) => {
           <View style={styles.commentInputRow}>
             <TextInput
               style={styles.commentInput}
-              placeholder="Add a comment…"
+              placeholder="Say something kind."
               placeholderTextColor={theme.colors.textSecondary}
               value={commentText}
               onChangeText={setCommentText}
               editable={!postingComment}
             />
             <PressableScale onPress={handlePostComment} disabled={!commentText.trim() || postingComment}>
-              <Ionicons name="arrow-up-circle" size={30} color={theme.colors.accentDeep} />
+              <Ionicons name="arrow-up-circle" size={30} color={theme.colors.ink} />
             </PressableScale>
           </View>
         </View>

@@ -13,10 +13,10 @@ import { HoneycombAuth } from './HoneycombAuth';
 
 const RequestRow = ({ request, onRespond }) => (
   <View style={styles.requestRow}>
-    <Text style={styles.requestName}>{request.requester?.display_name ?? 'Someone'} wants to connect</Text>
+    <Text style={styles.requestName}>{request.requester?.display_name ?? 'Someone'} wants to add you to their hive.</Text>
     <View style={styles.requestActions}>
       <PressableScale onPress={() => onRespond(request.id, false)} style={styles.declineButton}>
-        <Text style={styles.declineText}>Decline</Text>
+        <Text style={styles.declineText}>Not now</Text>
       </PressableScale>
       <PressableScale onPress={() => onRespond(request.id, true)} style={styles.acceptButton}>
         <Text style={styles.acceptText}>Accept</Text>
@@ -174,13 +174,22 @@ const HoneycombFeed = () => {
           {sharing ? 'Sharing…' : "Share today's gratitude"}
         </PrimaryButton>
       )}
+      {todayEntry && alreadySharedToday && (
+        <Text style={styles.sharedConfirmation}>Shared to your hive.</Text>
+      )}
 
       {feed.length === 0 ? (
-        <View style={styles.emptyCard}>
-          <Text style={styles.emptyText}>
-            No shared entries yet. Add a connection and share today's gratitude to start your feed.
-          </Text>
-        </View>
+        connections.length === 0 ? (
+          <View style={[styles.emptyState, styles.emptyStateYellow]}>
+            <Text style={styles.emptyTitle}>Your hive is quiet.</Text>
+            <Text style={styles.emptyBody}>Add a connection by email to get started.</Text>
+          </View>
+        ) : (
+          <View style={[styles.emptyState, styles.emptyStateSky]}>
+            <Text style={styles.emptyTitle}>Nothing in the hive yet.</Text>
+            <Text style={styles.emptyBody}>Be the first — share today's entry…</Text>
+          </View>
+        )
       ) : (
         feed.map((share) => <FeedCard key={share.id} share={share} onLikeToggled={handleLikeToggled} />)
       )}
@@ -225,7 +234,7 @@ const styles = StyleSheet.create({
   },
   sectionLabel: {
     ...theme.type.label,
-    color: theme.colors.accentDeep,
+    color: theme.colors.inkSoft,
     marginBottom: 12,
   },
   addCard: {
@@ -264,7 +273,7 @@ const styles = StyleSheet.create({
   },
   addMessage: {
     ...theme.type.bodySm,
-    color: theme.colors.accentDeep,
+    color: theme.colors.inkSoft,
     marginTop: 10,
   },
   addMessageError: {
@@ -324,17 +333,31 @@ const styles = StyleSheet.create({
   shareButton: {
     marginBottom: 20,
   },
-  emptyCard: {
-    backgroundColor: theme.colors.surface,
-    borderWidth: 1,
-    borderColor: theme.colors.surfaceBorder,
-    borderRadius: theme.borderRadius.large,
-    padding: 24,
+  sharedConfirmation: {
+    ...theme.type.bodySm,
+    color: theme.colors.inkSoft,
+    marginBottom: 20,
+  },
+  emptyState: {
+    marginHorizontal: -24,
+    padding: 32,
     alignItems: 'center',
   },
-  emptyText: {
-    ...theme.type.body,
-    color: theme.colors.textSecondary,
+  emptyStateYellow: {
+    backgroundColor: theme.colors.washYellow,
+  },
+  emptyStateSky: {
+    backgroundColor: theme.colors.washSky,
+  },
+  emptyTitle: {
+    ...theme.type.h2,
+    color: theme.colors.textPrimary,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  emptyBody: {
+    ...theme.type.bodyLg,
+    color: theme.colors.inkSoft,
     textAlign: 'center',
   },
 });
