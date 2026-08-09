@@ -2,10 +2,14 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Animated, StyleSheet, AccessibilityInfo } from 'react-native';
 import { Bee } from './Bee';
 
-// Per PLANS/HONEYCOMB_DESIGN.md §3 / §4: the bee arcs in and lifts off
+// Per PLANS/HONEYCOMB_DESIGN.md §3 / §9.4: the bee arcs in and lifts off
 // between claim screens, doing narrative work (stitching the argument
 // together) rather than decorating. Scarcity rules: never idles, never
 // loops, 2s cooldown between flights, reduced-motion collapses to a fade.
+// Uses a glide spring (friction 9 / tension 60), not §4's pop spring —
+// flight is traversal, not feedback, so a bounce reads wrong here. Pixel
+// ratified this as the standard for all three Honeycomb bee moments too
+// (gate R7, §9.4 amendment).
 const COOLDOWN_MS = 2000;
 
 export const BeeTransition = ({ triggerKey }) => {
