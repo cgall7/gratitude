@@ -124,12 +124,35 @@ const StepShell = ({ step, total, wash, onBack, children }) => {
 };
 
 // --- Step 1: Welcome — show the value before asking for any effort ---
-const WelcomeStep = ({ step, total, onNext }) => (
+// Demo-mode only: a visible A/B picker so anyone running the app can switch
+// flows without knowing the hidden 5-tap gesture (DevVersionTag). Sits below
+// the value prop so it never competes with the actual pitch.
+const FlowToggle = ({ flow, onChange }) => (
+  <View style={styles.flowToggleRow}>
+    {['A', 'B'].map((option) => {
+      const selected = option === flow;
+      return (
+        <PressableScale
+          key={option}
+          onPress={() => onChange(option)}
+          style={[styles.flowToggleChip, selected && styles.flowToggleChipSelected]}
+        >
+          <Text style={[styles.flowToggleText, selected && styles.flowToggleTextSelected]}>
+            Flow {option}
+          </Text>
+        </PressableScale>
+      );
+    })}
+  </View>
+);
+
+const WelcomeStep = ({ step, total, onNext, flow, onChangeFlow }) => (
   <StepShell step={step} total={total} wash={theme.colors.washYellow}>
     <View style={styles.centerFill}>
       <Text style={styles.wordmark}>Gratitude</Text>
       <Text style={styles.h1Center}>A brighter way to end your day.</Text>
     </View>
+    <FlowToggle flow={flow} onChange={onChangeFlow} />
     <PrimaryButton onPress={onNext}>Begin</PrimaryButton>
   </StepShell>
 );
@@ -307,6 +330,11 @@ export const OnboardingFlow = ({ onDone, initialFlow = 'A' }) => {
   const next = () => setStep((s) => s + 1);
   const back = () => setStep((s) => Math.max(0, s - 1));
 
+  const handleChangeFlow = (nextFlow) => {
+    setFlow(nextFlow);
+    DevSettings.setOnboardingFlow(nextFlow);
+  };
+
   const handleSaveEntry = (text) => {
     EntryStore.saveEntry(new Date(), text, tagEntry(text));
   };
@@ -322,7 +350,7 @@ export const OnboardingFlow = ({ onDone, initialFlow = 'A' }) => {
 
   let body;
   if (step === 0) {
-    body = <WelcomeStep step={0} total={total} onNext={next} />;
+    body = <WelcomeStep step={0} total={total} onNext={next} flow={flow} onChangeFlow={handleChangeFlow} />;
   } else if (isClaimStep) {
     body = (
       <ClaimStep
@@ -552,5 +580,32 @@ const styles = StyleSheet.create({
   },
   floatingButton: {
     marginTop: 16,
+  },
+  flowToggleRow: {
+    flexDirection: 'row',
+    alignSelf: 'center',
+    gap: 8,
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: theme.colors.surfaceBorder,
+    borderRadius: theme.borderRadius.full,
+    padding: 4,
+    marginBottom: 16,
+  },
+  flowToggleChip: {
+    paddingVertical: 8,
+    paddingHorizontal: 18,
+    borderRadius: theme.borderRadius.full,
+  },
+  flowToggleChipSelected: {
+    backgroundColor: theme.colors.washYellow,
+  },
+  flowToggleText: {
+    ...theme.type.bodySm,
+    color: theme.colors.inkSoft,
+  },
+  flowToggleTextSelected: {
+    fontFamily: theme.fonts.bodySemiBold,
+    color: theme.colors.ink,
   },
 });

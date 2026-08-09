@@ -15,7 +15,7 @@ const Tab = createBottomTabNavigator();
 // real iOS tab bars use to make the current tab unmistakable.
 const TAB_ICONS = {
   Today: { active: 'sunny', inactive: 'sunny-outline' },
-  Honeycomb: { active: 'hexagon', inactive: 'hexagon-outline', set: MaterialCommunityIcons },
+  Honeycomb: { active: 'hexagon-multiple', inactive: 'hexagon-multiple-outline', set: MaterialCommunityIcons },
   Recap: { active: 'book', inactive: 'book-outline' },
   Wrapped: { active: 'gift', inactive: 'gift-outline' },
 };
@@ -39,7 +39,7 @@ const TabIcon = ({ routeName, focused }) => {
       <Animated.View style={{ transform: [{ scale }] }}>
         <IconComponent
           name={focused ? TAB_ICONS[routeName].active : TAB_ICONS[routeName].inactive}
-          size={20}
+          size={23}
           color={focused ? theme.colors.textPrimary : theme.colors.textSecondary}
         />
       </Animated.View>
@@ -51,12 +51,11 @@ export const MainTabs = () => (
   <Tab.Navigator
     screenOptions={({ route }) => ({
       headerShown: false,
-      tabBarShowLabel: true,
+      tabBarShowLabel: false,
       tabBarActiveTintColor: theme.colors.textPrimary,
       tabBarInactiveTintColor: theme.colors.textSecondary,
       tabBarStyle: styles.tabBar,
       tabBarItemStyle: styles.tabBarItem,
-      tabBarLabelStyle: styles.tabBarLabel,
       tabBarButton: (props) => <TabBarButton {...props} />,
       tabBarIcon: ({ focused }) => <TabIcon routeName={route.name} focused={focused} />,
     })}
@@ -78,20 +77,14 @@ const styles = StyleSheet.create({
     borderRadius: theme.borderRadius.large,
     backgroundColor: theme.colors.surface,
     borderTopWidth: 0,
-    paddingTop: 10,
     ...theme.shadows.floating,
   },
   tabBarItem: {
-    paddingTop: 2,
-  },
-  tabBarLabel: {
-    fontFamily: theme.fonts.bodySemiBold,
-    fontSize: 11,
-    marginTop: 2,
+    paddingTop: 0,
   },
   iconPill: {
-    width: 40,
-    height: 28,
+    width: 48,
+    height: 40,
     borderRadius: theme.borderRadius.full,
     alignItems: 'center',
     justifyContent: 'center',

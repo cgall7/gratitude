@@ -9,7 +9,30 @@ import { toISODate } from '../utils/dateRanges';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { PressableScale } from '../components/PressableScale';
 import { FeedCard } from '../components/FeedCard';
+import { HoneycombGrid } from '../components/HoneycombGrid';
+import { DEMO_HIVE_MEMBERS } from '../constants/demoHive';
 import { HoneycombAuth } from './HoneycombAuth';
+
+// Real shares go first (center of the spiral, full opacity) so they read as
+// the actual hive; demo members fill the outer rings behind them so the
+// honeycomb always looks alive even with 0-2 real connections. Capped so
+// the grid stays a tidy cluster instead of sprawling off-screen.
+const MAX_HIVE_CELLS = 12;
+
+const toGridMember = (share) => ({
+  id: share.id,
+  name: share.isOwn ? 'You' : share.author?.display_name ?? 'Someone',
+  gratitude: share.content,
+  avatarUrl: share.author?.avatar_url,
+  isOwn: share.isOwn,
+  isDemo: false,
+});
+
+const buildHiveMembers = (feed) => {
+  const real = feed.map(toGridMember);
+  const combined = real.concat(DEMO_HIVE_MEMBERS);
+  return combined.slice(0, MAX_HIVE_CELLS);
+};
 
 const RequestRow = ({ request, onRespond }) => (
   <View style={styles.requestRow}>
@@ -132,6 +155,8 @@ const HoneycombFeed = () => {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.header}>Honeycomb</Text>
+
+      <HoneycombGrid members={buildHiveMembers(feed)} />
 
       <View style={styles.addCard}>
         <Text style={styles.sectionLabel}>ADD A CONNECTION</Text>
