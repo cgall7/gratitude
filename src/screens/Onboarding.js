@@ -23,6 +23,8 @@ import { CelebrationRays } from '../components/CelebrationRays';
 import { IdeasAccordion } from '../components/IdeasAccordion';
 import { BeeTransition } from '../components/BeeTransition';
 import { DevSettings } from '../services/devSettings';
+import { HoneycombStore } from '../services/HoneycombStore';
+import { useAuth } from '../contexts/AuthContext';
 
 const HIT_SLOP = { top: 12, bottom: 12, left: 12, right: 12 };
 
@@ -182,28 +184,131 @@ const ClaimStep = ({ step, total, data, onNext, onBack }) => (
   </StepShell>
 );
 
-// --- Step 2: Name — one useful question, used to personalize later screens ---
-const NameStep = ({ step, total, name, onChangeName, onNext, onBack }) => (
-  <StepShell step={step} total={total} wash={theme.colors.washYellow} onBack={onBack}>
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.fillBetween}>
-      <View style={styles.topContent}>
-        <Text style={styles.h1}>What should we call you?</Text>
-        <View style={styles.inputCard}>
-          <TextInput
-            style={styles.nameInput}
-            placeholder="Your name"
-            placeholderTextColor={theme.colors.inkSoft}
-            value={name}
-            onChangeText={onChangeName}
-            autoFocus
-            returnKeyType="done"
-          />
+// --- Step 2: Sign up — name + email + password, creates the real Supabase
+// --- account right here instead of gating it behind the Honeycomb tab
+// --- (Colin, 2026-08-09). Mirrors HoneycombAuth's create/sign-in toggle so
+// --- returning testers on the same device aren't stuck re-registering.
+const SignUpStep = ({ step, total, name, email, password, onChangeName, onChangeEmail, onChangePassword, onNext, onBack }) => {
+  const [mode, setMode] = useState('signup');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const [confirmSent, setConfirmSent] = useState(false);
+  const isSignUp = mode === 'signup';
+  const canSubmit = email.trim() && password.length >= 6 && (!isSignUp || name.trim()) && !busy;
+
+  const attemptSignIn = async () => {
+    await HoneycombStore.signIn(email.trim(), password);
+    onNext();
+  };
+
+  const handleSubmit = async () => {
+    if (!canSubmit) return;
+    setBusy(true);
+    setError(null);
+    try {
+      if (isSignUp) {
+        const result = await HoneycombStore.signUp(email.trim(), password, name.trim());
+        if (result.session) {
+          onNext();
+        } else {
+          setConfirmSent(true);
+        }
+      } else {
+        await attemptSignIn();
+      }
+    } catch (err) {
+      // Repeat demo pass on the same device, same email — quietly try
+      // signing in instead of dead-ending on "already registered."
+      if (isSignUp && /registered|exists/i.test(err.message || '')) {
+        try {
+          await attemptSignIn();
+          return;
+        } catch (signInErr) {
+          setError(signInErr.message || 'That email is already in use — try signing in.');
+          setMode('signin');
+          return;
+        }
+      }
+      setError(err.message || 'Something went wrong — try again.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (confirmSent) {
+    return (
+      <StepShell step={step} total={total} wash={theme.colors.washYellow} onBack={onBack}>
+        <View style={styles.centerFill}>
+          <Text style={styles.h1Center}>Check your email</Text>
+          <Text style={styles.bodyLgCenter}>
+            We sent a confirmation link to {email.trim()}. You can keep going now — just confirm it before you try
+            sharing to the hive.
+          </Text>
         </View>
-      </View>
-      <PrimaryButton onPress={onNext} disabled={!name.trim()}>Next</PrimaryButton>
-    </KeyboardAvoidingView>
-  </StepShell>
-);
+        <PrimaryButton onPress={onNext}>Continue</PrimaryButton>
+      </StepShell>
+    );
+  }
+
+  return (
+    <StepShell step={step} total={total} wash={theme.colors.washYellow} onBack={onBack}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.fillBetween}>
+        <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+          <Text style={styles.h1}>{isSignUp ? 'Create your account' : 'Welcome back'}</Text>
+          <Text style={styles.bodySm}>
+            {isSignUp ? "So your hive knows who's sharing." : 'Sign in to pick up where you left off.'}
+          </Text>
+          <View style={styles.inputCard}>
+            {isSignUp && (
+              <TextInput
+                style={styles.nameInput}
+                placeholder="Your name"
+                placeholderTextColor={theme.colors.inkSoft}
+                value={name}
+                onChangeText={onChangeName}
+                autoCapitalize="words"
+                returnKeyType="next"
+                editable={!busy}
+              />
+            )}
+            {isSignUp && <View style={styles.inputDivider} />}
+            <TextInput
+              style={styles.nameInput}
+              placeholder="Email"
+              placeholderTextColor={theme.colors.inkSoft}
+              value={email}
+              onChangeText={onChangeEmail}
+              autoCapitalize="none"
+              keyboardType="email-address"
+              returnKeyType="next"
+              editable={!busy}
+            />
+            <View style={styles.inputDivider} />
+            <TextInput
+              style={styles.nameInput}
+              placeholder="Password (6+ characters)"
+              placeholderTextColor={theme.colors.inkSoft}
+              value={password}
+              onChangeText={onChangePassword}
+              secureTextEntry
+              returnKeyType="done"
+              editable={!busy}
+            />
+          </View>
+          {error && <Text style={styles.signUpError}>{error}</Text>}
+          <PressableScale onPress={() => setMode(isSignUp ? 'signin' : 'signup')} haptic={null}>
+            <Text style={styles.switchModeText}>
+              {isSignUp ? 'Already have an account? Sign in' : 'New here? Create an account'}
+            </Text>
+          </PressableScale>
+        </ScrollView>
+        <PrimaryButton onPress={handleSubmit} disabled={!canSubmit} style={styles.floatingButton}>
+          {busy ? (isSignUp ? 'Creating account…' : 'Signing in…') : isSignUp ? 'Create account' : 'Sign in'}
+        </PrimaryButton>
+      </KeyboardAvoidingView>
+    </StepShell>
+  );
+};
 
 // --- Step 3: Why — one-tap chips, personalizes the activation screen's copy ---
 const WhyStep = ({ step, total, why, onPick, onNext, onBack }) => (
@@ -324,9 +429,12 @@ const CelebrationStep = ({ step, total, name, onDone }) => (
 // --- hidden dev toggle (DevSettings); Welcome is shared so there's no
 // --- flicker if it resolves a beat after mount. ---
 export const OnboardingFlow = ({ onDone, initialFlow = 'B' }) => {
+  const { session } = useAuth();
   const [flow, setFlow] = useState(initialFlow);
   const [step, setStep] = useState(0);
   const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [why, setWhy] = useState(null);
   const [ritualTime, setRitualTime] = useState(null);
 
@@ -355,6 +463,15 @@ export const OnboardingFlow = ({ onDone, initialFlow = 'B' }) => {
 
   const sharedOffset = flow === 'B' ? claimStart + CLAIM_SCREENS.length : claimStart;
 
+  // Demo mode resets to onboarding on every foreground resume — if this
+  // device already has a real session (signed up on a previous pass),
+  // don't make them create an account again. Skip straight past the step.
+  useEffect(() => {
+    if (session && step === sharedOffset) {
+      next();
+    }
+  }, [session, step, sharedOffset]);
+
   let body;
   if (step === 0) {
     body = (
@@ -381,7 +498,22 @@ export const OnboardingFlow = ({ onDone, initialFlow = 'B' }) => {
     const sharedStep = step - sharedOffset; // 0=Name, 1=Why, 2=Ritual, 3=FirstEntry, 4+=Celebration
     switch (sharedStep) {
       case 0:
-        body = <NameStep step={step} total={total} name={name} onChangeName={setName} onNext={next} onBack={back} />;
+        // Already signed in (demo-mode resume) — the effect above skips
+        // this step; render nothing rather than flash the sign-up form.
+        body = session ? null : (
+          <SignUpStep
+            step={step}
+            total={total}
+            name={name}
+            email={email}
+            password={password}
+            onChangeName={setName}
+            onChangeEmail={setEmail}
+            onChangePassword={setPassword}
+            onNext={next}
+            onBack={back}
+          />
+        );
         break;
       case 1:
         body = <WhyStep step={step} total={total} why={why} onPick={setWhy} onNext={next} onBack={back} />;
@@ -520,6 +652,23 @@ const styles = StyleSheet.create({
     fontFamily: theme.fonts.body,
     fontSize: 19,
     color: theme.colors.ink,
+    paddingVertical: 4,
+  },
+  inputDivider: {
+    height: 1,
+    backgroundColor: theme.colors.surfaceBorder,
+    marginVertical: 14,
+  },
+  signUpError: {
+    ...theme.type.bodySm,
+    color: theme.colors.danger,
+    marginTop: -8,
+    marginBottom: 16,
+  },
+  switchModeText: {
+    ...theme.type.bodySm,
+    color: theme.colors.accentDeep,
+    textAlign: 'center',
   },
   entryInput: {
     fontFamily: theme.fonts.body,

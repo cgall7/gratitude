@@ -20,30 +20,38 @@ const TAB_ICONS = {
   Wrapped: { active: 'gift', inactive: 'gift-outline' },
 };
 
-// A pill of accent color slides in behind the active icon instead of just
-// tinting it — makes the current tab unmistakable at a glance. The icon
-// itself pops with a spring on the switch so landing on a tab feels alive.
+// A full-color pill lands behind the active icon and lifts it slightly —
+// makes the current tab unmistakable at a glance, not just a tint change.
+// The icon itself pops with a spring on the switch so landing on a tab
+// feels alive. Sized up (Colin, 2026-08-09 — tabs felt "messy," wanted
+// bigger and more delightful).
 const TabIcon = ({ routeName, focused }) => {
   const scale = useRef(new Animated.Value(1)).current;
+  const lift = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    if (!focused) return;
-    scale.setValue(0.7);
-    Animated.spring(scale, { toValue: 1, friction: 5, tension: 240, useNativeDriver: true }).start();
+    if (!focused) {
+      lift.setValue(0);
+      return;
+    }
+    scale.setValue(0.6);
+    Animated.spring(scale, { toValue: 1, friction: 5, tension: 220, useNativeDriver: true }).start();
+    Animated.spring(lift, { toValue: 1, friction: 7, tension: 160, useNativeDriver: true }).start();
   }, [focused]);
 
   const IconComponent = TAB_ICONS[routeName].set ?? Ionicons;
+  const translateY = lift.interpolate({ inputRange: [0, 1], outputRange: [0, -3] });
 
   return (
-    <View style={[styles.iconPill, focused && styles.iconPillActive]}>
+    <Animated.View style={[styles.iconPill, focused && styles.iconPillActive, { transform: [{ translateY }] }]}>
       <Animated.View style={{ transform: [{ scale }] }}>
         <IconComponent
           name={focused ? TAB_ICONS[routeName].active : TAB_ICONS[routeName].inactive}
-          size={23}
-          color={focused ? theme.colors.textPrimary : theme.colors.textSecondary}
+          size={27}
+          color={focused ? theme.colors.ink : theme.colors.textSecondary}
         />
       </Animated.View>
-    </View>
+    </Animated.View>
   );
 };
 
@@ -73,7 +81,7 @@ const styles = StyleSheet.create({
     left: 20,
     right: 20,
     bottom: 28,
-    height: 72,
+    height: 86,
     borderRadius: theme.borderRadius.large,
     backgroundColor: theme.colors.surface,
     borderTopWidth: 0,
@@ -83,13 +91,14 @@ const styles = StyleSheet.create({
     paddingTop: 0,
   },
   iconPill: {
-    width: 48,
-    height: 40,
-    borderRadius: theme.borderRadius.full,
+    width: 60,
+    height: 52,
+    borderRadius: theme.borderRadius.large,
     alignItems: 'center',
     justifyContent: 'center',
   },
   iconPillActive: {
-    backgroundColor: theme.colors.accent + '33',
+    backgroundColor: theme.colors.accent,
+    ...theme.shadows.card,
   },
 });
