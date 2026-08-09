@@ -6,6 +6,7 @@ import { theme } from '../constants/theme';
 import { TodayTab } from '../screens/TodayTab';
 import { RecapTab } from '../screens/RecapTab';
 import { GratitudeWrapped } from '../screens/GratitudeWrapped';
+import { HoneycombTab } from '../screens/HoneycombTab';
 import { TabBarButton } from './TabBarButton';
 
 const Tab = createBottomTabNavigator();
@@ -16,6 +17,7 @@ const TAB_ICONS = {
   Today: { active: 'sunny', inactive: 'sunny-outline' },
   Recap: { active: 'book', inactive: 'book-outline' },
   Wrapped: { active: 'gift', inactive: 'gift-outline' },
+  Honeycomb: { active: 'people', inactive: 'people-outline' },
 };
 
 // A pill of accent color slides in behind the active icon instead of just
@@ -60,6 +62,7 @@ export const MainTabs = () => (
     <Tab.Screen name="Today" component={TodayTab} />
     <Tab.Screen name="Recap" component={RecapTab} />
     <Tab.Screen name="Wrapped" component={GratitudeWrapped} />
+    <Tab.Screen name="Honeycomb" component={HoneycombTab} />
   </Tab.Navigator>
 );
 

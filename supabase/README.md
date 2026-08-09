@@ -11,8 +11,9 @@
    supabase link --project-ref <your-project-ref>
    supabase db push
    ```
-3. **Auth:** the schema assumes phone-OTP auth (Supabase Auth → Providers →
-   Phone). Enable it and configure an SMS provider (Twilio, MessageBird, etc.)
-   before the honeycomb-connection flow can create real users.
+3. **Auth:** email + password (Supabase Auth → Providers → Email). Phone-OTP
+   was the original plan but needs a paid SMS provider, so connections are
+   discovered by exact email match via the `find_connectable_profile` RPC
+   (see `migrations/20260809000002_find_profile_by_email.sql`) instead.
 4. Restart `expo start` after adding `.env` — Expo only inlines
    `EXPO_PUBLIC_*` vars at bundle time, not on hot reload.
