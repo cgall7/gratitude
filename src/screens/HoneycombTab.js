@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { StyleSheet, View, Text, TextInput, ScrollView, ActivityIndicator } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { theme } from '../constants/theme';
@@ -10,7 +10,24 @@ import { PrimaryButton } from '../components/PrimaryButton';
 import { PressableScale } from '../components/PressableScale';
 import { FeedCard } from '../components/FeedCard';
 import { HoneycombGrid } from '../components/HoneycombGrid';
+import { BeeTransition } from '../components/BeeTransition';
 import { DEMO_HIVE_MEMBERS } from '../constants/demoHive';
+
+// Share carry (Sunbeam §11.2): the bee lifts the just-shared entry off the
+// button and carries it up toward the grid it just joined.
+const SHARE_CARRY_PATH = {
+  translateX: [10, -30],
+  translateY: [10, -60, -130],
+  rotate: ['6deg', '-14deg'],
+};
+
+// Feed arrival: a short touchdown at the top of the feed when a new share
+// lands there on refresh — the bee delivering it into the hive's view.
+const FEED_ARRIVAL_PATH = {
+  translateX: [-50, 30],
+  translateY: [-24, -4, 6],
+  rotate: ['-10deg', '4deg'],
+};
 
 // Real shares go first (center of the spiral, full opacity) so they read as
 // the actual hive; demo members fill the outer rings behind them so the
@@ -60,7 +77,11 @@ const HoneycombFeed = () => {
   const [addBusy, setAddBusy] = useState(false);
   const [addMessage, setAddMessage] = useState(null);
 
-  const loadAll = useCallback(async () => {
+  const [shareCarryKey, setShareCarryKey] = useState(0);
+  const [feedArrivalKey, setFeedArrivalKey] = useState(0);
+  const knownFeedIdsRef = useRef(null);
+
+  const loadAll = useCallback(async ({ suppressArrival = false } = {}) => {
     const today = toISODate(new Date());
     const [feedResult, connectionsResult, requestsResult, entry] = await Promise.all([
       HoneycombStore.listFeed(),
@@ -68,6 +89,17 @@ const HoneycombFeed = () => {
       HoneycombStore.listIncomingRequests(),
       EntryStore.getEntry(new Date()),
     ]);
+
+    // Feed arrival: fire only when a share we haven't seen yet lands at the
+    // top on a refresh — not on first load (so the bee never greets an
+    // empty hive filling in for the first time), and not right after our
+    // own share, which already got its own carry flight off the button.
+    if (knownFeedIdsRef.current && !suppressArrival) {
+      const hasNewArrival = feedResult.some((share) => !knownFeedIdsRef.current.has(share.id));
+      if (hasNewArrival) setFeedArrivalKey((key) => key + 1);
+    }
+    knownFeedIdsRef.current = new Set(feedResult.map((share) => share.id));
+
     setFeed(feedResult);
     setConnections(connectionsResult);
     setIncomingRequests(requestsResult);
@@ -131,7 +163,8 @@ const HoneycombFeed = () => {
         text: todayEntry.text,
         theme: todayEntry.theme,
       });
-      await loadAll();
+      setShareCarryKey((key) => key + 1);
+      await loadAll({ suppressArrival: true });
     } catch (err) {
       console.warn('Failed to share entry', err);
     } finally {
@@ -196,9 +229,12 @@ const HoneycombFeed = () => {
       )}
 
       {todayEntry && !alreadySharedToday && (
-        <PrimaryButton onPress={handleShareToday} disabled={sharing} style={styles.shareButton}>
-          {sharing ? 'Sharing…' : "Share today's gratitude"}
-        </PrimaryButton>
+        <View style={styles.shareButtonAnchor}>
+          <PrimaryButton onPress={handleShareToday} disabled={sharing} style={styles.shareButton}>
+            {sharing ? 'Sharing…' : "Share today's gratitude"}
+          </PrimaryButton>
+          <BeeTransition triggerKey={shareCarryKey} path={SHARE_CARRY_PATH} anchorStyle={styles.shareCarryBeeAnchor} size={16} />
+        </View>
       )}
       {todayEntry && alreadySharedToday && (
         <Text style={styles.sharedConfirmation}>Shared to your hive.</Text>
@@ -217,7 +253,12 @@ const HoneycombFeed = () => {
           </View>
         )
       ) : (
-        feed.map((share) => <FeedCard key={share.id} share={share} onLikeToggled={handleLikeToggled} />)
+        <View style={styles.feedTopAnchor}>
+          <BeeTransition triggerKey={feedArrivalKey} path={FEED_ARRIVAL_PATH} anchorStyle={styles.feedArrivalBeeAnchor} size={16} />
+          {feed.map((share) => (
+            <FeedCard key={share.id} share={share} onLikeToggled={handleLikeToggled} />
+          ))}
+        </View>
       )}
     </ScrollView>
   );
@@ -406,13 +447,28 @@ const styles = StyleSheet.create({
     fontFamily: theme.fonts.bodySemiBold,
     color: theme.colors.textPrimary,
   },
-  shareButton: {
+  shareButtonAnchor: {
     marginBottom: 20,
+  },
+  shareButton: {
+    marginBottom: 0,
+  },
+  shareCarryBeeAnchor: {
+    bottom: 12,
+    left: '50%',
+    top: undefined,
   },
   sharedConfirmation: {
     ...theme.type.bodySm,
     color: theme.colors.inkSoft,
     marginBottom: 20,
+  },
+  feedTopAnchor: {
+    position: 'relative',
+  },
+  feedArrivalBeeAnchor: {
+    top: -8,
+    left: '50%',
   },
   emptyState: {
     marginHorizontal: -24,

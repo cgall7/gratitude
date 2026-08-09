@@ -9,10 +9,20 @@ import { Bee } from './Bee';
 // Uses a glide spring (friction 9 / tension 60), not §4's pop spring —
 // flight is traversal, not feedback, so a bounce reads wrong here. Pixel
 // ratified this as the standard for all three Honeycomb bee moments too
-// (gate R7, §9.4 amendment).
+// (gate R7, §9.4 amendment) — `path`/`anchorStyle`/`size` let each of those
+// call sites tune the trajectory to its own geometry while sharing the same
+// spring + scarcity engine as the claim-screen flights.
 const COOLDOWN_MS = 2000;
 
-export const BeeTransition = ({ triggerKey }) => {
+// Matches the original claim-screen flight exactly — the default for every
+// caller that doesn't pass its own `path`.
+const DEFAULT_PATH = {
+  translateX: [-60, 280],
+  translateY: [20, -30, -70],
+  rotate: ['-4deg', '-18deg'],
+};
+
+export const BeeTransition = ({ triggerKey, path = DEFAULT_PATH, anchorStyle, size = 20 }) => {
   const progress = useRef(new Animated.Value(0)).current;
   const [reduced, setReduced] = useState(false);
   const [flying, setFlying] = useState(false);
@@ -46,23 +56,23 @@ export const BeeTransition = ({ triggerKey }) => {
   if (reduced) {
     const opacity = progress.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, 1, 0] });
     return (
-      <Animated.View pointerEvents="none" style={[styles.wrap, { opacity }]}>
-        <Bee size={20} />
+      <Animated.View pointerEvents="none" style={[styles.wrap, anchorStyle, { opacity }]}>
+        <Bee size={size} />
       </Animated.View>
     );
   }
 
-  const translateX = progress.interpolate({ inputRange: [0, 1], outputRange: [-60, 280] });
-  const translateY = progress.interpolate({ inputRange: [0, 0.5, 1], outputRange: [20, -30, -70] });
-  const rotate = progress.interpolate({ inputRange: [0, 1], outputRange: ['-4deg', '-18deg'] });
+  const translateX = progress.interpolate({ inputRange: [0, 1], outputRange: path.translateX });
+  const translateY = progress.interpolate({ inputRange: [0, 0.5, 1], outputRange: path.translateY });
+  const rotate = progress.interpolate({ inputRange: [0, 1], outputRange: path.rotate });
   const opacity = progress.interpolate({ inputRange: [0, 0.12, 0.85, 1], outputRange: [0, 1, 1, 0] });
 
   return (
     <Animated.View
       pointerEvents="none"
-      style={[styles.wrap, { opacity, transform: [{ translateX }, { translateY }, { rotate }] }]}
+      style={[styles.wrap, anchorStyle, { opacity, transform: [{ translateX }, { translateY }, { rotate }] }]}
     >
-      <Bee size={20} />
+      <Bee size={size} />
     </Animated.View>
   );
 };

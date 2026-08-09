@@ -12,7 +12,7 @@ export const CelebrationBadge = () => {
   useEffect(() => {
     Animated.sequence([
       Animated.delay(200),
-      Animated.spring(scale, { toValue: 1, friction: 5, tension: 120, useNativeDriver: true }),
+      Animated.spring(scale, { toValue: 1, friction: 4, tension: 140, useNativeDriver: true }),
     ]).start(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success));
   }, []);
 
