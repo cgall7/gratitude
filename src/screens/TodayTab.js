@@ -37,13 +37,13 @@ export const TodayTab = ({ navigation }) => {
         <Text style={styles.header}>Today</Text>
         <View style={styles.emptyCard}>
           <Text style={styles.emptyText}>
-            You haven't completed today's ritual yet. Lock in, reflect, and unlock your day.
+            You haven't shared today's good thing yet. Add one and see what's waiting for you.
           </Text>
           <TouchableOpacity
             style={styles.ctaButton}
             onPress={() => navigation.getParent()?.navigate('Lock')}
           >
-            <Text style={styles.ctaButtonText}>Start Today's Ritual</Text>
+            <Text style={styles.ctaButtonText}>Share Something Good</Text>
           </TouchableOpacity>
         </View>
       </View>

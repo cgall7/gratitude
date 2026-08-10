@@ -22,7 +22,7 @@ const WeeklyThemeCard = ({ weekInsight }) => (
     <Text style={styles.weekDesc}>
       {weekInsight
         ? describeTheme(weekInsight, 'days this week')
-        : 'Complete a ritual this week to see your theme.'}
+        : 'Add an entry this week to see your theme.'}
     </Text>
   </View>
 );

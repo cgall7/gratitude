@@ -20,7 +20,7 @@ import { SparkChips } from '../components/SparkChips';
 const { width, height } = Dimensions.get('window');
 
 // --- COMPONENT: LockScreen ---
-export const LockScreen = ({ onEnterRitual }) => {
+export const LockScreen = ({ onOpen }) => {
   const breathe = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -45,8 +45,8 @@ export const LockScreen = ({ onEnterRitual }) => {
         <Text style={styles.logo}>gratitude</Text>
         <Text style={styles.prompt}>Pause.{"\n"}What are you grateful for today?</Text>
 
-        <PressableScale style={styles.primaryButton} onPress={onEnterRitual}>
-          <Text style={styles.buttonText}>Enter Ritual</Text>
+        <PressableScale style={styles.primaryButton} onPress={onOpen}>
+          <Text style={styles.buttonText}>Let's go</Text>
         </PressableScale>
       </View>
     </View>

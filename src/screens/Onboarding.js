@@ -25,6 +25,7 @@ import { BeeTransition } from '../components/BeeTransition';
 import { DevSettings } from '../services/devSettings';
 import { HoneycombStore } from '../services/HoneycombStore';
 import { useAuth } from '../contexts/AuthContext';
+import { LockScreen, InputScreen } from './CoreRitual';
 
 const HIT_SLOP = { top: 12, bottom: 12, left: 12, right: 12 };
 
@@ -88,7 +89,7 @@ const renderAccentH1 = (text, accent) => {
 
 const WHY_OPTIONS = ['Sleep better', 'Less stress', 'Notice the good', 'Just curious'];
 
-const RITUAL_TIMES = [
+const CHECKIN_TIMES = [
   { key: 'morning', icon: 'sunny', label: 'Morning', caption: 'Start the day grounded' },
   { key: 'midday', icon: 'partly-sunny', label: 'Midday', caption: 'A pause in the middle' },
   { key: 'evening', icon: 'moon', label: 'Evening', caption: 'Wind down and reflect' },
@@ -129,12 +130,12 @@ const StepShell = ({ step, stage, wash, onBack, children }) => {
 };
 
 // --- Step 1: Welcome — show the value before asking for any effort ---
-// Demo-mode only: a visible A/B picker so anyone running the app can switch
-// flows without knowing the hidden 5-tap gesture (DevVersionTag). Sits below
-// the value prop so it never competes with the actual pitch.
+// Demo-mode only: a visible A/B/C picker so anyone running the app can
+// switch flows without knowing the hidden 5-tap gesture (DevVersionTag).
+// Sits below the value prop so it never competes with the actual pitch.
 const FlowToggle = ({ flow, onChange }) => (
   <View style={styles.flowToggleRow}>
-    {['A', 'B'].map((option) => {
+    {['A', 'B', 'C'].map((option) => {
       const selected = option === flow;
       return (
         <PressableScale
@@ -349,26 +350,26 @@ const WhyStep = ({ step, why, onPick, onNext, onBack }) => (
   </StepShell>
 );
 
-// --- Step 4: Ritual time — one clear action, sets the daily check-in ---
-const RitualTimeStep = ({ step, ritualTime, onPick, onNext, onBack }) => (
-  <StepShell step={step} stage="ritual" wash={theme.colors.washYellow} onBack={onBack}>
+// --- Step 4: Check-in time — one clear action, sets the daily nudge ---
+const CheckInTimeStep = ({ step, checkInTime, onPick, onNext, onBack }) => (
+  <StepShell step={step} stage="moment" wash={theme.colors.washYellow} onBack={onBack}>
     <View style={styles.fillBetween}>
       <View style={styles.topContent}>
         <Text style={styles.h1}>When's your moment?</Text>
         <Text style={styles.bodySm}>We'll check in once a day, gently.</Text>
-        <View style={styles.ritualList}>
-          {RITUAL_TIMES.map((option, index) => {
-            const selected = option.key === ritualTime;
+        <View style={styles.checkinList}>
+          {CHECKIN_TIMES.map((option, index) => {
+            const selected = option.key === checkInTime;
             return (
               <StaggeredItem key={option.key} index={index}>
                 <PressableScale
-                  style={[styles.ritualCard, selected && styles.ritualCardSelected]}
+                  style={[styles.checkinCard, selected && styles.checkinCardSelected]}
                   onPress={() => onPick(option.key)}
                 >
                   <View style={[styles.iconCircle, selected && styles.iconCircleSelected]}>
                     <Ionicons name={option.icon} size={22} color={theme.colors.ink} />
                   </View>
-                  <View style={styles.ritualText}>
+                  <View style={styles.checkinText}>
                     <Text style={styles.h3}>{option.label}</Text>
                     <Text style={styles.bodySmMuted}>{option.caption}</Text>
                   </View>
@@ -378,7 +379,7 @@ const RitualTimeStep = ({ step, ritualTime, onPick, onNext, onBack }) => (
           })}
         </View>
       </View>
-      <PrimaryButton onPress={onNext} disabled={!ritualTime}>Next</PrimaryButton>
+      <PrimaryButton onPress={onNext} disabled={!checkInTime}>Next</PrimaryButton>
     </View>
   </StepShell>
 );
@@ -422,6 +423,17 @@ const FirstEntryStep = ({ step, name, onNext, onBack, onSave }) => {
   );
 };
 
+// --- Step 5c (Flow C only): screen-lock demo — reuses the real Today-tab
+// --- lock/unlock screens verbatim, so this is an honest preview of the
+// --- actual daily loop, not a mockup of it (Colin, 2026-08-10). ---
+const LockDemoStep = ({ onNext }) => {
+  const [phase, setPhase] = useState('lock');
+  if (phase === 'entry') {
+    return <InputScreen onUnlock={onNext} />;
+  }
+  return <LockScreen onOpen={() => setPhase('entry')} />;
+};
+
 // --- Step 6: Celebration — always the first-ever-save treatment (screen 5's ---
 // --- save IS the first-ever save), never the bare badge. ---
 const CelebrationStep = ({ step, name, onDone }) => (
@@ -438,9 +450,11 @@ const CelebrationStep = ({ step, name, onDone }) => (
   </StepShell>
 );
 
-// --- Controller: owns the answers, drives Flow A (6 steps) or Flow B (10 —
-// --- adds the four claim screens before Name). Flow read once from the
-// --- hidden dev toggle (DevSettings); Welcome is shared so there's no
+// --- Controller: owns the answers, drives Flow A (6 steps, straight
+// --- through), Flow B (10 — adds the four claim screens before Name), or
+// --- Flow C (6 steps, same shape as A but the entry step demos the real
+// --- lock/unlock screens instead of a plain form). Flow read once from
+// --- the hidden dev toggle (DevSettings); Welcome is shared so there's no
 // --- flicker if it resolves a beat after mount. ---
 export const OnboardingFlow = ({ onDone, initialFlow = 'B', startAt }) => {
   const { session } = useAuth();
@@ -450,7 +464,7 @@ export const OnboardingFlow = ({ onDone, initialFlow = 'B', startAt }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [why, setWhy] = useState(null);
-  const [ritualTime, setRitualTime] = useState(null);
+  const [checkInTime, setCheckInTime] = useState(null);
 
   // Honeycomb's empty state ("Finish signup" / "Sign in") lands here instead
   // of a second auth form on the tab — jump straight to the account step at
@@ -514,7 +528,7 @@ export const OnboardingFlow = ({ onDone, initialFlow = 'B', startAt }) => {
       />
     );
   } else {
-    const sharedStep = step - sharedOffset; // 0=Name, 1=Why, 2=Ritual, 3=FirstEntry, 4+=Celebration
+    const sharedStep = step - sharedOffset; // 0=Name, 1=Why, 2=CheckIn, 3=Entry, 4+=Celebration
     switch (sharedStep) {
       case 0:
         // Already signed in (demo-mode resume) — the effect above skips
@@ -539,17 +553,19 @@ export const OnboardingFlow = ({ onDone, initialFlow = 'B', startAt }) => {
         break;
       case 2:
         body = (
-          <RitualTimeStep
+          <CheckInTimeStep
             step={step}
-            ritualTime={ritualTime}
-            onPick={setRitualTime}
+            checkInTime={checkInTime}
+            onPick={setCheckInTime}
             onNext={next}
             onBack={back}
           />
         );
         break;
       case 3:
-        body = (
+        body = flow === 'C' ? (
+          <LockDemoStep onNext={next} />
+        ) : (
           <FirstEntryStep step={step} name={name} onNext={next} onBack={back} onSave={handleSaveEntry} />
         );
         break;
@@ -721,11 +737,11 @@ const styles = StyleSheet.create({
   chipTextSelected: {
     fontFamily: theme.fonts.bodySemiBold,
   },
-  ritualList: {
+  checkinList: {
     gap: 12,
     marginTop: 16,
   },
-  ritualCard: {
+  checkinCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 16,
@@ -736,7 +752,7 @@ const styles = StyleSheet.create({
     padding: 16,
     ...theme.shadows.card,
   },
-  ritualCardSelected: {
+  checkinCardSelected: {
     borderColor: theme.colors.accent,
     borderWidth: 2,
   },
@@ -751,7 +767,7 @@ const styles = StyleSheet.create({
   iconCircleSelected: {
     backgroundColor: theme.colors.accent,
   },
-  ritualText: {
+  checkinText: {
     gap: 2,
   },
   badgeStage: {

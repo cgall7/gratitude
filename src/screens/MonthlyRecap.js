@@ -35,7 +35,7 @@ export const MonthlyRecap = ({
         <Text style={styles.insightDesc}>
           {hasEntries
             ? insightDescription
-            : 'Complete your morning ritual to start building this month\'s theme.'}
+            : 'Add your first entry to start building this month\'s theme.'}
         </Text>
       </View>
 
