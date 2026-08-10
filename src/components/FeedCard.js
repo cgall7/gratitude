@@ -4,6 +4,16 @@ import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../constants/theme';
 import { HoneycombStore } from '../services/HoneycombStore';
 import { PressableScale } from './PressableScale';
+import { BeeTransition } from './BeeTransition';
+
+// Like delivery (Sunbeam §11.2): a short lift-off from the heart, carrying
+// the like away rather than the long claim-screen traversal. Same glide
+// spring, tighter path to match the icon's scale.
+const LIKE_PATH = {
+  translateX: [-4, 46],
+  translateY: [4, -18, -38],
+  rotate: ['-6deg', '-22deg'],
+};
 
 const formatDate = (isoDate) => {
   if (!isoDate) return '';
@@ -22,12 +32,15 @@ export const FeedCard = ({ share, onLikeToggled }) => {
   const [commentText, setCommentText] = useState('');
   const [commentCount, setCommentCount] = useState(share.commentCount);
   const [postingComment, setPostingComment] = useState(false);
+  const [likeFlightKey, setLikeFlightKey] = useState(0);
 
   const handleLike = async () => {
     if (liking) return;
     setLiking(true);
+    const wasLiked = share.likedByMe;
     try {
       await HoneycombStore.toggleLike(share.id, share.likedByMe);
+      if (!wasLiked) setLikeFlightKey((key) => key + 1);
       onLikeToggled(share.id);
     } catch (err) {
       console.warn('Failed to toggle like', err);
@@ -83,6 +96,7 @@ export const FeedCard = ({ share, onLikeToggled }) => {
             color={share.likedByMe ? theme.colors.accent : theme.colors.textSecondary}
           />
           {share.likeCount > 0 && <Text style={styles.actionText}>{share.likeCount}</Text>}
+          <BeeTransition triggerKey={likeFlightKey} path={LIKE_PATH} anchorStyle={styles.likeBeeAnchor} size={13} />
         </PressableScale>
 
         <PressableScale onPress={toggleComments} style={styles.actionButton}>
@@ -167,6 +181,10 @@ const styles = StyleSheet.create({
   actionText: {
     ...theme.type.bodySm,
     color: theme.colors.textSecondary,
+  },
+  likeBeeAnchor: {
+    top: 0,
+    left: 0,
   },
   commentsSection: {
     marginTop: 14,

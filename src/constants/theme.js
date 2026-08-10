@@ -7,8 +7,9 @@ export const theme = {
     surfaceBorderStrong: 'rgba(26, 21, 0, 0.14)', // filled/selected card states need more than a hairline
 
     // Accents — Sunbeam v1 (GUIDES/GRATITUDE_DESIGN_SYSTEM_V1.md §1). Zero green anywhere.
-    accent: '#FFC300', // Marigold — THE one accent. Active states, celebration badge, key highlights.
-    accentDeep: '#FF8A00', // Warm amber — hero numerals, emphasis on cream (replaces `gold`).
+    accent: '#FFD200', // Marigold — THE one accent. Active states, celebration badge, key highlights.
+    accentDeep: '#FF7A00', // Warm amber — hero numerals, emphasis on cream (replaces `gold`).
+    accentBurst: '#FFEA00', // Hottest yellow on the board. Motion only — bursts, pops, bee trail. Never a static fill, text, or background.
     washYellow: '#FFF3C4', // Pastel wash — Today/ritual moments.
     washPeach: '#FFE9D9', // Pastel wash — warmth/celebration moments.
     washSky: '#E4F2FB', // Pastel wash — calm/recap moments. Use sparingly.
