@@ -11,6 +11,7 @@ import { PressableScale } from '../components/PressableScale';
 import { FeedCard } from '../components/FeedCard';
 import { HoneycombGrid } from '../components/HoneycombGrid';
 import { BeeTransition } from '../components/BeeTransition';
+import { FlyingBee } from '../components/FlyingBee';
 import { DEMO_HIVE_MEMBERS } from '../constants/demoHive';
 
 // Share carry (Sunbeam §11.2): the bee lifts the just-shared entry off the
@@ -185,7 +186,13 @@ const HoneycombFeed = () => {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <View style={styles.container}>
+      {/* §12.2/§14.1 ambient cruise — anchored to the screen (not the
+          scroll content) so it never scrolls off with the feed; parked
+          while idle content loads is handled by the `active` gate at the
+          top of the tree, not here. */}
+      <FlyingBee active />
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
       <Text style={styles.header}>Honeycomb</Text>
 
       <HoneycombGrid members={buildHiveMembers(feed)} />
@@ -260,7 +267,8 @@ const HoneycombFeed = () => {
           ))}
         </View>
       )}
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 };
 
@@ -308,6 +316,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: theme.colors.background,
+  },
+  scroll: {
+    flex: 1,
   },
   content: {
     padding: 24,

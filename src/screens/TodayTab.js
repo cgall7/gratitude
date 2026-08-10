@@ -3,6 +3,7 @@ import { StyleSheet, View, Text, TouchableOpacity, ActivityIndicator } from 'rea
 import { useFocusEffect } from '@react-navigation/native';
 import { theme } from '../constants/theme';
 import { EntryStore } from '../services/EntryStore';
+import { FlyingBee } from '../components/FlyingBee';
 
 export const TodayTab = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
@@ -34,6 +35,11 @@ export const TodayTab = ({ navigation }) => {
   if (!entry) {
     return (
       <View style={styles.container}>
+        {/* §12.2/§14.1: ambient cruise, default-on for Today idle. Never
+            sits over the CTA — it's absolutely positioned behind the
+            content flow and never intercepts touches (pointerEvents="none"
+            throughout FlyingBee). */}
+        <FlyingBee active />
         <Text style={styles.header}>Today</Text>
         <View style={styles.emptyCard}>
           <Text style={styles.emptyText}>
@@ -52,6 +58,7 @@ export const TodayTab = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
+      <FlyingBee active />
       <Text style={styles.header}>Today</Text>
       <View style={styles.quoteCard}>
         <Text style={styles.themeBadge}>{entry.theme}</Text>
