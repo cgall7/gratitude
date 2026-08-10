@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { toISODate } from '../utils/dateRanges';
+import { buildDemoEntries } from '../utils/demoSeed';
 
 // Local-first persistence for now — no Supabase project is wired up yet
 // (README lists it as the intended backend, but there's no client/env
@@ -45,5 +46,15 @@ export const EntryStore = {
     const start = toISODate(startDate);
     const end = toISODate(endDate);
     return all.filter((entry) => entry.date >= start && entry.date <= end);
+  },
+
+  // Demo/dev only — fills the last `days` consecutive days with realistic
+  // entries so Wrapped/Recap have something worth demoing. Merges on top of
+  // whatever's already stored rather than wiping it.
+  async seedDemoData(days = 180) {
+    const entries = await loadAll();
+    const demo = buildDemoEntries(days);
+    await saveAll({ ...entries, ...demo });
+    return Object.keys(demo).length;
   },
 };
