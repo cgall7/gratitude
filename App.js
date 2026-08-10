@@ -9,6 +9,7 @@ import { fontAssets } from './src/constants/fontAssets';
 import { OnboardingFlow } from './src/screens/Onboarding';
 import { LockScreen, InputScreen } from './src/screens/CoreRitual';
 import { EveningMirror } from './src/screens/EveningMirror';
+import { LegalScreen } from './src/screens/Legal';
 import { MainTabs } from './src/navigation/MainTabs';
 import { AuthProvider } from './src/contexts/AuthContext';
 
@@ -94,6 +95,8 @@ export default function App() {
           </Stack.Screen>
 
           <Stack.Screen name="Main" component={MainTabs} />
+
+          <Stack.Screen name="Legal" component={LegalScreen} options={{ presentation: 'modal' }} />
 
           <Stack.Screen name="Evening">
             {(props) => (

@@ -202,13 +202,16 @@ const SignUpStep = ({
   onNext,
   onBack,
   initialMode = 'signup',
+  navigation,
 }) => {
   const [mode, setMode] = useState(initialMode);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [confirmSent, setConfirmSent] = useState(false);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
   const isSignUp = mode === 'signup';
-  const canSubmit = email.trim() && password.length >= 6 && (!isSignUp || name.trim()) && !busy;
+  const canSubmit =
+    email.trim() && password.length >= 6 && (!isSignUp || (name.trim() && agreedToTerms)) && !busy;
 
   const attemptSignIn = async () => {
     await HoneycombStore.signIn(email.trim(), password);
@@ -309,6 +312,33 @@ const SignUpStep = ({
               editable={!busy}
             />
           </View>
+          {isSignUp && (
+            <PressableScale
+              onPress={() => setAgreedToTerms((a) => !a)}
+              haptic={null}
+              style={styles.consentRow}
+            >
+              <View style={[styles.checkbox, agreedToTerms && styles.checkboxChecked]}>
+                {agreedToTerms && <Ionicons name="checkmark" size={14} color={theme.colors.textInverse} />}
+              </View>
+              <Text style={styles.consentText}>
+                I agree to the{' '}
+                <Text
+                  style={styles.consentLink}
+                  onPress={() => navigation?.navigate('Legal', { tab: 'privacy' })}
+                >
+                  Privacy Policy
+                </Text>{' '}
+                and{' '}
+                <Text
+                  style={styles.consentLink}
+                  onPress={() => navigation?.navigate('Legal', { tab: 'terms' })}
+                >
+                  Terms of Service
+                </Text>
+              </Text>
+            </PressableScale>
+          )}
           {error && <Text style={styles.signUpError}>{error}</Text>}
           <PressableScale onPress={() => setMode(isSignUp ? 'signin' : 'signup')} haptic={null}>
             <Text style={styles.switchModeText}>
@@ -442,7 +472,7 @@ const CelebrationStep = ({ step, name, onDone }) => (
 // --- adds the four claim screens before Name). Flow read once from the
 // --- hidden dev toggle (DevSettings); Welcome is shared so there's no
 // --- flicker if it resolves a beat after mount. ---
-export const OnboardingFlow = ({ onDone, initialFlow = 'B', startAt }) => {
+export const OnboardingFlow = ({ onDone, initialFlow = 'B', startAt, navigation }) => {
   const { session } = useAuth();
   const [flow, setFlow] = useState(initialFlow);
   const [step, setStep] = useState(0);
@@ -531,6 +561,7 @@ export const OnboardingFlow = ({ onDone, initialFlow = 'B', startAt }) => {
             onNext={next}
             onBack={back}
             initialMode={startAt === 'signin' ? 'signin' : 'signup'}
+            navigation={navigation}
           />
         );
         break;
@@ -676,6 +707,36 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: theme.colors.surfaceBorder,
     marginVertical: 14,
+  },
+  consentRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    marginBottom: 16,
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: theme.colors.surfaceBorderStrong,
+    backgroundColor: theme.colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  checkboxChecked: {
+    backgroundColor: theme.colors.accent,
+    borderColor: theme.colors.accent,
+  },
+  consentText: {
+    ...theme.type.bodySm,
+    color: theme.colors.inkSoft,
+    flex: 1,
+  },
+  consentLink: {
+    color: theme.colors.accentDeep,
+    fontFamily: theme.fonts.bodySemiBold,
   },
   signUpError: {
     ...theme.type.bodySm,
