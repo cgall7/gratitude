@@ -16,6 +16,7 @@ import { EntryStore } from '../services/EntryStore';
 import { tagEntry } from '../utils/themeTagger';
 import { PressableScale } from '../components/PressableScale';
 import { SparkChips } from '../components/SparkChips';
+import { WelcomeBee } from '../components/WelcomeBee';
 
 const { width, height } = Dimensions.get('window');
 
@@ -32,20 +33,24 @@ export const LockScreen = ({ onEnterRitual }) => {
     ).start();
   }, []);
 
-  const glowScale = breathe.interpolate({ inputRange: [0, 1], outputRange: [1, 1.08] });
-  const glowOpacity = breathe.interpolate({ inputRange: [0, 1], outputRange: [0.15, 0.25] });
+  const glowScale = breathe.interpolate({ inputRange: [0, 1], outputRange: [1, 1.1] });
+  const glowOpacity = breathe.interpolate({ inputRange: [0, 1], outputRange: [0.18, 0.32] });
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, styles.lockContainer]}>
+      {/* Depth glow on top of the solid canvas, not instead of it — a
+          deeper amber breathing underneath ink content so the screen still
+          reads as one confident field of Golden Honey, not accent-on-cream. */}
       <Animated.View
         style={[styles.glow, { opacity: glowOpacity, transform: [{ scale: glowScale }] }]}
       />
 
       <View style={styles.content}>
+        <WelcomeBee size={104} />
         <Text style={styles.logo}>gratitude</Text>
         <Text style={styles.prompt}>Pause.{"\n"}What are you grateful for today?</Text>
 
-        <PressableScale style={styles.primaryButton} onPress={onEnterRitual}>
+        <PressableScale style={styles.primaryButton} onPress={onEnterRitual} haptic={Haptics.ImpactFeedbackStyle.Medium}>
           <Text style={styles.buttonText}>Enter Ritual</Text>
         </PressableScale>
       </View>
@@ -156,13 +161,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  // Full solid Golden Honey canvas for the ritual gate specifically — this
+  // is the one moment the app should feel unmistakably vibrant, not
+  // cream-with-an-accent. InputScreen (the actual writing surface) stays
+  // on `container`'s cream base: comfortable to read/write on, and every
+  // nested piece there (SparkChips label, etc.) is already tuned for
+  // cream contrast rather than gold.
+  lockContainer: {
+    backgroundColor: theme.colors.accent,
+  },
   glow: {
     position: 'absolute',
     width: width * 1.5,
     height: width * 1.5,
-    backgroundColor: theme.colors.accent,
+    backgroundColor: theme.colors.accentDeep,
     borderRadius: width,
-    top: -width * 0.2,
+    top: -width * 0.3,
   },
   content: {
     width: '85%',
@@ -172,7 +186,8 @@ const styles = StyleSheet.create({
   logo: {
     ...theme.type.logo,
     fontSize: 68,
-    color: theme.colors.textPrimary,
+    color: theme.colors.ink,
+    marginTop: 12,
     marginBottom: 20,
     textAlign: 'center',
   },
@@ -188,7 +203,10 @@ const styles = StyleSheet.create({
     fontSize: 24,
     lineHeight: 32,
     fontFamily: theme.fonts.bodyMedium,
-    color: theme.colors.textSecondary,
+    // Full ink, not textSecondary — inkSoft only clears ~3.5:1 against the
+    // solid Golden Honey canvas (fails AA). Hierarchy here comes from size
+    // and weight, not a lighter tint.
+    color: theme.colors.ink,
     textAlign: 'center',
     marginBottom: 50,
   },
@@ -216,17 +234,20 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
   },
   primaryButton: {
-    backgroundColor: theme.colors.accent,
+    // Ink pill, not accent-filled — on a solid Golden Honey canvas an
+    // accent button disappears into the background. Matches the Sunbeam
+    // rule that yellow never fills the CTA anyway.
+    backgroundColor: theme.colors.ink,
     paddingVertical: 20,
     paddingHorizontal: 40,
     borderRadius: theme.borderRadius.full,
     width: '100%',
     alignItems: 'center',
-    ...theme.shadows.tinted(theme.colors.accent),
+    ...theme.shadows.tinted(theme.colors.accentDeep),
   },
   buttonText: {
     ...theme.type.button,
-    color: theme.colors.textPrimary,
+    color: theme.colors.background,
   },
   unlockOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -235,23 +256,26 @@ const styles = StyleSheet.create({
     zIndex: 2,
   },
   unlockBadge: {
+    // Ink, not accent — the ritual screen's canvas is now solid Golden
+    // Honey (see `container`), so an accent-filled badge would vanish
+    // into the background it's celebrating on top of.
     width: 96,
     height: 96,
     borderRadius: 48,
-    backgroundColor: theme.colors.accent,
+    backgroundColor: theme.colors.ink,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 24,
-    ...theme.shadows.tinted(theme.colors.accent),
+    ...theme.shadows.tinted(theme.colors.accentDeep),
   },
   unlockCheck: {
     fontSize: 44,
-    color: theme.colors.textInverse,
+    color: theme.colors.background,
     fontFamily: theme.fonts.headerExtraBold,
   },
   unlockingText: {
     fontFamily: theme.fonts.bodySemiBold,
-    color: theme.colors.textPrimary,
+    color: theme.colors.ink,
     fontSize: 18,
     textAlign: 'center',
   }

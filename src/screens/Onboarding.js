@@ -22,6 +22,7 @@ import { CelebrationBadge } from '../components/CelebrationBadge';
 import { CelebrationRays } from '../components/CelebrationRays';
 import { IdeasAccordion } from '../components/IdeasAccordion';
 import { BeeTransition } from '../components/BeeTransition';
+import { WelcomeBee } from '../components/WelcomeBee';
 import { DevSettings } from '../services/devSettings';
 import { HoneycombStore } from '../services/HoneycombStore';
 import { useAuth } from '../contexts/AuthContext';
@@ -158,6 +159,7 @@ const FlowToggle = ({ flow, onChange }) => (
 const WelcomeStep = ({ step, onNext, flow, onChangeFlow, onSkipDemo }) => (
   <StepShell step={step} stage="welcome" wash={theme.colors.washYellow}>
     <View style={styles.centerFill}>
+      <WelcomeBee />
       <Text style={styles.wordmark}>Gratitude</Text>
       <Text style={styles.h1Center}>A brighter way to end your day.</Text>
     </View>

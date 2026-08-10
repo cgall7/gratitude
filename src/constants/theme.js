@@ -7,7 +7,7 @@ export const theme = {
     surfaceBorderStrong: 'rgba(26, 21, 0, 0.14)', // filled/selected card states need more than a hairline
 
     // Accents — Sunbeam v1 (GUIDES/GRATITUDE_DESIGN_SYSTEM_V1.md §1). Zero green anywhere.
-    accent: '#FFC300', // Marigold — THE one accent. Active states, celebration badge, key highlights.
+    accent: '#FFB300', // Golden Honey — deeper/richer than the old Marigold (#FFC300) per Colin's moodboard (2026-08-09). THE one accent. Active states, celebration badge, key highlights.
     accentDeep: '#FF8A00', // Warm amber — hero numerals, emphasis on cream (replaces `gold`).
     washYellow: '#FFF3C4', // Pastel wash — Today/ritual moments.
     washPeach: '#FFE9D9', // Pastel wash — warmth/celebration moments.
