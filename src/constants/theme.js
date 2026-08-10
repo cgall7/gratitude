@@ -21,6 +21,15 @@ export const theme = {
     textSecondary: '#6B5F3D', // Alias of `inkSoft`, kept for existing call sites.
     textInverse: '#221B03', // Dark text for use on top of bright accent/accentDeep surfaces
   },
+  // Two-stop washes for hero cards that need to feel like they're catching
+  // light rather than sitting flat — corner-to-corner, always resolving
+  // back to `surface` so text contrast never drifts. Keyed to the same
+  // wash family the moment already uses (Sunbeam §1), not new colors.
+  gradients: {
+    weekWash: ['#FFFFFF', '#FFF3C4'], // surface -> washYellow, Today/ritual warmth
+    monthWash: ['#FFFFFF', '#E4F2FB'], // surface -> washSky, recap calm
+    badge: ['#FFD84D', '#FF8A00'], // accent -> accentDeep, icon roundels
+  },
   // Family names match the registered fonts loaded via useFonts() in
   // App.js (see src/constants/fontAssets.js) — Nunito for display/UI
   // headlines, Plus Jakarta Sans for reading copy, Dancing Script for the

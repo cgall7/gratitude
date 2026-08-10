@@ -1,5 +1,5 @@
-import React, { useCallback, useState } from 'react';
-import { StyleSheet, View, Text, ScrollView, ActivityIndicator } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { StyleSheet, View, Text, ScrollView, ActivityIndicator, Animated } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { theme } from '../constants/theme';
 import { MonthlyRecap } from './MonthlyRecap';
@@ -7,6 +7,8 @@ import { EntryStore } from '../services/EntryStore';
 import { dominantTheme } from '../utils/themeTagger';
 import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, monthName } from '../utils/dateRanges';
 import { DevVersionTag } from '../components/DevVersionTag';
+import { GradientCard } from '../components/GradientCard';
+import { GradientIconBadge } from '../components/GradientIconBadge';
 
 const describeTheme = (insight, periodLabel) => {
   if (!insight) return '';
@@ -15,17 +17,30 @@ const describeTheme = (insight, periodLabel) => {
 };
 
 // --- COMPONENT: WeeklyThemeCard ---
-const WeeklyThemeCard = ({ weekInsight }) => (
-  <View style={styles.weekCard}>
-    <Text style={styles.weekLabel}>THIS WEEK'S THEME</Text>
-    <Text style={styles.weekValue}>{weekInsight ? weekInsight.theme : 'No entries yet'}</Text>
-    <Text style={styles.weekDesc}>
-      {weekInsight
-        ? describeTheme(weekInsight, 'days this week')
-        : 'Complete a ritual this week to see your theme.'}
-    </Text>
-  </View>
-);
+const WeeklyThemeCard = ({ weekInsight }) => {
+  const enter = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.spring(enter, { toValue: 1, friction: 7, tension: 90, useNativeDriver: true }).start();
+  }, []);
+
+  const translateY = enter.interpolate({ inputRange: [0, 1], outputRange: [18, 0] });
+
+  return (
+    <Animated.View style={{ opacity: enter, transform: [{ translateY }] }}>
+      <GradientCard colors={theme.gradients.weekWash} style={styles.weekCardOuter} contentStyle={styles.weekCard}>
+        <GradientIconBadge icon="flame" size={44} style={styles.weekBadge} />
+        <Text style={styles.weekLabel}>THIS WEEK'S THEME</Text>
+        <Text style={styles.weekValue}>{weekInsight ? weekInsight.theme : 'No entries yet'}</Text>
+        <Text style={styles.weekDesc}>
+          {weekInsight
+            ? describeTheme(weekInsight, 'days this week')
+            : 'Complete a ritual this week to see your theme.'}
+        </Text>
+      </GradientCard>
+    </Animated.View>
+  );
+};
 
 export const RecapTab = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
@@ -101,16 +116,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  weekCard: {
+  weekCardOuter: {
     width: '100%',
-    backgroundColor: theme.colors.surface,
+    marginBottom: 24,
+    borderRadius: theme.borderRadius.large,
+    ...theme.shadows.card,
+  },
+  weekCard: {
     borderWidth: 1,
     borderColor: theme.colors.surfaceBorder,
     borderRadius: theme.borderRadius.large,
     padding: 24,
-    marginBottom: 24,
     alignItems: 'center',
-    ...theme.shadows.card,
+  },
+  weekBadge: {
+    marginBottom: 12,
   },
   weekLabel: {
     ...theme.type.label,
