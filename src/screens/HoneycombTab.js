@@ -397,7 +397,7 @@ const styles = StyleSheet.create({
   addButtonText: {
     ...theme.type.bodySm,
     fontFamily: theme.fonts.bodySemiBold,
-    color: theme.colors.background,
+    color: theme.colors.backgroundWriting,
   },
   addMessage: {
     ...theme.type.bodySm,

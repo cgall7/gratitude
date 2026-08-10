@@ -95,7 +95,7 @@ export const InputScreen = ({ onUnlock }) => {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={styles.container}
+      style={[styles.container, { backgroundColor: theme.colors.backgroundWriting }]}
     >
       {unlocking && (
         <View style={styles.unlockOverlay} pointerEvents="none">
@@ -142,7 +142,7 @@ export const InputScreen = ({ onUnlock }) => {
           disabled={!text.trim() || unlocking}
           haptic={Haptics.ImpactFeedbackStyle.Medium}
         >
-          <Text style={[styles.buttonText, { color: theme.colors.background }]}>Unlock Apps</Text>
+          <Text style={[styles.buttonText, { color: theme.colors.backgroundWriting }]}>Unlock Apps</Text>
         </PressableScale>
       </Animated.View>
     </KeyboardAvoidingView>

@@ -1,7 +1,8 @@
 export const theme = {
   colors: {
     // Backgrounds
-    background: '#FFFBEB', // Sunlit Cream
+    background: '#FFF7CC', // Sunlit Honey (§12.1 retune) — identity screens: Today, Honeycomb, Recap, Wrapped, ritual gate.
+    backgroundWriting: '#FFFBEB', // Sunlit Cream — ritual input step only. Contrast gate (Sage-ratified): read/write surfaces stay cream, never brighten.
     surface: '#FFFFFF', // Card white, pops off the cream backdrop
     surfaceBorder: 'rgba(26, 21, 0, 0.08)',
     surfaceBorderStrong: 'rgba(26, 21, 0, 0.14)', // filled/selected card states need more than a hairline
