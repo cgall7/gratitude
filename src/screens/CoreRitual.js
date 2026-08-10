@@ -9,7 +9,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
-  Pressable,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { theme } from '../constants/theme';
@@ -24,16 +23,11 @@ const { width, height } = Dimensions.get('window');
 // --- COMPONENT: LockScreen ---
 export const LockScreen = ({ onEnterRitual }) => {
   const breathe = useRef(new Animated.Value(0)).current;
-  const tapTimestamps = useRef([]);
 
-  // Hidden dev trigger (matches the devSettings.js pattern) — 5 taps on the
-  // wordmark within 2s seeds 180 days of realistic demo entries so Wrapped
-  // and Recap have something worth showing. Never surfaced as real UI.
-  const handleLogoTap = () => {
-    const now = Date.now();
-    tapTimestamps.current = [...tapTimestamps.current, now].filter((t) => now - t < 2000);
-    if (tapTimestamps.current.length < 5) return;
-    tapTimestamps.current = [];
+  // Visible demo trigger (Colin, 2026-08-10: wants a real button, not the
+  // old hidden 5-tap gesture) — seeds 180 days of realistic demo entries so
+  // Wrapped and Recap have something worth showing.
+  const handleLoadDemoData = () => {
     EntryStore.seedDemoData(180).then((count) => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert('Demo data loaded', `Filled the last ${count} days with entries.`);
@@ -59,13 +53,15 @@ export const LockScreen = ({ onEnterRitual }) => {
       />
 
       <View style={styles.content}>
-        <Pressable onPress={handleLogoTap}>
-          <Text style={styles.logo}>gratitude</Text>
-        </Pressable>
+        <Text style={styles.logo}>gratitude</Text>
         <Text style={styles.prompt}>Pause.{"\n"}What are you grateful for today?</Text>
 
         <PressableScale style={styles.primaryButton} onPress={onEnterRitual}>
           <Text style={styles.buttonText}>Enter Ritual</Text>
+        </PressableScale>
+
+        <PressableScale onPress={handleLoadDemoData} style={styles.demoDataLink}>
+          <Text style={styles.demoDataLinkText}>Load demo data</Text>
         </PressableScale>
       </View>
     </View>
@@ -210,6 +206,15 @@ const styles = StyleSheet.create({
     color: theme.colors.textSecondary,
     textAlign: 'center',
     marginBottom: 50,
+  },
+  demoDataLink: {
+    alignSelf: 'center',
+    marginTop: 16,
+  },
+  demoDataLinkText: {
+    ...theme.type.bodySm,
+    color: theme.colors.textSecondary,
+    textDecorationLine: 'underline',
   },
   promptQuestion: {
     ...theme.type.h3,
