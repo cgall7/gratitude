@@ -22,9 +22,13 @@ export const ThemeCardFlip = ({ themeWord, snippet, delay = 0, onRevealed }) => 
   const revealedRef = useRef(false);
   const { reduced, resolved } = useReducedMotionState();
 
-  const settle = () => {
-    // Guard against double-fire the same way FlyingBee's onSettle does.
-    if (revealedRef.current) return;
+  const settle = ({ finished } = {}) => {
+    // R20: a cleanup-triggered stop invokes this with finished:false —
+    // latching the ref on an interruption would fire onRevealed before
+    // the card actually reveals and silence the run that does finish.
+    // Check finished first, then guard against double-fire the same way
+    // FlyingBee's onSettle does.
+    if (!finished || revealedRef.current) return;
     revealedRef.current = true;
     onRevealed?.();
   };
