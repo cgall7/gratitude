@@ -1,19 +1,26 @@
-import React, { useMemo } from 'react';
-import { StyleSheet, View, Text, Pressable, useWindowDimensions } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Animated, Easing, StyleSheet, View, Text, Pressable, useWindowDimensions } from 'react-native';
 import Svg, { Defs, Polygon } from 'react-native-svg';
 import { theme } from '../constants/theme';
+import { DURATIONS, useReducedMotion } from '../constants/motion';
 import { StaggeredItem } from '../components/StaggeredItem';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { GradientCard } from '../components/GradientCard';
 import { GradientIconBadge } from '../components/GradientIconBadge';
 import { StripePattern } from '../components/StripeTexture';
 import { useSvgId } from '../utils/svgId';
+import { tagEntry } from '../utils/themeTagger';
 import { COLS, HEX_ASPECT, combLayout, hexAt, hexPoints } from '../utils/combGeometry';
 
 // §17.5 — the month grid is a true honeycomb: cells share walls instead of
 // sitting in a square lattice with air between them. The lattice itself
 // (hex vertices, row parity, hit-testing) lives in `utils/combGeometry` so
 // it can be exercised without a renderer.
+
+// The reveal card's header hex. Same generator as the comb, so it is the
+// same shape at a different size rather than a lookalike (R36).
+const REVEAL_HEX_W = 30;
+const REVEAL_HEX_H = REVEAL_HEX_W * HEX_ASPECT;
 
 const DayCell = ({ day, entries, index, filledCount, w, h, x, y, points }) => {
   const filled = entries.length > 0;
@@ -57,6 +64,86 @@ const DayCell = ({ day, entries, index, filledCount, w, h, x, y, points }) => {
   );
 };
 
+// R35: the selected cell wears the hive's selected treatment — a 2pt ink
+// stroke where a resting filled cell carries 1pt of accentDeep.
+//
+// Drawn as its own layer above every cell rather than as a `strokeWidth` on
+// the selected cell's own polygon, for two reasons the comb creates and the
+// old gapped grid didn't. The polygon sits exactly on its box edge, so half
+// of any stroke falls outside the `<Svg>` and is clipped — fine at 1pt,
+// where the two cells sharing a wall each paint half of it, but it would
+// silently halve a 2pt selection ring. And cells paint in date order, so
+// later days would overdraw the ring's lower-right walls. One extra `<Svg>`
+// with 1pt of bleed on every side, on top, has neither problem.
+const SelectionRing = ({ cell, w, h }) => (
+  <View style={[styles.cellPosition, { left: cell.x - 1, top: cell.y - 1 }]} pointerEvents="none">
+    <Svg width={w + 2} height={h + 2}>
+      <Polygon
+        points={hexPoints(w, h)}
+        transform="translate(1 1)"
+        fill="none"
+        stroke={theme.colors.ink}
+        strokeWidth={2}
+      />
+    </Svg>
+  </View>
+);
+
+// R35: the day opens IN PLACE, directly under the comb — not a modal, not a
+// navigation push. The card is the hive's reveal card
+// (`HoneycombGrid.js:187-207`) in the same component language, because
+// tapping a day here and tapping a person there are the same gesture
+// answered the same way; the rhyme is the point.
+const DayRevealCard = ({ monthName, day, entries, progress, reduced, w, h }) => (
+  <Animated.View
+    style={[
+      styles.revealCard,
+      {
+        opacity: progress,
+        transform: [
+          {
+            translateY: progress.interpolate({
+              inputRange: [0, 1],
+              outputRange: [reduced ? 0 : 10, 0],
+            }),
+          },
+        ],
+      },
+    ]}
+  >
+    <View style={styles.revealHeader}>
+      {/* The cell's own fill state, shrunk — the card wears the motif it
+          came from instead of a generic icon roundel. */}
+      <View style={styles.revealHex}>
+        <Svg width={w} height={h}>
+          <Polygon
+            points={hexPoints(w, h)}
+            fill={theme.colors.accent}
+            stroke={theme.colors.accentDeep}
+            strokeWidth={1}
+          />
+        </Svg>
+        <View style={styles.revealHexNumeral} pointerEvents="none">
+          <Text style={styles.revealHexText}>{day}</Text>
+        </View>
+      </View>
+      <Text style={styles.revealDate}>
+        {monthName} {day}
+      </Text>
+      <Text style={styles.revealCount}>
+        {entries.length} {entries.length === 1 ? 'entry' : 'entries'}
+      </Text>
+    </View>
+
+    {entries.map((entry, index) => (
+      <View key={`${entry.date}-${index}`} style={index > 0 && styles.revealEntryRule}>
+        <Text style={styles.revealQuote}>“{entry.text}”</Text>
+        <Text style={styles.revealTheme}>{entry.theme || tagEntry(entry.text)}</Text>
+      </View>
+    ))}
+  </Animated.View>
+);
+
 export const MonthlyRecap = ({
   monthName,
   entries,
@@ -64,7 +151,6 @@ export const MonthlyRecap = ({
   insightTheme,
   insightDescription,
   onPreviewWrapped,
-  onSelectDay,
 }) => {
   // entries = [{ date: '2026-07-01', text: '...', theme: 'Family' }, ...]
   const hasEntries = entries.length > 0;
@@ -96,13 +182,46 @@ export const MonthlyRecap = ({
     return map;
   }, [entries]);
 
+  const [selectedDay, setSelectedDay] = useState(null);
+  const reduced = useReducedMotion();
+  const revealProgress = useRef(new Animated.Value(0)).current;
+
+  // The card's content belongs to its month, so a month change takes the
+  // selection with it rather than leaving February's card under March.
+  useEffect(() => {
+    setSelectedDay(null);
+  }, [monthName]);
+
+  const openDay = (day) => {
+    // R35: re-tapping the open day closes it; tapping a different filled day
+    // swaps the content in place, with no close/reopen cycle — replaying the
+    // rise on a card that never left the screen reads as a flinch.
+    if (day === selectedDay) {
+      setSelectedDay(null);
+      return;
+    }
+    const wasOpen = selectedDay !== null;
+    setSelectedDay(day);
+    if (wasOpen) return;
+    revealProgress.setValue(0);
+    Animated.timing(revealProgress, {
+      toValue: 1,
+      duration: reduced ? DURATIONS.reducedMotionFade : DURATIONS.revealGlide,
+      easing: reduced ? Easing.linear : Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  };
+
   const handlePress = (event) => {
     const { locationX, locationY } = event.nativeEvent;
     const cell = hexAt(locationX, locationY, cells, cellW, cellH);
     // Empty days don't open — the reveal is the entry, and there isn't one.
     if (!cell || !entriesByDay.has(cell.day)) return;
-    onSelectDay?.(cell.day, entriesByDay.get(cell.day));
+    openDay(cell.day);
   };
+
+  const selectedCell = selectedDay === null ? null : cells.find((c) => c.day === selectedDay);
+  const selectedEntries = selectedDay === null ? [] : entriesByDay.get(selectedDay) || [];
 
   let filledSoFar = 0;
 
@@ -139,7 +258,7 @@ export const MonthlyRecap = ({
               day={cell.day}
               entries={dayEntries}
               index={staggerIndex}
-              filledCount={entries.length}
+              filledCount={entriesByDay.size}
               w={cellW}
               h={cellH}
               x={cell.x}
@@ -148,6 +267,8 @@ export const MonthlyRecap = ({
             />
           );
         })}
+
+        {selectedCell && <SelectionRing cell={selectedCell} w={cellW} h={cellH} />}
 
         {/* R33: exactly one Pressable for the whole comb. */}
         <Pressable
@@ -176,15 +297,28 @@ export const MonthlyRecap = ({
                     ? `${monthName} ${cell.day}, ${dayEntries.length} ${dayEntries.length === 1 ? 'entry' : 'entries'}`
                     : `${monthName} ${cell.day}, no entry`
                 }
-                onAccessibilityTap={
-                  filled ? () => onSelectDay?.(cell.day, dayEntries) : undefined
-                }
+                onAccessibilityTap={filled ? () => openDay(cell.day) : undefined}
                 style={[styles.cellPosition, { left: cell.x, top: cell.y, width: cellW, height: cellH }]}
               />
             );
           })}
         </View>
       </View>
+
+      {/* Directly below the comb, and after it in tree order — which is also
+          the reading order VoiceOver walks, so the card lands right after the
+          day that opened it. */}
+      {selectedDay !== null && (
+        <DayRevealCard
+          monthName={monthName}
+          day={selectedDay}
+          entries={selectedEntries}
+          progress={revealProgress}
+          reduced={reduced}
+          w={REVEAL_HEX_W}
+          h={REVEAL_HEX_H}
+        />
+      )}
 
       <Text style={styles.gridCaption}>
         {entries.length} of {daysInMonth} days filled in
@@ -273,6 +407,74 @@ const styles = StyleSheet.create({
   dateTextFilled: {
     color: theme.colors.ink,
     fontFamily: theme.fonts.bodySemiBold,
+  },
+  // R35 — the hive's `revealCard` treatment, matched deliberately: white
+  // surface, hairline border, card shadow. `alignSelf: stretch` because this
+  // one sits in a centring column, where the hive's sits in a full-width one.
+  revealCard: {
+    alignSelf: 'stretch',
+    marginTop: 16,
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: theme.colors.surfaceBorder,
+    borderRadius: theme.borderRadius.large,
+    padding: 20,
+    ...theme.shadows.card,
+  },
+  revealHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 14,
+  },
+  revealHex: {
+    width: REVEAL_HEX_W,
+    height: REVEAL_HEX_H,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  revealHexNumeral: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  revealHexText: {
+    fontSize: 12,
+    color: theme.colors.ink,
+    fontFamily: theme.fonts.bodySemiBold,
+  },
+  revealDate: {
+    fontFamily: theme.fonts.header,
+    fontSize: 17,
+    color: theme.colors.ink,
+  },
+  // Pushed right by the header's own flex, so the count sits at the card's
+  // edge no matter how long the month's name is.
+  revealCount: {
+    ...theme.type.bodySm,
+    marginLeft: 'auto',
+    color: theme.colors.inkSoft,
+  },
+  // Hairline between entries only — a rule above the first one would fence
+  // the day off from its own header.
+  revealEntryRule: {
+    marginTop: 14,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.surfaceBorder,
+  },
+  revealQuote: {
+    fontFamily: theme.fonts.bodyItalic,
+    fontSize: 16,
+    lineHeight: 22,
+    color: theme.colors.textPrimary,
+  },
+  revealTheme: {
+    ...theme.type.label,
+    fontSize: 10,
+    letterSpacing: 1.4,
+    color: theme.colors.inkSoft,
+    marginTop: 8,
   },
   gridCaption: {
     ...theme.type.bodySm,
