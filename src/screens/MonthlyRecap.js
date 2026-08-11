@@ -1,5 +1,5 @@
-import React from 'react';
-import { StyleSheet, View, Text, useWindowDimensions } from 'react-native';
+import React, { useMemo } from 'react';
+import { StyleSheet, View, Text, Pressable, useWindowDimensions } from 'react-native';
 import Svg, { Defs, Polygon } from 'react-native-svg';
 import { theme } from '../constants/theme';
 import { StaggeredItem } from '../components/StaggeredItem';
@@ -8,34 +8,29 @@ import { GradientCard } from '../components/GradientCard';
 import { GradientIconBadge } from '../components/GradientIconBadge';
 import { StripePattern } from '../components/StripeTexture';
 import { useSvgId } from '../utils/svgId';
+import { COLS, HEX_ASPECT, combLayout, hexAt, hexPoints } from '../utils/combGeometry';
 
-// Pointy-top hex, sized to fit a `size`-wide box — the month grid is made
-// of the same cells as the hive, not generic rounded squares.
-const hexPoints = (width, height) => {
-  const points = [];
-  for (let i = 0; i < 6; i += 1) {
-    const angle = (Math.PI / 180) * (60 * i - 90);
-    points.push(`${width / 2 + (width / 2) * Math.cos(angle)},${height / 2 + (height / 2) * Math.sin(angle)}`);
-  }
-  return points.join(' ');
-};
+// §17.5 — the month grid is a true honeycomb: cells share walls instead of
+// sitting in a square lattice with air between them. The lattice itself
+// (hex vertices, row parity, hit-testing) lives in `utils/combGeometry` so
+// it can be exercised without a renderer.
 
-const DayCell = ({ day, entry, index, filledCount, size }) => {
-  const filled = !!entry;
+const DayCell = ({ day, entries, index, filledCount, w, h, x, y, points }) => {
+  const filled = entries.length > 0;
   // The hatch is a `<Defs>` fill on the hex itself, so it follows the six
   // edges exactly — an overlay clipped by `overflow: hidden` would square
   // off the corners.
   const hatchId = useSvgId('emptyHatch');
   const cell = (
-    <View style={[styles.gridItem, { width: size, height: size * 1.1 }]}>
-      <Svg width={size} height={size * 1.1}>
+    <View style={[styles.cell, { width: w, height: h }]}>
+      <Svg width={w} height={h}>
         {!filled && (
           <Defs>
             <StripePattern id={hatchId} />
           </Defs>
         )}
         <Polygon
-          points={hexPoints(size, size * 1.1)}
+          points={points}
           fill={filled ? theme.colors.accent : `url(#${hatchId})`}
           stroke={filled ? theme.colors.accentDeep : theme.colors.surfaceBorderStrong}
           strokeWidth={1}
@@ -49,12 +44,16 @@ const DayCell = ({ day, entry, index, filledCount, size }) => {
 
   // Only the days you actually earned cascade in; empty days are scenery and
   // shouldn't each cost an animation.
-  return filled ? (
-    <StaggeredItem index={index} count={filledCount} pop>
-      {cell}
-    </StaggeredItem>
-  ) : (
-    cell
+  return (
+    <View style={[styles.cellPosition, { left: x, top: y }]} pointerEvents="none">
+      {filled ? (
+        <StaggeredItem index={index} count={filledCount} pop>
+          {cell}
+        </StaggeredItem>
+      ) : (
+        cell
+      )}
+    </View>
   );
 };
 
@@ -65,22 +64,45 @@ export const MonthlyRecap = ({
   insightTheme,
   insightDescription,
   onPreviewWrapped,
+  onSelectDay,
 }) => {
   // entries = [{ date: '2026-07-01', text: '...', theme: 'Family' }, ...]
   const hasEntries = entries.length > 0;
-  // 7 cells across, sized off the live window (not a module-scope
-  // Dimensions read) so rotation and split-view don't leave a stale grid:
-  // screen width, less RecapTab's 24pt padding each side, less six 8pt gaps.
+  // Sized off the live window (not a module-scope Dimensions read) so
+  // rotation and split-view don't leave a stale comb: screen width, less
+  // RecapTab's 24pt padding each side. R33: no gap term — the comb has no
+  // gaps to subtract, and nothing from the analysis basis is frozen here.
   const { width } = useWindowDimensions();
-  const cellSize = Math.floor((width - 48 - 6 * 8) / 7);
+  const cellW = Math.floor((width - 48) / COLS);
+  const cellH = cellW * HEX_ASPECT;
+
+  const { cells, height } = useMemo(
+    () => combLayout(daysInMonth, cellW, cellH),
+    [daysInMonth, cellW, cellH]
+  );
+  const points = useMemo(() => hexPoints(cellW, cellH), [cellW, cellH]);
 
   // Index entries by day-of-month so each one lands on its real date. The
   // grid used to render every filled day first and then pad with empties,
   // which made three scattered entries look like the 1st, 2nd and 3rd —
   // a tally wearing a calendar's clothes.
-  const entryByDay = new Map(
-    entries.map((entry) => [parseInt(entry.date.split('-')[2], 10), entry])
-  );
+  const entriesByDay = useMemo(() => {
+    const map = new Map();
+    for (const entry of entries) {
+      const day = parseInt(entry.date.split('-')[2], 10);
+      if (!map.has(day)) map.set(day, []);
+      map.get(day).push(entry);
+    }
+    return map;
+  }, [entries]);
+
+  const handlePress = (event) => {
+    const { locationX, locationY } = event.nativeEvent;
+    const cell = hexAt(locationX, locationY, cells, cellW, cellH);
+    // Empty days don't open — the reveal is the entry, and there isn't one.
+    if (!cell || !entriesByDay.has(cell.day)) return;
+    onSelectDay?.(cell.day, entriesByDay.get(cell.day));
+  };
 
   let filledSoFar = 0;
 
@@ -106,23 +128,62 @@ export const MonthlyRecap = ({
         </Text>
       </GradientCard>
 
-      {/* Gratitude Grid — one cell per calendar day, in date order */}
-      <View style={styles.grid}>
-        {Array.from({ length: daysInMonth }).map((_, i) => {
-          const day = i + 1;
-          const entry = entryByDay.get(day);
-          const staggerIndex = entry ? filledSoFar++ : 0;
+      {/* The comb — one hexagon per calendar day, in date order */}
+      <View style={[styles.comb, { width: cellW * COLS, height }]}>
+        {cells.map((cell) => {
+          const dayEntries = entriesByDay.get(cell.day) || [];
+          const staggerIndex = dayEntries.length > 0 ? filledSoFar++ : 0;
           return (
             <DayCell
-              key={day}
-              day={day}
-              entry={entry}
+              key={cell.day}
+              day={cell.day}
+              entries={dayEntries}
               index={staggerIndex}
               filledCount={entries.length}
-              size={cellSize}
+              w={cellW}
+              h={cellH}
+              x={cell.x}
+              y={cell.y}
+              points={points}
             />
           );
         })}
+
+        {/* R33: exactly one Pressable for the whole comb. */}
+        <Pressable
+          style={StyleSheet.absoluteFill}
+          onPress={handlePress}
+          accessible={false}
+        />
+
+        {/* §17.7-adjacent: per-day screen-reader targets. `pointerEvents:
+            none` keeps them out of the touch path (the overlay above owns
+            every tap) while leaving them in the accessibility tree, so
+            VoiceOver can still land on an individual day. This composition
+            is UNVERIFIED on device — it is the mechanism half of R34's
+            ratified requirement and is on the device-pass list. */}
+        <View style={StyleSheet.absoluteFill} pointerEvents="none">
+          {cells.map((cell) => {
+            const dayEntries = entriesByDay.get(cell.day) || [];
+            const filled = dayEntries.length > 0;
+            return (
+              <View
+                key={cell.day}
+                accessible
+                accessibilityRole={filled ? 'button' : undefined}
+                accessibilityLabel={
+                  filled
+                    ? `${monthName} ${cell.day}, ${dayEntries.length} ${dayEntries.length === 1 ? 'entry' : 'entries'}`
+                    : `${monthName} ${cell.day}, no entry`
+                }
+                onAccessibilityTap={
+                  filled ? () => onSelectDay?.(cell.day, dayEntries) : undefined
+                }
+                style={[styles.cellPosition, { left: cell.x, top: cell.y, width: cellW, height: cellH }]}
+              />
+            );
+          })}
+        </View>
       </View>
 
       <Text style={styles.gridCaption}>
@@ -187,13 +248,15 @@ const styles = StyleSheet.create({
     color: theme.colors.inkSoft,
     textAlign: 'center',
   },
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: 8,
+  // Cells are absolutely positioned: the 0.75h row pitch means rows must
+  // overlap, which no flex row can express.
+  comb: {
+    position: 'relative',
   },
-  gridItem: {
+  cellPosition: {
+    position: 'absolute',
+  },
+  cell: {
     alignItems: 'center',
     justifyContent: 'center',
   },
