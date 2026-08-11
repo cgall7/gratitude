@@ -512,8 +512,13 @@ const styles = StyleSheet.create({
     left: -1,
     top: -1,
   },
+  // Deezine (2026-08-11, R43 FAIL 2): `StyleSheet.absoluteFillObject`
+  // doesn't exist in RN 0.86.2 — the export is `absoluteFill` now, and
+  // `{...undefined}` spreads nothing. This was a plain in-flow View sized
+  // to its own text, which is why centring it did nothing: the numeral
+  // rode wherever its content-sized box landed at the cell's top edge.
   dayNumberOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -556,7 +561,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   revealHexNumeral: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
   },
