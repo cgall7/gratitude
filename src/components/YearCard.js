@@ -29,14 +29,9 @@ export const YearCard = ({
   totalEntries,
   themeWord,
   // Miniaturized completed tapestry, passed in as an element once Beats
-  // 4–5 exist — its unit (dot vs hex month-grid) is an open design
-  // question against design-pass's Recap change, so this component stays
-  // agnostic and just frames whatever it's handed.
+  // 4–5 exist — R15 settled the unit as hex month-grids, but the frame
+  // stays agnostic and just renders whatever it's handed.
   watermark = null,
-  // §14.4 allows accentDeep or ink for the hero numeral ("one accent
-  // moment per card"). Defaulting to ink for contrast on the gold field;
-  // Pixel's on-device gate makes the final call — it's one prop to flip.
-  numeralColor = theme.colors.ink,
   width = 320,
 }) => (
   <View style={[styles.card, { width, height: width / CARD_ASPECT }]}>
@@ -58,7 +53,7 @@ export const YearCard = ({
     </View>
 
     <View style={styles.safeZone}>
-      <Text style={[styles.numeral, { color: numeralColor }]}>{String(totalEntries)}</Text>
+      <Text style={styles.numeral}>{String(totalEntries)}</Text>
       <Text style={styles.themeWord}>{themeWord}</Text>
     </View>
   </View>
@@ -102,8 +97,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  // R15: ink only on the gold field — accentDeep is a warm-amber-on-cream
+  // rule and lands at 1.53:1 here; ink is 10.01:1. Not a prop, so the
+  // keepsake frame can't be built unreadable.
   numeral: {
     ...theme.type.hero,
+    color: theme.colors.ink,
   },
   themeWord: {
     ...theme.type.h2,
