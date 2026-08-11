@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
 import { theme } from '../constants/theme';
-import { SPRINGS, DURATIONS, useReducedMotion } from '../constants/motion';
+import { SPRINGS, DURATIONS, useReducedMotionState } from '../constants/motion';
 import { Bee } from './Bee';
 
 // §14.2 Beat 3 "What You Loved" — one physical card that 3D-flips from a
@@ -20,7 +20,7 @@ const FLIP_PERSPECTIVE = 800;
 export const ThemeCardFlip = ({ themeWord, snippet, delay = 0, onRevealed }) => {
   const flip = useRef(new Animated.Value(0)).current;
   const revealedRef = useRef(false);
-  const reduced = useReducedMotion();
+  const { reduced, resolved } = useReducedMotionState();
 
   const settle = () => {
     // Guard against double-fire the same way FlyingBee's onSettle does.
@@ -30,6 +30,10 @@ export const ThemeCardFlip = ({ themeWord, snippet, delay = 0, onRevealed }) => 
   };
 
   useEffect(() => {
+    // R19: hold the first frame until the OS preference is actually
+    // known — starting the spring on the assumed-`false` value is the
+    // race R18 found. `resolved` flips exactly once per mount.
+    if (!resolved) return;
     if (reduced) {
       // §14.2 reduced motion: same content, zero velocity — the front face
       // fades in flat, no rotation, and the beat continues immediately.
@@ -46,12 +50,11 @@ export const ThemeCardFlip = ({ themeWord, snippet, delay = 0, onRevealed }) => 
       ...SPRINGS.reveal,
       useNativeDriver: true,
     }).start(settle);
-    // R18: `useReducedMotion` resolves async (false → true after mount for
-    // a Reduce Motion user), so this effect re-runs — the cleanup must
-    // stop the in-flight spring or the flip keeps rotating underneath the
-    // reduced branch's flat fade.
+    // R18: a live OS toggle re-runs this effect mid-flip — the cleanup
+    // must stop the in-flight spring or the flip keeps rotating
+    // underneath the reduced branch's flat fade.
     return () => flip.stopAnimation();
-  }, [reduced]);
+  }, [reduced, resolved]);
 
   if (reduced) {
     return (
