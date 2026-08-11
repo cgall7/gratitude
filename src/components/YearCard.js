@@ -1,7 +1,7 @@
 import React from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
 import { theme } from '../constants/theme';
-import { Bee } from './Bee';
+import { StripedBee } from './StripedBee';
 
 // §14.4 Beat 6 "The Year Card" — the static shareable keepsake the burst
 // resolves into. Deliberately motionless: "motion sells the ceremony;
@@ -42,7 +42,10 @@ export const YearCard = ({
         resizeMode="contain"
       />
       <View style={styles.bee}>
-        <Bee size={22} />
+        {/* 30, not the old 22: it stands beside a 44pt spiral mark on the
+            year's keepsake, and a bee that has to be looked for isn't proud.
+            Band knocked out to the card's own gold. */}
+        <StripedBee size={30} fieldColor={theme.colors.goldField} />
       </View>
     </View>
 

@@ -130,6 +130,14 @@ export const SealCrack = ({ onCracked }) => {
           // BEE_PATH's terminal translate is (0,0) at 0deg — exactly
           // styles.beeAnchor with no transform, so the crossfade lands in
           // the same spot BeeTransition's flight was already ending at.
+          //
+          // §17.3 correction: this bee is filed under "standing/keepsake"
+          // and is therefore listed for Deezine's Recap swap, but it is not
+          // a standing bee — it is the last frame of a BeeTransition flight,
+          // crossfading from the `<Bee>` that BeeTransition renders
+          // internally. Swapping only this one to StripedBee makes the
+          // handoff pop from unstriped to striped mid-fade. It is a FLIGHT
+          // site and moves with BeeTransition, on the flows branch.
           <Animated.View pointerEvents="none" style={[styles.beeAnchor, { opacity: staticBeeOpacity }]}>
             <Bee size={22} />
           </Animated.View>

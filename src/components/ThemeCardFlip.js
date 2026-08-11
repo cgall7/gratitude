@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
 import { theme } from '../constants/theme';
 import { SPRINGS, DURATIONS, useReducedMotionState } from '../constants/motion';
-import { Bee } from './Bee';
+import { StripedBee } from './StripedBee';
 
 // §14.2 Beat 3 "What You Loved" — one physical card that 3D-flips from a
 // gold back to reveal a theme word (Nunito ExtraBold) + one real entry
@@ -86,7 +86,12 @@ export const ThemeCardFlip = ({ themeWord, snippet, caption, delay = 0, onReveal
           { transform: [{ perspective: FLIP_PERSPECTIVE }, { rotateY: backRotate }] },
         ]}
       >
-        <Bee size={28} />
+        {/* Bigger than the 28pt glyph it replaces: the back of this card is
+            a whole gold field with one mark on it, and at 28 the bee read as
+            a smudge in the middle of it. `fieldColor` is the card's own
+            gold, so the band is cut out of the field rather than painted
+            over it. */}
+        <StripedBee size={40} fieldColor={theme.colors.goldField} />
       </Animated.View>
       <Animated.View
         style={[
