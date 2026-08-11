@@ -581,8 +581,10 @@ export const OnboardingFlow = ({ onDone, initialFlow = 'B', startAt }) => {
     if (finishedRef.current) return;
     finishedRef.current = true;
     // Fire-and-forget: the flag only matters on the NEXT cold launch, so
-    // navigation doesn't wait on the write.
-    OnboardingState.markComplete();
+    // navigation doesn't wait on the write. Swallowing a failed write is
+    // deliberate — "see the flow again" is already the designed fallback,
+    // and an unhandled rejection here would LogBox over the finish beat.
+    OnboardingState.markComplete().catch(() => {});
     onDone();
   };
 
