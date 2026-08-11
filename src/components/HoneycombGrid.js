@@ -228,6 +228,7 @@ export const HoneycombGrid = ({ members, cellSize = 34 }) => {
               const member = layout.hitTest(locationX, locationY);
               if (member) handlePress(member);
             }}
+            accessible={false}
           />
         </Animated.View>
       </View>
