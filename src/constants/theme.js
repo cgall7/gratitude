@@ -16,6 +16,15 @@ const colors = {
   accent: '#FFD200', // Marigold — THE one accent. Active states, celebration badge, key highlights.
   accentDeep: '#FF7A00', // Warm amber — hero numerals, emphasis on cream (replaces `gold`).
   accentBurst: '#FFEA00', // Hottest yellow on the board. Motion only — bursts, pops, bee trail. Never a static fill, text, or background.
+  // Golden Honey — the adaptive icon's locked gold (§13.1), and the field
+  // every KEEPSAKE sits on: the Seal that opens Wrapped, the Year Card that
+  // closes it, and the month-theme flip. Deliberately NOT `accent`: the two
+  // are only 1.179:1 apart, close enough that a keepsake next to an accent
+  // fill reads as a printing error rather than a second colour. Promoted to
+  // a token in §17.5 after living as a hand-copied literal in three files.
+  // Ink on this field is 10.01:1; `accentDeep` is 1.53:1 and must never
+  // carry text here (R15).
+  goldField: '#F0C023',
   washYellow: '#FFF3C4', // Pastel wash — Today/check-in moments.
   washPeach: '#FFE9D9', // Pastel wash — warmth/celebration moments.
   washSky: '#E4F2FB', // Pastel wash — calm/recap moments. Use sparingly.
@@ -29,20 +38,16 @@ const colors = {
   textInverse: '#221B03', // Dark text for use on top of bright accent/accentDeep surfaces
 };
 
-// Two-stop washes for the hero insight cards, corner to corner: lit corner
-// to shaded corner, so a card reads as catching light rather than sitting
-// flat. Every stop is a token reference — no literal hex lives here.
+// Two-stop washes, corner to corner: lit corner to shaded corner, so a
+// surface reads as catching light rather than sitting flat. Every stop is a
+// token reference — no literal hex lives here.
 const gradients = {
-  // "This week" — a white card on the Sunlit Honey page is paper in sun, so
-  // it falls to `surfaceShade` and stays neutral. Deliberately NOT
-  // `washYellow`: since §12.1, washYellow (#FFF3C4) and background (#FFF7CC)
-  // are ~2% apart, and that wash read as the card dissolving into the page.
-  weekWash: [colors.surface, colors.surfaceShade],
-  // "This month" — the summary card earns a hue shift so the two cards in
-  // RecapTab's scroll read as different kinds of insight, not one repeated.
-  // Peach, not `washSky`: §12.1 put Recap on Sunlit Honey, and the biggest
-  // element on a warm field should not be the app's only cool cast.
-  monthWash: [colors.surface, colors.washPeach],
+  // `weekWash` and `monthWash` retired in §17.5: they existed for Recap's two
+  // always-on insight cards, and both cards are gone — the week card because
+  // it spoiled the reveal below it, the month card because the theme is now
+  // something you earn by tapping the month. Retired rather than relocated,
+  // per the ruling; a wash looking for a new home is how the peach kept
+  // coming back.
   // Icon roundels — the one place accent is allowed to fill a shape.
   badge: [colors.accent, colors.accentDeep],
 };

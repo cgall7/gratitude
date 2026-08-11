@@ -27,6 +27,46 @@ export const endOfYear = (date) => new Date(date.getFullYear(), 11, 31);
 
 export const monthName = (date) => date.toLocaleString('default', { month: 'long' });
 
+// The month keys a pager should offer, oldest first, ending on the month
+// `now` falls in. Lives here rather than in RecapTab for the same reason
+// combGeometry does: it's the part with edge cases (year boundaries, a
+// window that has to trim itself, a first-run store with nothing in it),
+// and here it can be exercised without a renderer.
+//
+// `earliestISO` is the oldest entry's `YYYY-MM-DD`, or null for an empty
+// store — in which case the answer is just the current month, so a
+// first-week user gets one page instead of eleven empty combs to swipe.
+export const recentMonths = (now, earliestISO, maxMonths = 12) => {
+  const last = new Date(now.getFullYear(), now.getMonth(), 1);
+  const floor = new Date(now.getFullYear(), now.getMonth() - (maxMonths - 1), 1);
+  let cursor = last;
+  if (earliestISO) {
+    // Split rather than `new Date(iso)`: a bare ISO date parses as UTC and
+    // lands in the previous month anywhere west of Greenwich.
+    const [year, month] = earliestISO.split('-').map(Number);
+    const first = new Date(year, month - 1, 1);
+    cursor = first > floor ? first : floor;
+    // An entry dated in the future doesn't get to open pages ahead of today.
+    if (cursor > last) cursor = last;
+  }
+  const months = [];
+  while (cursor <= last) {
+    const label = monthName(cursor);
+    const year = cursor.getFullYear();
+    months.push({
+      key: `${year}-${String(cursor.getMonth() + 1).padStart(2, '0')}`,
+      label,
+      // The year shows up only once the pager crosses out of the current
+      // one — "December" alone is ambiguous on a twelve-month scroll, and
+      // "August 2026" is noise on the month you're standing in.
+      title: year === now.getFullYear() ? label : `${label} ${year}`,
+      daysInMonth: endOfMonth(cursor).getDate(),
+    });
+    cursor = new Date(year, cursor.getMonth() + 1, 1);
+  }
+  return months;
+};
+
 // The streak you're *on* right now — the one worth putting on the home
 // screen. Counts back from today; a today-less run still counts as long as
 // yesterday is there, so the streak doesn't visibly "break" at midnight

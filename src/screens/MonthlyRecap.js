@@ -1,12 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, StyleSheet, View, Text, Pressable, useWindowDimensions } from 'react-native';
 import Svg, { Defs, Polygon } from 'react-native-svg';
+import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../constants/theme';
 import { DURATIONS, useReducedMotion } from '../constants/motion';
 import { StaggeredItem } from '../components/StaggeredItem';
+import { PressableScale } from '../components/PressableScale';
 import { PrimaryButton } from '../components/PrimaryButton';
-import { GradientCard } from '../components/GradientCard';
-import { GradientIconBadge } from '../components/GradientIconBadge';
+import { ThemeCardFlip } from '../components/ThemeCardFlip';
 import { StripePattern } from '../components/StripeTexture';
 import { useSvgId } from '../utils/svgId';
 import { tagEntry } from '../utils/themeTagger';
@@ -22,7 +23,7 @@ import { COLS, HEX_ASPECT, combLayout, hexAt, hexPoints } from '../utils/combGeo
 const REVEAL_HEX_W = 30;
 const REVEAL_HEX_H = REVEAL_HEX_W * HEX_ASPECT;
 
-const DayCell = ({ day, entries, index, filledCount, w, h, x, y, points }) => {
+const DayCell = ({ day, entries, index, filledCount, cascade, w, h, x, y, points }) => {
   const filled = entries.length > 0;
   // The hatch is a `<Defs>` fill on the hex itself, so it follows the six
   // edges exactly — an overlay clipped by `overflow: hidden` would square
@@ -54,7 +55,7 @@ const DayCell = ({ day, entries, index, filledCount, w, h, x, y, points }) => {
   return (
     <View style={[styles.cellPosition, { left: x, top: y }]} pointerEvents="none">
       {filled ? (
-        <StaggeredItem index={index} count={filledCount} pop>
+        <StaggeredItem index={index} count={filledCount} replayKey={cascade} pop>
           {cell}
         </StaggeredItem>
       ) : (
@@ -146,11 +147,18 @@ const DayRevealCard = ({ monthName, day, entries, progress, reduced, w, h }) => 
 
 export const MonthlyRecap = ({
   monthName,
+  // Display override for the title only — the pager adds a year once it
+  // scrolls past December, while `monthName` stays bare so the per-day
+  // VoiceOver labels read "December 14", not "December 2025 14".
+  title,
   entries,
   daysInMonth = 31,
   insightTheme,
   insightDescription,
   onPreviewWrapped,
+  // False for the pages either side of the one you're looking at. Defaults
+  // true so a lone MonthlyRecap behaves exactly as it did before the pager.
+  active = true,
 }) => {
   // entries = [{ date: '2026-07-01', text: '...', theme: 'Family' }, ...]
   const hasEntries = entries.length > 0;
@@ -183,14 +191,38 @@ export const MonthlyRecap = ({
   }, [entries]);
 
   const [selectedDay, setSelectedDay] = useState(null);
+  const [themeOpen, setThemeOpen] = useState(false);
+  const [cascade, setCascade] = useState(0);
   const reduced = useReducedMotion();
   const revealProgress = useRef(new Animated.Value(0)).current;
 
-  // The card's content belongs to its month, so a month change takes the
-  // selection with it rather than leaving February's card under March.
+  // R35: both reveals belong to their month, so scrolling away takes them
+  // with it — a card whose content outlived the comb it was opened from is
+  // the confusing kind of persistence.
   useEffect(() => {
     setSelectedDay(null);
-  }, [monthName]);
+    setThemeOpen(false);
+  }, [monthName, active]);
+
+  // §17.5: the incoming grid re-staggers on a page turn. Skipped on mount,
+  // where StaggeredItem's own entrance is already the cascade — bumping the
+  // replay key there would start a second one a render later.
+  const mountedRef = useRef(false);
+  useEffect(() => {
+    if (!mountedRef.current) {
+      mountedRef.current = true;
+      return;
+    }
+    if (active) setCascade((c) => c + 1);
+  }, [active]);
+
+  // The card names a theme, so it should quote an entry that IS that theme —
+  // the first one that tags to it, falling back to the month's opener if the
+  // dominant theme came from entries that all tag on the fly.
+  const themeSnippet = useMemo(() => {
+    const match = entries.find((entry) => (entry.theme || tagEntry(entry.text)) === insightTheme);
+    return (match || entries[0])?.text;
+  }, [entries, insightTheme]);
 
   const openDay = (day) => {
     // R35: re-tapping the open day closes it; tapping a different filled day
@@ -227,25 +259,45 @@ export const MonthlyRecap = ({
 
   return (
     <View style={styles.content}>
-      <Text style={styles.title}>{monthName}</Text>
+      {/* §17.5: the month's theme is something you tap for, not furniture
+          that sits above the comb announcing itself. The title carries the
+          affordance — a month with nothing in it has nothing to reveal, so
+          it renders as plain text with no phantom tap target. */}
+      {hasEntries ? (
+        <PressableScale
+          onPress={() => setThemeOpen((open) => !open)}
+          style={styles.titleRow}
+          accessibilityLabel={
+            themeOpen
+              ? `${monthName}, hide this month's theme`
+              : `${monthName}, reveal this month's theme`
+          }
+        >
+          <Text style={styles.title}>{title || monthName}</Text>
+          <Ionicons
+            name={themeOpen ? 'sparkles' : 'sparkles-outline'}
+            size={18}
+            color={theme.colors.accentDeep}
+            style={styles.titleHint}
+          />
+        </PressableScale>
+      ) : (
+        <View style={styles.titleRow}>
+          <Text style={styles.title}>{title || monthName}</Text>
+        </View>
+      )}
 
-      {/* Theme Insight Card */}
-      <GradientCard
-        colors={theme.gradients.monthWash}
-        style={styles.insightCardOuter}
-        contentStyle={styles.insightCard}
-      >
-        <GradientIconBadge icon="sparkles" style={styles.insightBadge} />
-        <Text style={styles.insightLabel}>PRIMARY THEME</Text>
-        <Text style={styles.insightValue}>
-          {hasEntries ? insightTheme : 'No entries yet'}
-        </Text>
-        <Text style={styles.insightDesc}>
-          {hasEntries
-            ? insightDescription
-            : 'Write your first entry to start building this month\'s theme.'}
-        </Text>
-      </GradientCard>
+      {/* Mounted on open, so the gold-back flip replays every time rather
+          than only on the screen's first render. */}
+      {themeOpen && (
+        <View style={styles.themeCardSlot}>
+          <ThemeCardFlip
+            themeWord={insightTheme}
+            snippet={themeSnippet}
+            caption={insightDescription}
+          />
+        </View>
+      )}
 
       {/* The comb — one hexagon per calendar day, in date order */}
       <View style={[styles.comb, { width: cellW * COLS, height }]}>
@@ -259,6 +311,7 @@ export const MonthlyRecap = ({
               entries={dayEntries}
               index={staggerIndex}
               filledCount={entriesByDay.size}
+              cascade={cascade}
               w={cellW}
               h={cellH}
               x={cell.x}
@@ -321,7 +374,9 @@ export const MonthlyRecap = ({
       )}
 
       <Text style={styles.gridCaption}>
-        {entries.length} of {daysInMonth} days filled in
+        {hasEntries
+          ? `${entriesByDay.size} of ${daysInMonth} days filled in`
+          : 'No entries this month yet.'}
       </Text>
 
       <PrimaryButton onPress={onPreviewWrapped} style={styles.wrappedTeaser}>
@@ -336,51 +391,27 @@ const styles = StyleSheet.create({
     width: '100%',
     alignItems: 'center',
   },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 24,
+  },
   title: {
     ...theme.type.h1,
     color: theme.colors.ink,
-    marginBottom: 24,
     textAlign: 'center',
   },
-  // Split in two on purpose: `overflow: hidden` is what clips the wash to
-  // the rounded corners, and on the same node it kills the iOS shadow. The
-  // outer view carries radius + shadow, the inner one carries the clip.
-  // The `backgroundColor` is invisible (the clip sits on top of it) but not
-  // decorative — iOS derives a shadow from an opaque layer, and falls back
-  // to reading the contents' alpha channel when there isn't one.
-  insightCardOuter: {
-    width: '100%',
+  // The whole affordance: one small mark that fills in once the card is
+  // open. Anything louder would be the PRIMARY THEME card again, wearing a
+  // smaller hat.
+  titleHint: {
+    marginTop: 2,
+  },
+  themeCardSlot: {
+    alignSelf: 'stretch',
     marginBottom: 32,
-    borderRadius: theme.borderRadius.large,
-    backgroundColor: theme.colors.surface,
-    ...theme.shadows.card,
-  },
-  insightCard: {
-    borderWidth: 1,
-    borderColor: theme.colors.surfaceBorder,
-    borderRadius: theme.borderRadius.large,
-    padding: 28,
-    alignItems: 'center',
-  },
-  insightBadge: {
-    marginBottom: 12,
-  },
-  insightLabel: {
-    ...theme.type.label,
-    color: theme.colors.inkSoft,
-    marginBottom: 8,
-  },
-  insightValue: {
-    ...theme.type.h1,
-    fontSize: 36,
-    color: theme.colors.ink,
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  insightDesc: {
-    ...theme.type.body,
-    color: theme.colors.inkSoft,
-    textAlign: 'center',
   },
   // Cells are absolutely positioned: the 0.75h row pitch means rows must
   // overlap, which no flex row can express.

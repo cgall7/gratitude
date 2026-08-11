@@ -20,11 +20,20 @@ import { DURATIONS, SPRINGS, staggerDelay, useReducedMotion } from '../constants
 // divides a fixed budget instead of multiplying a fixed step, so a 30-cell
 // grid still settles in under a second. Omitting it keeps the old timing
 // exactly.
-export const StaggeredItem = ({ index, count = 1, children, style, pop = false }) => {
+//
+// Change `replayKey` to run the entrance again on a live item — §17.5's
+// month pager re-staggers the incoming grid on every swipe, and doing that
+// by remounting would tear down and rebuild 31 `<Svg>` cells per page turn.
+// Undefined by default, so it never changes for any existing consumer and
+// the effect fires exactly as often as it did before (R19).
+export const StaggeredItem = ({ index, count = 1, children, style, pop = false, replayKey }) => {
   const reduced = useReducedMotion();
   const anim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    // No-op on mount (the value is already 0); on a replay it rewinds so the
+    // entrance starts from nothing instead of animating 1 → 1.
+    anim.setValue(0);
     if (pop && !reduced) {
       Animated.spring(anim, {
         toValue: 1,
@@ -40,7 +49,7 @@ export const StaggeredItem = ({ index, count = 1, children, style, pop = false }
       delay: reduced ? 0 : staggerDelay(index, count),
       useNativeDriver: true,
     }).start();
-  }, [reduced]);
+  }, [reduced, replayKey]);
 
   if (pop) {
     // Reduced motion holds scale at 1 and lets the fade carry it alone.

@@ -12,6 +12,12 @@ export const PressableScale = ({
   scaleTo = 0.96,
   haptic = Haptics.ImpactFeedbackStyle.Light,
   disabled,
+  // §17.7 scope note (R36): RN's Pressable is `accessible: true` by
+  // default, so every one of these is already a VoiceOver stop — it just
+  // announces nothing. Optional passthrough so a caller can name the stop
+  // it creates; additive, so no existing consumer changes behaviour.
+  accessibilityLabel,
+  accessibilityRole = 'button',
 }) => {
   const scale = useRef(new Animated.Value(1)).current;
 
@@ -38,6 +44,8 @@ export const PressableScale = ({
       onPressOut={handlePressOut}
       onPress={handlePress}
       disabled={disabled}
+      accessibilityLabel={accessibilityLabel}
+      accessibilityRole={accessibilityRole}
     >
       <Animated.View style={[style, { opacity: disabled ? 0.4 : 1, transform: [{ scale }] }]}>
         {children}

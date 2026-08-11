@@ -12,13 +12,6 @@ import { CelebrationRays } from './CelebrationRays';
 // lands on the mark. Tap cracks the seal — medium haptic + accentBurst
 // flash — then hands off to Beat 1 via `onCracked`.
 //
-// §13.1's locked adaptive-icon gold (`#F0C023`) — the same field
-// SplashSpiral opens the app on, deliberately not theme.colors.accent (a
-// brighter, different yellow). Duplicated as a local constant rather than
-// imported: SplashSpiral lives on the still-unmerged splash-login-bee-arc
-// branch, and this is a fixed design value, not shared logic.
-const SEAL_GOLD = '#F0C023';
-
 const MARK_W = 519;
 const MARK_H = 614;
 const DISPLAY_W = 160;
@@ -164,9 +157,14 @@ export const SealCrack = ({ onCracked }) => {
 };
 
 const styles = StyleSheet.create({
+  // §13.1's locked adaptive-icon gold — the same field SplashSpiral opens
+  // the app on, deliberately not theme.colors.accent (a brighter, different
+  // yellow). Was a local literal because SplashSpiral sits on an unmerged
+  // branch; §17.5 promoted it to `goldField` instead, so Beat 0 and Beat 6
+  // now read the same token rather than two copies of the same string.
   fill: {
     flex: 1,
-    backgroundColor: SEAL_GOLD,
+    backgroundColor: theme.colors.goldField,
     alignItems: 'center',
     justifyContent: 'center',
   },
