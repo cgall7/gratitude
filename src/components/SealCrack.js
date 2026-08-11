@@ -2,8 +2,9 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Image, Pressable, StyleSheet, Text } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { theme } from '../constants/theme';
-import { DURATIONS } from '../constants/motion';
+import { SPRINGS, DURATIONS } from '../constants/motion';
 import { BeeTransition } from './BeeTransition';
+import { Bee } from './Bee';
 import { CelebrationRays } from './CelebrationRays';
 
 // §14.2 Beat 0 — The Seal. Full gold field, spiral mark static, the bee
@@ -34,7 +35,19 @@ const BEE_PATH = {
 export const SealCrack = ({ onCracked }) => {
   const [beeKey, setBeeKey] = useState(0);
   const [cracked, setCracked] = useState(false);
+  const [landed, setLanded] = useState(false);
   const flash = useRef(new Animated.Value(0)).current;
+  const staticBeeOpacity = useRef(new Animated.Value(0)).current;
+  // R16: the seal's tap is user-paced and unbounded, so the bee must rest
+  // on the mark rather than vanish on arrival (BeeTransition unmounts at
+  // flight-end everywhere else, correctly — that rule isn't touched here).
+  // BeeTransition can't take an onSettle callback without changing a
+  // component every other flight in the app shares, so instead this runs a
+  // shadow spring with the identical SPRINGS.glide config, started on the
+  // same triggerKey change — its completion lands within a frame of
+  // BeeTransition's own, close enough for a static-bee handoff with no
+  // visible jump.
+  const settleShadow = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     // Let the field render a beat before the bee flies in, so the landing
@@ -42,6 +55,15 @@ export const SealCrack = ({ onCracked }) => {
     const t = setTimeout(() => setBeeKey(1), 250);
     return () => clearTimeout(t);
   }, []);
+
+  useEffect(() => {
+    if (beeKey === 0) return;
+    settleShadow.setValue(0);
+    Animated.spring(settleShadow, { toValue: 1, ...SPRINGS.glide, useNativeDriver: true }).start(() => {
+      setLanded(true);
+      Animated.timing(staticBeeOpacity, { toValue: 1, duration: DURATIONS.quick, useNativeDriver: true }).start();
+    });
+  }, [beeKey]);
 
   const handleCrack = () => {
     if (cracked) return;
@@ -56,6 +78,14 @@ export const SealCrack = ({ onCracked }) => {
   return (
     <Pressable style={styles.fill} onPress={handleCrack}>
       <BeeTransition triggerKey={beeKey} path={BEE_PATH} anchorStyle={styles.beeAnchor} size={22} />
+      {landed && (
+        // BEE_PATH's terminal translate is (0,0) at 0deg — exactly
+        // styles.beeAnchor with no transform, so the crossfade lands in the
+        // same spot BeeTransition's flight was already ending at.
+        <Animated.View pointerEvents="none" style={[styles.beeAnchor, { opacity: staticBeeOpacity }]}>
+          <Bee size={22} />
+        </Animated.View>
+      )}
       <Image
         source={require('../../assets/spiral-mark.png')}
         style={{ width: DISPLAY_W, height: DISPLAY_H }}

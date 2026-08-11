@@ -20,6 +20,11 @@ const HEX_SIZE = 14;
 // motif, not a literal tally — the wiring's copy/numeral carries the true
 // count alongside it.
 const MAX_HEXES = 30;
+// R16 item 1 (Pixel): the visual cap doesn't bound the haptic rate — 30
+// ticks at the 40ms cadence is 25Hz, which reads as one continuous buzz
+// instead of discrete ticks. Cap ignite haptics at 12 regardless of hex
+// count; the final hex's success haptic is unaffected by this stride.
+const HAPTIC_CAP = 12;
 
 const hexPoints = (size) =>
   Array.from({ length: 6 }, (_, i) => {
@@ -27,7 +32,7 @@ const hexPoints = (size) =>
     return `${size + size * Math.cos(angle)},${size + size * Math.sin(angle)}`;
   }).join(' ');
 
-const Hex = ({ delay, isLast, reduced, onIgnite }) => {
+const Hex = ({ delay, isLast, reduced, haptic, onIgnite }) => {
   const progress = useRef(new Animated.Value(0)).current;
   const glow = useRef(new Animated.Value(0)).current;
   const points = useMemo(() => hexPoints(HEX_SIZE), []);
@@ -48,7 +53,7 @@ const Hex = ({ delay, isLast, reduced, onIgnite }) => {
     }
 
     const t = setTimeout(() => {
-      Haptics.selectionAsync();
+      if (haptic) Haptics.selectionAsync();
       Animated.spring(progress, { toValue: 1, ...SPRINGS.tick, useNativeDriver: true }).start();
       if (isLast) {
         Animated.timing(glow, { toValue: 1, duration: DURATIONS.arrival, useNativeDriver: true }).start();
@@ -57,7 +62,7 @@ const Hex = ({ delay, isLast, reduced, onIgnite }) => {
       }
     }, delay);
     return () => clearTimeout(t);
-  }, [delay, isLast, reduced]);
+  }, [delay, isLast, reduced, haptic]);
 
   // Reduced motion pins scale flat (opacity-only fade) — same Rule 4
   // reading HoneyDropProgress already uses, so a hex/glow never zooms
@@ -90,6 +95,10 @@ const Hex = ({ delay, isLast, reduced, onIgnite }) => {
 export const StreakHexTrail = ({ count, onSettle }) => {
   const reduced = useReducedMotion();
   const hexes = useMemo(() => Array.from({ length: Math.min(Math.max(count, 0), MAX_HEXES) }), [count]);
+  // Fire on every ceil(N/12)-th hex so the tick rate never exceeds the cap
+  // regardless of trail length; the final hex's success haptic (below) is
+  // unconditional and separate from this stride.
+  const hapticStride = Math.max(1, Math.ceil(hexes.length / HAPTIC_CAP));
 
   useEffect(() => {
     if (hexes.length === 0) onSettle?.();
@@ -103,6 +112,7 @@ export const StreakHexTrail = ({ count, onSettle }) => {
           delay={i * IGNITE_STAGGER_MS}
           isLast={i === hexes.length - 1}
           reduced={reduced}
+          haptic={i % hapticStride === 0}
           onIgnite={onSettle}
         />
       ))}
