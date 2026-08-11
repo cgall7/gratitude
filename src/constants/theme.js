@@ -23,7 +23,7 @@ const colors = {
 
   // Text / ink
   ink: '#221B03', // Warm near-black. Text, primary CTA fill, icons.
-  inkSoft: '#6B5F3D', // Secondary text — ~6.1:1 on Sunlit Cream, AA-compliant.
+  inkSoft: '#6B5F3D', // Secondary text — 5.84:1 on Sunlit Honey (every identity screen), 6.08:1 on Sunlit Cream (ritual input only). AA for normal text on both; quote the 5.84.
   textPrimary: '#221B03', // Alias of `ink`, kept for existing call sites.
   textSecondary: '#6B5F3D', // Alias of `inkSoft`, kept for existing call sites.
   textInverse: '#221B03', // Dark text for use on top of bright accent/accentDeep surfaces
