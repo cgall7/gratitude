@@ -19,6 +19,7 @@ import { SparkChips } from '../components/SparkChips';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { PressableScale } from '../components/PressableScale';
 import { GlowOrb } from '../components/GlowOrb';
+import { WelcomeBee } from '../components/WelcomeBee';
 import { CelebrationBadge } from '../components/CelebrationBadge';
 import { CelebrationRays } from '../components/CelebrationRays';
 
@@ -49,10 +50,18 @@ export const LockScreen = ({ onOpen }) => {
       <GlowOrb size={width * 1.6} breathe intensity={0.55} style={{ top: -width * 0.35 }} />
 
       <View style={styles.content}>
+        {/* Sits inside the orb, unlit by anything of its own — the light is
+            GlowOrb's job. Gives the gate a face to arrive at instead of
+            opening on a wordmark and a question. */}
+        <WelcomeBee size={132} />
         <Text style={styles.logo}>gratitude</Text>
         <Text style={styles.prompt}>Pause.{"\n"}What are you grateful for today?</Text>
 
-        <PrimaryButton onPress={onOpen}>Begin</PrimaryButton>
+        {/* Medium, not the default Light: this is the one tap in the app
+            that crosses a threshold rather than adjusting something. */}
+        <PrimaryButton onPress={onOpen} haptic={Haptics.ImpactFeedbackStyle.Medium}>
+          Begin
+        </PrimaryButton>
 
         <PressableScale onPress={handleLoadDemoData} style={styles.demoDataLink}>
           <Text style={styles.demoDataLinkText}>Load demo data</Text>

@@ -3,6 +3,7 @@ import { Animated, StyleSheet, View } from 'react-native';
 import Svg, { Defs, RadialGradient, Stop, Circle } from 'react-native-svg';
 import { theme } from '../constants/theme';
 import { useReducedMotion } from '../constants/motion';
+import { useSvgId } from '../utils/svgId';
 
 // The ambient light behind the lock/reflection moments.
 //
@@ -15,10 +16,6 @@ import { useReducedMotion } from '../constants/motion';
 // Breathing is opt-in (`breathe`) and reduced-motion aware — under Reduce
 // Motion the orb holds at its midpoint instead of pulsing, so the light
 // still reads without any movement.
-// Gradient ids have to be unique per instance — two orbs on one screen
-// sharing an id can resolve to the wrong `<Defs>` entry.
-let orbSequence = 0;
-
 export const GlowOrb = ({
   size,
   color = theme.colors.accent,
@@ -28,7 +25,7 @@ export const GlowOrb = ({
 }) => {
   const reduced = useReducedMotion();
   const pulse = useRef(new Animated.Value(0.5)).current;
-  const gradientId = useRef(`glowOrb${(orbSequence += 1)}`).current;
+  const gradientId = useSvgId('glowOrb');
 
   useEffect(() => {
     if (!breathe || reduced) {

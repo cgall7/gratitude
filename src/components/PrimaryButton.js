@@ -7,13 +7,22 @@ import { PressableScale } from './PressableScale';
 // The one CTA shape in the app (Sunbeam §4): full-width ink pill, cream
 // text. The button is the period at the end of the sentence — yellow never
 // fills it.
-export const PrimaryButton = ({ onPress, disabled, children, style }) => (
+// `haptic` is overridable for the rare CTA that means more than the rest —
+// the lock screen's "Begin" takes Medium because it crosses a threshold.
+// Everything else stays Light; if every button is heavy, none of them are.
+export const PrimaryButton = ({
+  onPress,
+  disabled,
+  children,
+  style,
+  haptic = Haptics.ImpactFeedbackStyle.Light,
+}) => (
   <PressableScale
     style={[styles.button, style]}
     onPress={onPress}
     disabled={disabled}
     scaleTo={0.97}
-    haptic={Haptics.ImpactFeedbackStyle.Light}
+    haptic={haptic}
   >
     <Text style={styles.text}>{children}</Text>
   </PressableScale>

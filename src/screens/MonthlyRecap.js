@@ -1,9 +1,13 @@
 import React from 'react';
 import { StyleSheet, View, Text, useWindowDimensions } from 'react-native';
-import Svg, { Polygon } from 'react-native-svg';
+import Svg, { Defs, Polygon } from 'react-native-svg';
 import { theme } from '../constants/theme';
 import { StaggeredItem } from '../components/StaggeredItem';
 import { PrimaryButton } from '../components/PrimaryButton';
+import { GradientCard } from '../components/GradientCard';
+import { GradientIconBadge } from '../components/GradientIconBadge';
+import { StripePattern } from '../components/StripeTexture';
+import { useSvgId } from '../utils/svgId';
 
 // Pointy-top hex, sized to fit a `size`-wide box — the month grid is made
 // of the same cells as the hive, not generic rounded squares.
@@ -16,15 +20,23 @@ const hexPoints = (width, height) => {
   return points.join(' ');
 };
 
-const DayCell = ({ day, entry, index, size }) => {
+const DayCell = ({ day, entry, index, filledCount, size }) => {
   const filled = !!entry;
+  // The hatch is a `<Defs>` fill on the hex itself, so it follows the six
+  // edges exactly — an overlay clipped by `overflow: hidden` would square
+  // off the corners.
+  const hatchId = useSvgId('emptyHatch');
   const cell = (
     <View style={[styles.gridItem, { width: size, height: size * 1.1 }]}>
       <Svg width={size} height={size * 1.1}>
+        {!filled && (
+          <Defs>
+            <StripePattern id={hatchId} />
+          </Defs>
+        )}
         <Polygon
           points={hexPoints(size, size * 1.1)}
-          fill={filled ? theme.colors.accent : theme.colors.surface}
-          fillOpacity={filled ? 1 : 0.5}
+          fill={filled ? theme.colors.accent : `url(#${hatchId})`}
           stroke={filled ? theme.colors.accentDeep : theme.colors.surfaceBorderStrong}
           strokeWidth={1}
         />
@@ -37,7 +49,13 @@ const DayCell = ({ day, entry, index, size }) => {
 
   // Only the days you actually earned cascade in; empty days are scenery and
   // shouldn't each cost an animation.
-  return filled ? <StaggeredItem index={index}>{cell}</StaggeredItem> : cell;
+  return filled ? (
+    <StaggeredItem index={index} count={filledCount} pop>
+      {cell}
+    </StaggeredItem>
+  ) : (
+    cell
+  );
 };
 
 export const MonthlyRecap = ({
@@ -71,7 +89,12 @@ export const MonthlyRecap = ({
       <Text style={styles.title}>{monthName}</Text>
 
       {/* Theme Insight Card */}
-      <View style={styles.insightCard}>
+      <GradientCard
+        colors={theme.gradients.monthWash}
+        style={styles.insightCardOuter}
+        contentStyle={styles.insightCard}
+      >
+        <GradientIconBadge icon="sparkles" style={styles.insightBadge} />
         <Text style={styles.insightLabel}>PRIMARY THEME</Text>
         <Text style={styles.insightValue}>
           {hasEntries ? insightTheme : 'No entries yet'}
@@ -81,7 +104,7 @@ export const MonthlyRecap = ({
             ? insightDescription
             : 'Write your first entry to start building this month\'s theme.'}
         </Text>
-      </View>
+      </GradientCard>
 
       {/* Gratitude Grid — one cell per calendar day, in date order */}
       <View style={styles.grid}>
@@ -90,7 +113,14 @@ export const MonthlyRecap = ({
           const entry = entryByDay.get(day);
           const staggerIndex = entry ? filledSoFar++ : 0;
           return (
-            <DayCell key={day} day={day} entry={entry} index={staggerIndex} size={cellSize} />
+            <DayCell
+              key={day}
+              day={day}
+              entry={entry}
+              index={staggerIndex}
+              filledCount={entries.length}
+              size={cellSize}
+            />
           );
         })}
       </View>
@@ -117,16 +147,28 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     textAlign: 'center',
   },
-  insightCard: {
+  // Split in two on purpose: `overflow: hidden` is what clips the wash to
+  // the rounded corners, and on the same node it kills the iOS shadow. The
+  // outer view carries radius + shadow, the inner one carries the clip.
+  // The `backgroundColor` is invisible (the clip sits on top of it) but not
+  // decorative — iOS derives a shadow from an opaque layer, and falls back
+  // to reading the contents' alpha channel when there isn't one.
+  insightCardOuter: {
     width: '100%',
+    marginBottom: 32,
+    borderRadius: theme.borderRadius.large,
     backgroundColor: theme.colors.surface,
+    ...theme.shadows.card,
+  },
+  insightCard: {
     borderWidth: 1,
     borderColor: theme.colors.surfaceBorder,
     borderRadius: theme.borderRadius.large,
     padding: 28,
-    marginBottom: 32,
     alignItems: 'center',
-    ...theme.shadows.card,
+  },
+  insightBadge: {
+    marginBottom: 12,
   },
   insightLabel: {
     ...theme.type.label,

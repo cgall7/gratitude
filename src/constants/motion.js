@@ -54,15 +54,30 @@ export const DURATIONS = {
   // ~600-900ms" — midpoint).
   trailFade: 750,
   // §14.1 mandate: reduced motion collapses every spring/transition to a
-  // flat fade at this duration — "no exceptions." (This is the more recent,
-  // explicit ruling; §12.5's own text says "~150ms" for the same case —
-  // flagged here for Pixel's gate read, both land as "fast, no bounce.")
+  // flat fade at this duration — "no exceptions." Supersedes §12.5's
+  // approximate "~150ms" for the same case (settled at Pixel's gate, logged
+  // in the Review Log — don't re-open it).
   reducedMotionFade: 200,
 };
 
 // Cascade delay between staggered children (list items, tapestry cells,
 // theme card reveals) — §14.1 "40-60ms cascade."
 export const STAGGER_MS = 50;
+
+// §14.1 amendment (R24, Pixel). §14.1's per-item step is calibrated for a
+// 5-10 row list; what's actually ratified is how a cascade *feels*, and
+// that's its total length, not its step. Multiplying a fixed step by a
+// dense collection breaks the thing the rule exists to protect — 30
+// calendar cells at `STAGGER_MS` is a 1.5s wait for the grid to settle.
+// So dense collections divide a budget instead.
+export const CASCADE_BUDGET_MS = 700;
+
+// Per-item delay for a cascade of `count` items. Below ~14 items the
+// budget isn't binding and this returns `STAGGER_MS` exactly, so every
+// existing call site is byte-identical — a change to the shared module
+// must not move a single merged consumer (R19).
+export const staggerDelay = (index, count = 1) =>
+  index * Math.min(STAGGER_MS, Math.ceil(CASCADE_BUDGET_MS / Math.max(count, 1)));
 
 // Hard cap for any particle-based effect (bee glow trail, celebration
 // burst). §12.5 Rule 3: FlyingBee trail is the #1 low-end perf risk.

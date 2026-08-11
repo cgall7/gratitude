@@ -1,28 +1,55 @@
+// Hoisted out of the `theme` literal so `gradients` below can be built from
+// the tokens themselves instead of re-typing their hex values. A stop that
+// only *claims* in a comment to be `accent` goes stale the next time the
+// accent moves — which is exactly how §11's retune got dropped on the floor
+// once already.
+const colors = {
+  // Backgrounds
+  background: '#FFF7CC', // Sunlit Honey (§12.1 retune) — identity screens: Today, Honeycomb, Recap, Wrapped, ritual gate.
+  backgroundWriting: '#FFFBEB', // Sunlit Cream — ritual input step only. Contrast gate (Sage-ratified): read/write surfaces stay cream, never brighten.
+  surface: '#FFFFFF', // Card white, pops off the cream backdrop
+  surfaceShade: '#FFFAE8', // Surface in shadow. Only ever a gradient's far stop — stays lighter than `background` so a card never dissolves into the page.
+  surfaceBorder: 'rgba(26, 21, 0, 0.08)',
+  surfaceBorderStrong: 'rgba(26, 21, 0, 0.14)', // filled/selected card states need more than a hairline
+
+  // Accents — Sunbeam v1 (GUIDES/GRATITUDE_DESIGN_SYSTEM_V1.md §1). Zero green anywhere.
+  accent: '#FFD200', // Marigold — THE one accent. Active states, celebration badge, key highlights.
+  accentDeep: '#FF7A00', // Warm amber — hero numerals, emphasis on cream (replaces `gold`).
+  accentBurst: '#FFEA00', // Hottest yellow on the board. Motion only — bursts, pops, bee trail. Never a static fill, text, or background.
+  washYellow: '#FFF3C4', // Pastel wash — Today/check-in moments.
+  washPeach: '#FFE9D9', // Pastel wash — warmth/celebration moments.
+  washSky: '#E4F2FB', // Pastel wash — calm/recap moments. Use sparingly.
+  danger: '#E5484D', // Destructive only (delete entry). Rarely seen.
+
+  // Text / ink
+  ink: '#221B03', // Warm near-black. Text, primary CTA fill, icons.
+  inkSoft: '#6B5F3D', // Secondary text — ~6.1:1 on Sunlit Cream, AA-compliant.
+  textPrimary: '#221B03', // Alias of `ink`, kept for existing call sites.
+  textSecondary: '#6B5F3D', // Alias of `inkSoft`, kept for existing call sites.
+  textInverse: '#221B03', // Dark text for use on top of bright accent/accentDeep surfaces
+};
+
+// Two-stop washes for the hero insight cards, corner to corner: lit corner
+// to shaded corner, so a card reads as catching light rather than sitting
+// flat. Every stop is a token reference — no literal hex lives here.
+const gradients = {
+  // "This week" — a white card on the Sunlit Honey page is paper in sun, so
+  // it falls to `surfaceShade` and stays neutral. Deliberately NOT
+  // `washYellow`: since §12.1, washYellow (#FFF3C4) and background (#FFF7CC)
+  // are ~2% apart, and that wash read as the card dissolving into the page.
+  weekWash: [colors.surface, colors.surfaceShade],
+  // "This month" — the summary card earns a hue shift so the two cards in
+  // RecapTab's scroll read as different kinds of insight, not one repeated.
+  // Peach, not `washSky`: §12.1 put Recap on Sunlit Honey, and the biggest
+  // element on a warm field should not be the app's only cool cast.
+  monthWash: [colors.surface, colors.washPeach],
+  // Icon roundels — the one place accent is allowed to fill a shape.
+  badge: [colors.accent, colors.accentDeep],
+};
+
 export const theme = {
-  colors: {
-    // Backgrounds
-    background: '#FFF7CC', // Sunlit Honey (§12.1 retune) — identity screens: Today, Honeycomb, Recap, Wrapped, ritual gate.
-    backgroundWriting: '#FFFBEB', // Sunlit Cream — ritual input step only. Contrast gate (Sage-ratified): read/write surfaces stay cream, never brighten.
-    surface: '#FFFFFF', // Card white, pops off the cream backdrop
-    surfaceBorder: 'rgba(26, 21, 0, 0.08)',
-    surfaceBorderStrong: 'rgba(26, 21, 0, 0.14)', // filled/selected card states need more than a hairline
-
-    // Accents — Sunbeam v1 (GUIDES/GRATITUDE_DESIGN_SYSTEM_V1.md §1). Zero green anywhere.
-    accent: '#FFD200', // Marigold — THE one accent. Active states, celebration badge, key highlights.
-    accentDeep: '#FF7A00', // Warm amber — hero numerals, emphasis on cream (replaces `gold`).
-    accentBurst: '#FFEA00', // Hottest yellow on the board. Motion only — bursts, pops, bee trail. Never a static fill, text, or background.
-    washYellow: '#FFF3C4', // Pastel wash — Today/check-in moments.
-    washPeach: '#FFE9D9', // Pastel wash — warmth/celebration moments.
-    washSky: '#E4F2FB', // Pastel wash — calm/recap moments. Use sparingly.
-    danger: '#E5484D', // Destructive only (delete entry). Rarely seen.
-
-    // Text / ink
-    ink: '#221B03', // Warm near-black. Text, primary CTA fill, icons.
-    inkSoft: '#6B5F3D', // Secondary text — ~6.1:1 on Sunlit Cream, AA-compliant.
-    textPrimary: '#221B03', // Alias of `ink`, kept for existing call sites.
-    textSecondary: '#6B5F3D', // Alias of `inkSoft`, kept for existing call sites.
-    textInverse: '#221B03', // Dark text for use on top of bright accent/accentDeep surfaces
-  },
+  colors,
+  gradients,
   // Family names match the registered fonts loaded via useFonts() in
   // App.js (see src/constants/fontAssets.js) — Nunito for display/UI
   // headlines, Plus Jakarta Sans for reading copy, Dancing Script for the

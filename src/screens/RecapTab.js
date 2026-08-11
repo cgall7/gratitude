@@ -20,6 +20,8 @@ import { DevVersionTag } from '../components/DevVersionTag';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { StreakBadge } from '../components/StreakBadge';
 import { StaggeredItem } from '../components/StaggeredItem';
+import { GradientCard } from '../components/GradientCard';
+import { GradientIconBadge } from '../components/GradientIconBadge';
 
 const describeTheme = (insight, periodLabel) => {
   if (!insight) return '';
@@ -49,7 +51,12 @@ const StatsCard = ({ streak, best, total }) => (
 
 // --- COMPONENT: WeeklyThemeCard ---
 const WeeklyThemeCard = ({ weekInsight }) => (
-  <View style={styles.weekCard}>
+  <GradientCard
+    colors={theme.gradients.weekWash}
+    style={styles.weekCardOuter}
+    contentStyle={styles.weekCard}
+  >
+    <GradientIconBadge icon="flame" style={styles.weekBadge} />
     <Text style={styles.weekLabel}>THIS WEEK'S THEME</Text>
     <Text style={styles.weekValue}>{weekInsight ? weekInsight.theme : 'No entries yet'}</Text>
     <Text style={styles.weekDesc}>
@@ -57,7 +64,7 @@ const WeeklyThemeCard = ({ weekInsight }) => (
         ? describeTheme(weekInsight, 'days this week')
         : 'Write an entry this week to see your theme.'}
     </Text>
-  </View>
+  </GradientCard>
 );
 
 export const RecapTab = ({ navigation }) => {
@@ -180,16 +187,26 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  weekCard: {
+  // See MonthlyRecap's `insightCardOuter` — clip and shadow can't share a
+  // node, so radius + shadow live outside and `overflow: hidden` inside,
+  // and the outer node keeps an opaque `backgroundColor` for iOS to derive
+  // the shadow from.
+  weekCardOuter: {
     width: '100%',
+    marginBottom: 24,
+    borderRadius: theme.borderRadius.large,
     backgroundColor: theme.colors.surface,
+    ...theme.shadows.card,
+  },
+  weekCard: {
     borderWidth: 1,
     borderColor: theme.colors.surfaceBorder,
     borderRadius: theme.borderRadius.large,
     padding: 24,
-    marginBottom: 24,
     alignItems: 'center',
-    ...theme.shadows.card,
+  },
+  weekBadge: {
+    marginBottom: 12,
   },
   weekLabel: {
     ...theme.type.label,
