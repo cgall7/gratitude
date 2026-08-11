@@ -1,23 +1,55 @@
 import React, { useCallback, useState } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { StyleSheet, View, Text, ActivityIndicator, ScrollView } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { theme } from '../constants/theme';
 import { EntryStore } from '../services/EntryStore';
 import { FlyingBee } from '../components/FlyingBee';
+import { PrimaryButton } from '../components/PrimaryButton';
+import { ScreenHeader } from '../components/ScreenHeader';
+import { StreakBadge } from '../components/StreakBadge';
+import { StaggeredItem } from '../components/StaggeredItem';
+import { currentStreak, nextMilestone, startOfYear, endOfYear } from '../utils/dateRanges';
+
+const greeting = (date) => {
+  const hour = date.getHours();
+  if (hour < 12) return 'Good morning';
+  if (hour < 18) return 'Good afternoon';
+  return 'Good evening';
+};
+
+const longDate = (date) =>
+  date.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+
+// The line under the streak — a goal, not just a number. Turns "7" into
+// "3 days to 10," which is the whole point of showing a streak at all.
+const streakCaption = (streak) => {
+  if (streak === 0) return 'Write today to start your streak.';
+  const next = nextMilestone(streak);
+  if (!next) return "You've caught every milestone. Keep going.";
+  return `${next.remaining} ${next.remaining === 1 ? 'day' : 'days'} to ${next.target}.`;
+};
 
 export const TodayTab = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
   const [entry, setEntry] = useState(null);
+  const [streak, setStreak] = useState(0);
+  const [total, setTotal] = useState(0);
 
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
-      EntryStore.getEntry(new Date()).then((result) => {
-        if (!cancelled) {
-          setEntry(result);
-          setLoading(false);
-        }
-      });
+      (async () => {
+        const now = new Date();
+        const [today, yearEntries] = await Promise.all([
+          EntryStore.getEntry(now),
+          EntryStore.getEntriesBetween(startOfYear(now), endOfYear(now)),
+        ]);
+        if (cancelled) return;
+        setEntry(today);
+        setStreak(currentStreak(yearEntries, now));
+        setTotal(yearEntries.length);
+        setLoading(false);
+      })();
       return () => {
         cancelled = true;
       };
@@ -26,45 +58,72 @@ export const TodayTab = ({ navigation }) => {
 
   if (loading) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, styles.centered]}>
         <ActivityIndicator color={theme.colors.accent} size="large" />
       </View>
     );
   }
 
-  if (!entry) {
-    return (
-      <View style={styles.container}>
-        {/* §12.2/§14.1: ambient cruise, default-on for Today idle. Never
-            sits over the CTA — it's absolutely positioned behind the
-            content flow and never intercepts touches (pointerEvents="none"
-            throughout FlyingBee). */}
-        <FlyingBee active />
-        <Text style={styles.header}>Today</Text>
-        <View style={styles.emptyCard}>
-          <Text style={styles.emptyText}>
-            You haven't completed today's ritual yet. Lock in, reflect, and unlock your day.
-          </Text>
-          <TouchableOpacity
-            style={styles.ctaButton}
-            onPress={() => navigation.getParent()?.navigate('Lock')}
-          >
-            <Text style={styles.ctaButtonText}>Start Today's Ritual</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  }
+  const now = new Date();
 
   return (
     <View style={styles.container}>
+      {/* §12.2/§14.1: ambient cruise, default-on for Today idle. Absolutely
+          positioned behind the content and never intercepts touches
+          (pointerEvents="none" throughout FlyingBee). */}
       <FlyingBee active />
-      <Text style={styles.header}>Today</Text>
-      <View style={styles.quoteCard}>
-        <Text style={styles.themeBadge}>{entry.theme}</Text>
-        <Text style={styles.gratitudeText}>"{entry.text}"</Text>
-      </View>
-      <Text style={styles.footerText}>Your apps unlocked when you saved this. See you tomorrow.</Text>
+
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <ScreenHeader
+          eyebrow={longDate(now)}
+          title={greeting(now)}
+          right={<StreakBadge streak={streak} />}
+        />
+
+        <StaggeredItem index={0}>
+          <View style={styles.streakCard}>
+            <Text style={styles.streakCaption}>{streakCaption(streak)}</Text>
+            <View style={styles.statDivider} />
+            <View style={styles.statRow}>
+              <View style={styles.stat}>
+                <Text style={styles.statValue}>{streak}</Text>
+                <Text style={styles.statLabel}>DAY STREAK</Text>
+              </View>
+              <View style={styles.stat}>
+                <Text style={styles.statValue}>{total}</Text>
+                <Text style={styles.statLabel}>THIS YEAR</Text>
+              </View>
+            </View>
+          </View>
+        </StaggeredItem>
+
+        <StaggeredItem index={1}>
+          {entry ? (
+            <View style={styles.quoteCard}>
+              <Text style={styles.themeBadge}>{entry.theme}</Text>
+              <Text style={styles.gratitudeText}>"{entry.text}"</Text>
+            </View>
+          ) : (
+            <View style={styles.emptyCard}>
+              <Text style={styles.emptyTitle}>Today's page is blank.</Text>
+              <Text style={styles.emptyBody}>
+                One line is enough. Write it, and your apps unlock for the day.
+              </Text>
+              <PrimaryButton onPress={() => navigation.getParent()?.navigate('Lock')}>
+                Write today's entry
+              </PrimaryButton>
+            </View>
+          )}
+        </StaggeredItem>
+
+        {entry && (
+          <StaggeredItem index={2}>
+            <Text style={styles.footerText}>
+              Saved and unlocked. Share it with your hive, or come back tomorrow.
+            </Text>
+          </StaggeredItem>
+        )}
+      </ScrollView>
     </View>
   );
 };
@@ -73,19 +132,49 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: theme.colors.background,
+  },
+  centered: {
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingBottom: 120,
   },
-  header: {
+  content: {
+    padding: 24,
+    paddingTop: 72,
+    paddingBottom: 140,
+  },
+  streakCard: {
+    backgroundColor: theme.colors.washYellow,
+    borderRadius: theme.borderRadius.large,
+    padding: 24,
+    marginBottom: 16,
+  },
+  streakCaption: {
+    ...theme.type.bodyLg,
+    color: theme.colors.ink,
+    textAlign: 'center',
+  },
+  statDivider: {
+    height: 1,
+    backgroundColor: theme.colors.surfaceBorderStrong,
+    marginVertical: 20,
+  },
+  statRow: {
+    flexDirection: 'row',
+  },
+  stat: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  statValue: {
+    ...theme.type.display,
+    color: theme.colors.accentDeep,
+  },
+  statLabel: {
     ...theme.type.label,
-    color: theme.colors.textSecondary,
-    position: 'absolute',
-    top: 70,
+    color: theme.colors.inkSoft,
+    marginTop: 4,
   },
   emptyCard: {
-    width: '100%',
     backgroundColor: theme.colors.surface,
     borderWidth: 1,
     borderColor: theme.colors.surfaceBorder,
@@ -94,28 +183,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     ...theme.shadows.card,
   },
-  emptyText: {
-    ...theme.type.bodyLg,
-    fontSize: 17,
-    lineHeight: 24,
-    color: theme.colors.textPrimary,
+  emptyTitle: {
+    ...theme.type.h2,
+    color: theme.colors.ink,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  emptyBody: {
+    ...theme.type.body,
+    color: theme.colors.inkSoft,
     textAlign: 'center',
     marginBottom: 24,
   },
-  ctaButton: {
-    backgroundColor: theme.colors.accent,
-    paddingVertical: 16,
-    paddingHorizontal: 28,
-    borderRadius: theme.borderRadius.full,
-    ...theme.shadows.tinted(theme.colors.accent),
-  },
-  ctaButtonText: {
-    ...theme.type.button,
-    fontSize: 15,
-    color: theme.colors.textPrimary,
-  },
   quoteCard: {
-    width: '100%',
     backgroundColor: theme.colors.surface,
     borderWidth: 1,
     borderColor: theme.colors.surfaceBorder,
@@ -137,15 +217,14 @@ const styles = StyleSheet.create({
   gratitudeText: {
     fontFamily: theme.fonts.bodyItalic,
     fontSize: 24,
-    color: theme.colors.textPrimary,
+    color: theme.colors.ink,
     textAlign: 'center',
     lineHeight: 34,
   },
   footerText: {
-    ...theme.type.body,
-    fontSize: 14,
-    color: theme.colors.textSecondary,
+    ...theme.type.bodySm,
+    color: theme.colors.inkSoft,
     textAlign: 'center',
-    marginTop: 24,
+    marginTop: 20,
   },
 });

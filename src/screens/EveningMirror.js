@@ -1,23 +1,28 @@
 import React, { useEffect, useRef } from 'react';
-import { 
-  StyleSheet, 
-  View, 
-  Text, 
-  TouchableOpacity, 
-  Animated, 
-  Dimensions 
-} from 'react-native';
+import { StyleSheet, View, Text, Animated, useWindowDimensions } from 'react-native';
 import { theme } from '../constants/theme';
-
-const { width, height } = Dimensions.get('window');
+import { GlowOrb } from '../components/GlowOrb';
+import { PressableScale } from '../components/PressableScale';
+import { DURATIONS, SPRINGS, useReducedMotion } from '../constants/motion';
 
 export const EveningMirror = ({ gratitudeText, onClose }) => {
-  // Animation values
+  const { width } = useWindowDimensions();
+  const reduced = useReducedMotion();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.95)).current;
 
   useEffect(() => {
-    // Smooth entrance animation
+    if (reduced) {
+      scaleAnim.setValue(1);
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: DURATIONS.reducedMotionFade,
+        useNativeDriver: true,
+      }).start();
+      return;
+    }
+    // Slow, settling entrance — this is the wind-down screen, so it takes
+    // its time where the rest of the app snaps.
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
@@ -26,17 +31,22 @@ export const EveningMirror = ({ gratitudeText, onClose }) => {
       }),
       Animated.spring(scaleAnim, {
         toValue: 1,
-        friction: 8,
-        tension: 40,
+        ...SPRINGS.glide,
         useNativeDriver: true,
       }),
     ]).start();
-  }, []);
+  }, [reduced]);
 
   return (
     <View style={styles.container}>
-      {/* Ambient background glow for evening vibe */}
-      <View style={styles.eveningGlow} />
+      {/* Ambient evening light, rising from the bottom for a sunset feel.
+          A gradient orb rather than the flat 10%-opacity disc this used to
+          be — that left a hard circular edge across the cream. */}
+      <GlowOrb
+        size={width * 1.4}
+        intensity={0.4}
+        style={{ bottom: -width * 0.5, left: -width * 0.2 }}
+      />
 
       <Animated.View style={[styles.content, { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }]}>
         <Text style={styles.header}>Tonight's Reflection</Text>
@@ -49,12 +59,9 @@ export const EveningMirror = ({ gratitudeText, onClose }) => {
           <Text style={styles.quoteMarkEnd}>”</Text>
         </View>
 
-        <TouchableOpacity 
-          style={styles.closeButton} 
-          onPress={onClose}
-        >
-          <Text style={styles.closeButtonText}>Rest Well</Text>
-        </TouchableOpacity>
+        <PressableScale style={styles.closeButton} onPress={onClose}>
+          <Text style={styles.closeButtonText}>Rest well</Text>
+        </PressableScale>
       </Animated.View>
     </View>
   );
@@ -66,15 +73,6 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.background,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  eveningGlow: {
-    position: 'absolute',
-    width: width * 1.2,
-    height: width * 1.2,
-    backgroundColor: theme.colors.accent,
-    borderRadius: width,
-    opacity: 0.1,
-    bottom: -width * 0.3, // Glow comes from bottom for a "sunset/moonrise" feel
   },
   content: {
     width: '80%',
@@ -120,16 +118,14 @@ const styles = StyleSheet.create({
   },
   closeButton: {
     marginTop: 40,
-    paddingVertical: 15,
-    paddingHorizontal: 30,
+    paddingVertical: 16,
+    paddingHorizontal: 40,
     borderRadius: theme.borderRadius.full,
-    borderWidth: 1,
-    borderColor: theme.colors.accent,
-    backgroundColor: 'transparent',
+    backgroundColor: theme.colors.ink,
   },
   closeButtonText: {
     ...theme.type.button,
     fontSize: 16,
-    color: theme.colors.accent,
+    color: theme.colors.background,
   },
 });

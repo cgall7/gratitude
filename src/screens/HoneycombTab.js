@@ -1,5 +1,6 @@
 import React, { useCallback, useRef, useState } from 'react';
 import { StyleSheet, View, Text, TextInput, ScrollView, ActivityIndicator } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { theme } from '../constants/theme';
 import { useAuth } from '../contexts/AuthContext';
@@ -10,6 +11,7 @@ import { PrimaryButton } from '../components/PrimaryButton';
 import { PressableScale } from '../components/PressableScale';
 import { FeedCard } from '../components/FeedCard';
 import { HoneycombGrid } from '../components/HoneycombGrid';
+import { ScreenHeader } from '../components/ScreenHeader';
 import { BeeTransition } from '../components/BeeTransition';
 import { FlyingBee } from '../components/FlyingBee';
 import { DEMO_HIVE_MEMBERS } from '../constants/demoHive';
@@ -77,6 +79,10 @@ const HoneycombFeed = () => {
   const [addEmail, setAddEmail] = useState('');
   const [addBusy, setAddBusy] = useState(false);
   const [addMessage, setAddMessage] = useState(null);
+  // The add-a-connection form used to sit permanently under the hive — a raw
+  // email field in the best real estate on the screen. It's a once-in-a-while
+  // action, so it collapses behind its own row until you want it.
+  const [addOpen, setAddOpen] = useState(false);
 
   const [shareCarryKey, setShareCarryKey] = useState(0);
   const [feedArrivalKey, setFeedArrivalKey] = useState(0);
@@ -193,36 +199,51 @@ const HoneycombFeed = () => {
           top of the tree, not here. */}
       <FlyingBee active />
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-      <Text style={styles.header}>Honeycomb</Text>
+      <ScreenHeader
+        eyebrow={
+          connections.length > 0
+            ? `${connections.length} CONNECTION${connections.length === 1 ? '' : 'S'}`
+            : 'YOUR HIVE'
+        }
+        title="Honeycomb"
+      />
 
       <HoneycombGrid members={buildHiveMembers(feed)} />
 
       <View style={styles.addCard}>
-        <Text style={styles.sectionLabel}>ADD A CONNECTION</Text>
-        <View style={styles.addRow}>
-          <TextInput
-            style={styles.addInput}
-            placeholder="Their email"
-            placeholderTextColor={theme.colors.textSecondary}
-            value={addEmail}
-            onChangeText={setAddEmail}
-            autoCapitalize="none"
-            keyboardType="email-address"
-            editable={!addBusy}
+        <PressableScale onPress={() => setAddOpen((open) => !open)} style={styles.addToggle} haptic={null}>
+          <Ionicons
+            name={addOpen ? 'close' : 'person-add-outline'}
+            size={18}
+            color={theme.colors.inkSoft}
           />
-          <PressableScale onPress={handleAddConnection} disabled={!addEmail.trim() || addBusy} style={styles.addButton}>
-            <Text style={styles.addButtonText}>{addBusy ? '…' : 'Add'}</Text>
-          </PressableScale>
-        </View>
-        {addMessage && (
-          <Text style={[styles.addMessage, addMessage.tone === 'error' && styles.addMessageError]}>
-            {addMessage.text}
-          </Text>
-        )}
-        {connections.length > 0 && (
-          <Text style={styles.connectionsCount}>
-            {connections.length} connection{connections.length === 1 ? '' : 's'}
-          </Text>
+          <Text style={styles.addToggleText}>{addOpen ? 'Cancel' : 'Add someone to your hive'}</Text>
+        </PressableScale>
+
+        {addOpen && (
+          <View style={styles.addBody}>
+            <View style={styles.addRow}>
+              <TextInput
+                style={styles.addInput}
+                placeholder="Their email"
+                placeholderTextColor={theme.colors.textSecondary}
+                value={addEmail}
+                onChangeText={setAddEmail}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                editable={!addBusy}
+                autoFocus
+              />
+              <PressableScale onPress={handleAddConnection} disabled={!addEmail.trim() || addBusy} style={styles.addButton}>
+                <Text style={styles.addButtonText}>{addBusy ? '…' : 'Add'}</Text>
+              </PressableScale>
+            </View>
+            {addMessage && (
+              <Text style={[styles.addMessage, addMessage.tone === 'error' && styles.addMessageError]}>
+                {addMessage.text}
+              </Text>
+            )}
+          </View>
         )}
       </View>
 
@@ -355,11 +376,6 @@ const styles = StyleSheet.create({
     color: theme.colors.inkSoft,
     textDecorationLine: 'underline',
   },
-  header: {
-    ...theme.type.h1,
-    color: theme.colors.textPrimary,
-    marginBottom: 20,
-  },
   sectionLabel: {
     ...theme.type.label,
     color: theme.colors.inkSoft,
@@ -370,9 +386,22 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: theme.colors.surfaceBorder,
     borderRadius: theme.borderRadius.large,
-    padding: 20,
+    padding: 16,
     marginBottom: 16,
     ...theme.shadows.card,
+  },
+  addToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  addToggleText: {
+    ...theme.type.bodySm,
+    fontFamily: theme.fonts.bodySemiBold,
+    color: theme.colors.inkSoft,
+  },
+  addBody: {
+    marginTop: 14,
   },
   addRow: {
     flexDirection: 'row',
@@ -406,11 +435,6 @@ const styles = StyleSheet.create({
   },
   addMessageError: {
     color: theme.colors.danger,
-  },
-  connectionsCount: {
-    ...theme.type.bodySm,
-    color: theme.colors.textSecondary,
-    marginTop: 10,
   },
   requestsCard: {
     backgroundColor: theme.colors.surface,
@@ -482,8 +506,9 @@ const styles = StyleSheet.create({
     left: '50%',
   },
   emptyState: {
-    marginHorizontal: -24,
+    borderRadius: theme.borderRadius.large,
     padding: 32,
+    marginBottom: 16,
     alignItems: 'center',
   },
   emptyStateYellow: {
