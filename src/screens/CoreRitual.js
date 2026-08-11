@@ -7,7 +7,8 @@ import {
   Animated,
   Dimensions,
   KeyboardAvoidingView,
-  Platform
+  Platform,
+  Alert,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { theme } from '../constants/theme';
@@ -22,6 +23,20 @@ const { width, height } = Dimensions.get('window');
 // --- COMPONENT: LockScreen ---
 export const LockScreen = ({ onEnterRitual }) => {
   const breathe = useRef(new Animated.Value(0)).current;
+
+  // Visible demo trigger (Colin, 2026-08-10: wants a real button, not the
+  // old hidden 5-tap gesture) — seeds 180 days of realistic demo entries so
+  // Wrapped and Recap have something worth showing.
+  const handleLoadDemoData = () => {
+    EntryStore.seedDemoData(180)
+      .then((count) => {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        Alert.alert('Demo data loaded', `Filled the last ${count} days with entries.`);
+      })
+      .catch(() => {
+        Alert.alert('Couldn\'t load demo data', 'Something went wrong — try again.');
+      });
+  };
 
   useEffect(() => {
     Animated.loop(
@@ -47,6 +62,10 @@ export const LockScreen = ({ onEnterRitual }) => {
 
         <PressableScale style={styles.primaryButton} onPress={onEnterRitual}>
           <Text style={styles.buttonText}>Enter Ritual</Text>
+        </PressableScale>
+
+        <PressableScale onPress={handleLoadDemoData} style={styles.demoDataLink}>
+          <Text style={styles.demoDataLinkText}>Load demo data</Text>
         </PressableScale>
       </View>
     </View>
@@ -191,6 +210,15 @@ const styles = StyleSheet.create({
     color: theme.colors.textSecondary,
     textAlign: 'center',
     marginBottom: 50,
+  },
+  demoDataLink: {
+    alignSelf: 'center',
+    marginTop: 16,
+  },
+  demoDataLinkText: {
+    ...theme.type.bodySm,
+    color: theme.colors.textSecondary,
+    textDecorationLine: 'underline',
   },
   promptQuestion: {
     ...theme.type.h3,
