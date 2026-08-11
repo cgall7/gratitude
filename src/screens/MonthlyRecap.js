@@ -33,7 +33,10 @@ const REVEAL_HEX_H = REVEAL_HEX_W * HEX_ASPECT;
 // second Svg-root config near the grid. Everything below is plain RN views
 // animated on the native driver — no SVG, so nothing here can trigger it.
 
-const CellGlow = ({ index, count, cascade, reduced, w, h }) => {
+// Only ever mounted when `!reduced` (see DayCell below) — accentBurst is
+// "motion only" per its own theme token comment, and Reduce Motion's flat
+// fade already lives on the numeral's StaggeredItem.
+const CellGlow = ({ index, count, cascade, w, h }) => {
   // Same motif as StreakHexTrail's ignite glow (`StreakHexTrail.js:89`) —
   // one ramp 0→1, read through a bloom-then-fade interpolation, rather than
   // an explicit up/down animation.
@@ -51,15 +54,21 @@ const CellGlow = ({ index, count, cascade, reduced, w, h }) => {
     // value mid-fade.
     Animated.timing(glow, {
       toValue: 1,
-      duration: reduced ? DURATIONS.reducedMotionFade : DURATIONS.arrival,
-      delay: reduced ? 0 : staggerDelay(index, count),
+      duration: DURATIONS.arrival,
+      delay: staggerDelay(index, count),
       useNativeDriver: true,
     }).start();
     return () => glow.stopAnimation();
-  }, [reduced, cascade]);
+  }, [cascade]);
 
   const opacity = glow.interpolate({ inputRange: [0, 0.3, 1], outputRange: [0, 0.6, 0] });
-  const scale = reduced ? 1 : glow.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1.3] });
+  // Deezine (2026-08-11): at [0.6, 1.3] the bloom peaks (glow=0.3) at scale
+  // 0.81 — still inside the hex, so max brightness is accentBurst painted
+  // over accent, a 14/255 shift nobody sees. StreakHexTrail's version reads
+  // outside the hex, against cream; ours has to clear the hex's own edge
+  // before it's visible. [0.95, 1.6] puts scale at ~1.145 when opacity
+  // peaks, so the halo is outside the hex right when it's brightest.
+  const scale = glow.interpolate({ inputRange: [0, 1], outputRange: [0.95, 1.6] });
 
   return (
     <Animated.View
@@ -78,8 +87,16 @@ const CellGlow = ({ index, count, cascade, reduced, w, h }) => {
 // Only the days you actually earned animate; empty days are scenery.
 const DayCell = ({ day, filled, index, filledCount, cascade, reduced, w, h, x, y }) => (
   <View style={[styles.cellPosition, { left: x, top: y, width: w, height: h }]} pointerEvents="none">
-    {filled && (
-      <CellGlow index={index} count={filledCount} cascade={cascade} reduced={reduced} w={w} h={h} />
+    {/* Deezine (2026-08-11): accentBurst is motion-only by its own token
+        comment. Gated on `filled` alone, Reduce Motion still ran every
+        filled cell's glow as a simultaneous flat flash — the scale pins to
+        1 but the flash itself isn't motion-free. StreakHexTrail's own
+        Reduce Motion path only glows once, for its last hex, inside a
+        celebration the user opened; thirty-one at once on arrival isn't
+        that. §12.5 Rule 4 wants a flat fade here, which the numeral's
+        StaggeredItem already carries alone. */}
+    {filled && !reduced && (
+      <CellGlow index={index} count={filledCount} cascade={cascade} w={w} h={h} />
     )}
     {filled ? (
       <StaggeredItem index={index} count={filledCount} replayKey={cascade} pop style={styles.dayNumberOverlay}>
@@ -331,16 +348,37 @@ export const MonthlyRecap = ({
           <Defs>
             <StripePattern id={hatchId} />
           </Defs>
-          {cellRenderData.map(({ cell, filled }) => (
-            <Polygon
-              key={cell.day}
-              points={points}
-              transform={`translate(${cell.x + 1} ${cell.y + 1})`}
-              fill={filled ? theme.colors.accent : `url(#${hatchId})`}
-              stroke={filled ? theme.colors.accentDeep : theme.colors.surfaceBorderStrong}
-              strokeWidth={1}
-            />
-          ))}
+          {/* Deezine (2026-08-11): a 1pt stroke on a shared wall paints
+              twice in one root, and the later element wins — so painting
+              in date order let a later empty day eat a filled day's wall.
+              Empties first, then every filled cell, so a filled hex always
+              owns its complete outline regardless of date. Order within
+              a group doesn't matter: every member of it strokes the same
+              color, so whichever paints second is a no-op repaint. */}
+          {cellRenderData
+            .filter(({ filled }) => !filled)
+            .map(({ cell }) => (
+              <Polygon
+                key={cell.day}
+                points={points}
+                transform={`translate(${cell.x + 1} ${cell.y + 1})`}
+                fill={`url(#${hatchId})`}
+                stroke={theme.colors.surfaceBorderStrong}
+                strokeWidth={1}
+              />
+            ))}
+          {cellRenderData
+            .filter(({ filled }) => filled)
+            .map(({ cell }) => (
+              <Polygon
+                key={cell.day}
+                points={points}
+                transform={`translate(${cell.x + 1} ${cell.y + 1})`}
+                fill={theme.colors.accent}
+                stroke={theme.colors.accentDeep}
+                strokeWidth={1}
+              />
+            ))}
           {selectedCell && (
             <Polygon
               points={points}
