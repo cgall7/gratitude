@@ -600,7 +600,12 @@ const styles = StyleSheet.create({
     marginTop: 16,
     marginBottom: 32,
   },
+  // Pixel (2026-08-11): PrimaryButton is `width: '100%'` internally, but
+  // `content`'s `alignItems: 'center'` still shrinks it to its label with
+  // no side padding unless the child itself claims the cross-axis. Same
+  // `alignSelf: 'stretch'` `revealCard` already uses above.
   wrappedTeaser: {
+    alignSelf: 'stretch',
     marginTop: 4,
   },
 });
