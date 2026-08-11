@@ -24,6 +24,14 @@ const MARK_H = 614;
 const DISPLAY_W = 160;
 const DISPLAY_H = (DISPLAY_W * MARK_H) / MARK_W;
 
+// R22 (Pixel): optical center of the spiral's eye, measured on
+// assets/spiral-mark.png — the largest inscribed clearance is at source
+// pixel (247, 263) of 519x614. Not 50%/50%: the tail hook and the three
+// dots weight the composition lower-left, so the bounding-box center
+// lands 3.9pt right / 13.6pt below the actual eye at DISPLAY_W=160.
+const EYE_LEFT = '47.6%';
+const EYE_TOP = '42.8%';
+
 // Starts off to the upper-left and arcs down onto the mark's center
 // (anchor sits at the mark's position, so the path's end value is 0,0).
 const BEE_PATH = {
@@ -101,7 +109,14 @@ export const SealCrack = ({ onCracked }) => {
     Animated.sequence([
       Animated.timing(flash, { toValue: 1, duration: DURATIONS.instant, useNativeDriver: true }),
       Animated.timing(flash, { toValue: 0, duration: DURATIONS.quick, useNativeDriver: true }),
-    ]).start(() => onCracked?.());
+    ]).start(() => {
+      // R22 (Pixel): guarded on mountedRef only, deliberately not on
+      // `finished` — R20's finished check existed because a latch made an
+      // early fire permanent; nothing here latches, so refusing to fire on
+      // finished:false would just dead-end Beat 0 on an interruption
+      // instead of preventing one. Same reasoning as R20, opposite call.
+      if (mountedRef.current) onCracked?.();
+    });
   };
 
   return (
@@ -113,8 +128,8 @@ export const SealCrack = ({ onCracked }) => {
         // sat 27pt above the group's center, and the bee/burst landed off
         // the spiral. Anchors for a mark-centered moment attach to the
         // mark, never to the screen: this wrapper is sized to the mark
-        // only, so top:50%/left:50% inside it lands exactly on the
-        // spiral's center regardless of what copy sits below.
+        // only, so EYE_TOP/EYE_LEFT (R22) inside it lands exactly on the
+        // spiral's optical center regardless of what copy sits below.
       }
       <View style={styles.markStage}>
         <BeeTransition triggerKey={beeKey} path={BEE_PATH} anchorStyle={styles.beeAnchor} size={22} />
@@ -162,15 +177,22 @@ const styles = StyleSheet.create({
   },
   beeAnchor: {
     position: 'absolute',
-    top: '50%',
-    left: '50%',
+    top: EYE_TOP,
+    left: EYE_LEFT,
     marginTop: -11,
     marginLeft: -11,
+    // R22 (Pixel): the landed static <Bee> is an earlier sibling than
+    // <Image> with no zIndex of its own — RN paints in tree order
+    // regardless of position:absolute. It was invisible only because its
+    // footprint fell entirely inside the mark's transparent eye; matches
+    // BeeTransition's own `wrap` zIndex so the handoff doesn't depend on
+    // the asset's alpha, which matters more now the anchor has moved.
+    zIndex: 10,
   },
   raysStage: {
     position: 'absolute',
-    top: '50%',
-    left: '50%',
+    top: EYE_TOP,
+    left: EYE_LEFT,
     marginTop: -48,
     marginLeft: -48,
     width: 96,
