@@ -30,6 +30,6 @@ const styles = StyleSheet.create({
   },
   text: {
     ...theme.type.button,
-    color: theme.colors.background,
+    color: theme.colors.backgroundWriting, // always cream text, per §4 — not the identity honey tone
   },
 });
