@@ -458,7 +458,11 @@ export const MonthlyRecap = ({
           : 'No entries this month yet.'}
       </Text>
 
-      <PrimaryButton onPress={onPreviewWrapped} style={styles.wrappedTeaser}>
+      <PrimaryButton
+        onPress={onPreviewWrapped}
+        style={styles.wrappedTeaser}
+        containerStyle={styles.wrappedTeaserContainer}
+      >
         Preview your annual Wrapped
       </PrimaryButton>
     </View>
@@ -600,12 +604,16 @@ const styles = StyleSheet.create({
     marginTop: 16,
     marginBottom: 32,
   },
-  // Pixel (2026-08-11): PrimaryButton is `width: '100%'` internally, but
-  // `content`'s `alignItems: 'center'` still shrinks it to its label with
-  // no side padding unless the child itself claims the cross-axis. Same
-  // `alignSelf: 'stretch'` `revealCard` already uses above.
   wrappedTeaser: {
-    alignSelf: 'stretch',
     marginTop: 4,
+  },
+  // Pixel's device gate (2026-08-11, R43): `alignSelf: 'stretch'` on
+  // `wrappedTeaser` above compiled but couldn't work — `style` on
+  // PressableScale only ever reaches the inner Animated.View, one node
+  // short of the actual flex child. `content`'s `alignItems: 'center'`
+  // shrinks that outer Pressable to its label with no side padding unless
+  // IT claims the cross-axis, which is what `containerStyle` is for.
+  wrappedTeaserContainer: {
+    alignSelf: 'stretch',
   },
 });

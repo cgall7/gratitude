@@ -8,6 +8,13 @@ import * as Haptics from 'expo-haptics';
 export const PressableScale = ({
   onPress,
   style,
+  // Pixel (2026-08-11, R43 gate): `style` only ever reached the inner
+  // `Animated.View` — the transform/opacity layer — while the outer
+  // `Pressable` is the actual flex child of whatever container this sits
+  // in. A caller asking for cross-axis sizing (`alignSelf: 'stretch'`,
+  // `width`) on `style` was landing it one node too deep to matter.
+  // Undefined by default: zero change for every existing consumer.
+  containerStyle,
   children,
   scaleTo = 0.96,
   haptic = Haptics.ImpactFeedbackStyle.Light,
@@ -44,6 +51,7 @@ export const PressableScale = ({
 
   return (
     <Pressable
+      style={containerStyle}
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
       onPress={handlePress}
