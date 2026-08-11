@@ -38,6 +38,12 @@ const Hex = ({ delay, isLast, reduced, haptic, onIgnite }) => {
   const points = useMemo(() => hexPoints(HEX_SIZE), []);
 
   useEffect(() => {
+    // R18 (Pixel): useReducedMotion resolves async and starts at `null`.
+    // Hold here instead of assuming full-motion — a delay:0 first hex would
+    // otherwise fire a real haptic + spring before the promise settles,
+    // which is exactly the opt-out a Reduce Motion user asked for.
+    if (reduced === null) return undefined;
+
     if (reduced) {
       // §12.5 Rule 4 / §14.1: reduced motion collapses to a flat fade, no
       // stagger and no per-cell haptic — every hex fades in together
@@ -49,7 +55,13 @@ const Hex = ({ delay, isLast, reduced, haptic, onIgnite }) => {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         onIgnite?.();
       }
-      return;
+      // R18: a live OS toggle mid-beat can still re-run this effect after
+      // the full-motion branch below already started a spring — stop it
+      // rather than letting two drivers fight the same Animated.Value.
+      return () => {
+        progress.stopAnimation();
+        glow.stopAnimation();
+      };
     }
 
     const t = setTimeout(() => {
@@ -61,7 +73,11 @@ const Hex = ({ delay, isLast, reduced, haptic, onIgnite }) => {
         onIgnite?.();
       }
     }, delay);
-    return () => clearTimeout(t);
+    return () => {
+      clearTimeout(t);
+      progress.stopAnimation();
+      glow.stopAnimation();
+    };
   }, [delay, isLast, reduced, haptic]);
 
   // Reduced motion pins scale flat (opacity-only fade) — same Rule 4

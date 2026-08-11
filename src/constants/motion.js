@@ -71,14 +71,25 @@ export const MAX_TRAIL_PARTICLES = 12;
 // Reduced-motion, first-class (§12.5 Rule 4) — one hook, subscribed to
 // live OS changes (not just read-once-at-mount), so a mid-session
 // accessibility toggle takes effect immediately.
+//
+// R18 (Pixel): the initial read is async (a promise), so every consumer's
+// first render sees a value that hasn't been confirmed yet. This hook
+// resolves that to `null` rather than `false` specifically so it stays
+// backward compatible: `if (reduced)` reads null as falsy, identical to
+// the old default-false behavior, so nothing already written against this
+// hook needs to change. Only a component that fires a one-time side effect
+// on mount (a haptic, a spring that must not run under Reduce Motion)
+// needs to add `if (reduced === null) return;` and wait one render for the
+// real answer instead of assuming full-motion and racing the promise
+// (StreakHexTrail was the worst case — see R18).
 export const useReducedMotion = () => {
-  const [reduced, setReduced] = useState(false);
+  const [reduced, setReduced] = useState(null);
 
   useEffect(() => {
     let mounted = true;
     AccessibilityInfo.isReduceMotionEnabled?.()
       .then((value) => mounted && setReduced(!!value))
-      .catch(() => {});
+      .catch(() => mounted && setReduced(false));
     const subscription = AccessibilityInfo.addEventListener?.('reduceMotionChanged', (value) => {
       if (mounted) setReduced(!!value);
     });
