@@ -28,10 +28,14 @@ export const LockScreen = ({ onEnterRitual }) => {
   // old hidden 5-tap gesture) — seeds 180 days of realistic demo entries so
   // Wrapped and Recap have something worth showing.
   const handleLoadDemoData = () => {
-    EntryStore.seedDemoData(180).then((count) => {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert('Demo data loaded', `Filled the last ${count} days with entries.`);
-    });
+    EntryStore.seedDemoData(180)
+      .then((count) => {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        Alert.alert('Demo data loaded', `Filled the last ${count} days with entries.`);
+      })
+      .catch(() => {
+        Alert.alert('Couldn\'t load demo data', 'Something went wrong — try again.');
+      });
   };
 
   useEffect(() => {

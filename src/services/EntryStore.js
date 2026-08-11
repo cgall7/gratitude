@@ -54,7 +54,9 @@ export const EntryStore = {
   async seedDemoData(days = 180) {
     const entries = await loadAll();
     const demo = buildDemoEntries(days);
-    await saveAll({ ...entries, ...demo });
+    // Real entries win — demo data only fills gaps, never overwrites what a
+    // tester actually wrote (R12: Pixel).
+    await saveAll({ ...demo, ...entries });
     return Object.keys(demo).length;
   },
 };
