@@ -58,8 +58,16 @@ export const SealCrack = ({ onCracked }) => {
     return () => clearTimeout(t);
   }, []);
 
-  useEffect(() => () => {
-    mountedRef.current = false;
+  useEffect(() => {
+    // R21 (Pixel): a cleanup-only effect has no setup body, so Fast
+    // Refresh — which preserves the ref across the edit — runs the
+    // cleanup on the old instance and never restores `true` on the new
+    // one. Not reachable in production (no StrictMode double-invoke in
+    // this tree), but it bites mid-development on exactly this file.
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -98,31 +106,43 @@ export const SealCrack = ({ onCracked }) => {
 
   return (
     <Pressable style={styles.fill} onPress={handleCrack}>
-      <BeeTransition triggerKey={beeKey} path={BEE_PATH} anchorStyle={styles.beeAnchor} size={22} />
-      {landed && (
-        // BEE_PATH's terminal translate is (0,0) at 0deg — exactly
-        // styles.beeAnchor with no transform, so the crossfade lands in the
-        // same spot BeeTransition's flight was already ending at.
-        <Animated.View pointerEvents="none" style={[styles.beeAnchor, { opacity: staticBeeOpacity }]}>
-          <Bee size={22} />
-        </Animated.View>
-      )}
-      <Image
-        source={require('../../assets/spiral-mark.png')}
-        style={{ width: DISPLAY_W, height: DISPLAY_H }}
-        resizeMode="contain"
-      />
+      {
+        // R21 (Pixel): beeAnchor/raysStage used to center on the
+        // Pressable itself, but the Pressable centers a group of *two*
+        // in-flow children (mark + copy below) — so the mark's own center
+        // sat 27pt above the group's center, and the bee/burst landed off
+        // the spiral. Anchors for a mark-centered moment attach to the
+        // mark, never to the screen: this wrapper is sized to the mark
+        // only, so top:50%/left:50% inside it lands exactly on the
+        // spiral's center regardless of what copy sits below.
+      }
+      <View style={styles.markStage}>
+        <BeeTransition triggerKey={beeKey} path={BEE_PATH} anchorStyle={styles.beeAnchor} size={22} />
+        {landed && (
+          // BEE_PATH's terminal translate is (0,0) at 0deg — exactly
+          // styles.beeAnchor with no transform, so the crossfade lands in
+          // the same spot BeeTransition's flight was already ending at.
+          <Animated.View pointerEvents="none" style={[styles.beeAnchor, { opacity: staticBeeOpacity }]}>
+            <Bee size={22} />
+          </Animated.View>
+        )}
+        <Image
+          source={require('../../assets/spiral-mark.png')}
+          style={{ width: DISPLAY_W, height: DISPLAY_H }}
+          resizeMode="contain"
+        />
+        {cracked && (
+          // R17 (Pixel): CelebrationRays anchors to the center of a 96x96
+          // box (its own doc comment says so) — bare, it was reading the
+          // Pressable's top-left instead of the mark. Same wrapper
+          // convention Onboarding's CelebrationStep already uses, centered
+          // here on the mark rather than a static layout position.
+          <View pointerEvents="none" style={styles.raysStage}>
+            <CelebrationRays />
+          </View>
+        )}
+      </View>
       <Text style={styles.copy}>Your year, poured.</Text>
-      {cracked && (
-        // R17 (Pixel): CelebrationRays anchors to the center of a 96x96
-        // box (its own doc comment says so) — bare, it was reading the
-        // Pressable's top-left instead of the mark. Same wrapper
-        // convention Onboarding's CelebrationStep already uses, centered
-        // here on the mark rather than a static layout position.
-        <View pointerEvents="none" style={styles.raysStage}>
-          <CelebrationRays />
-        </View>
-      )}
       <Animated.View pointerEvents="none" style={[styles.flash, { opacity: flash }]} />
     </Pressable>
   );
@@ -134,6 +154,11 @@ const styles = StyleSheet.create({
     backgroundColor: SEAL_GOLD,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  markStage: {
+    position: 'relative',
+    width: DISPLAY_W,
+    height: DISPLAY_H,
   },
   beeAnchor: {
     position: 'absolute',
