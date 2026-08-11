@@ -113,6 +113,13 @@ export const useReducedMotion = () => {
 // `useReducedMotion` itself keeps its exact original contract and its
 // bail-out; this is additive, not a replacement, so the 7 merged
 // consumers need no changes and no re-audit.
+// R20 (Pixel): a `resolved` hold turns a failed accessibility read from
+// cosmetic (assume full motion, animate anyway) into blocking (nothing
+// runs, the ceremony stalls). `.catch` covers the realistic case
+// (rejection); this covers the read never settling at all — cheap
+// insurance so a stuck native bridge can't hang the app's emotional peak.
+const RESOLVE_TIMEOUT_MS = 750;
+
 export const useReducedMotionState = () => {
   const [state, setState] = useState({ reduced: false, resolved: false });
 
@@ -124,8 +131,12 @@ export const useReducedMotionState = () => {
     const subscription = AccessibilityInfo.addEventListener?.('reduceMotionChanged', (value) => {
       if (mounted) setState({ reduced: !!value, resolved: true });
     });
+    const timeout = setTimeout(() => {
+      if (mounted) setState((prev) => (prev.resolved ? prev : { ...prev, resolved: true }));
+    }, RESOLVE_TIMEOUT_MS);
     return () => {
       mounted = false;
+      clearTimeout(timeout);
       subscription?.remove?.();
     };
   }, []);
