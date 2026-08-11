@@ -5,14 +5,47 @@ import { theme } from '../constants/theme';
 import { MonthlyRecap } from './MonthlyRecap';
 import { EntryStore } from '../services/EntryStore';
 import { dominantTheme } from '../utils/themeTagger';
-import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, monthName } from '../utils/dateRanges';
+import {
+  startOfWeek,
+  endOfWeek,
+  startOfMonth,
+  endOfMonth,
+  startOfYear,
+  endOfYear,
+  monthName,
+  currentStreak,
+  longestStreak,
+} from '../utils/dateRanges';
 import { DevVersionTag } from '../components/DevVersionTag';
+import { ScreenHeader } from '../components/ScreenHeader';
+import { StreakBadge } from '../components/StreakBadge';
+import { StaggeredItem } from '../components/StaggeredItem';
 
 const describeTheme = (insight, periodLabel) => {
   if (!insight) return '';
   const { theme: themeName, count, total } = insight;
   return `You leaned into "${themeName}" ${count} of ${total} ${periodLabel}.`;
 };
+
+// The three numbers worth chasing, up top where they're the first thing you
+// see — Recap used to open on a theme card with no score of any kind.
+const StatsCard = ({ streak, best, total }) => (
+  <View style={styles.statsCard}>
+    {[
+      { value: streak, label: 'CURRENT' },
+      { value: best, label: 'BEST EVER' },
+      { value: total, label: 'THIS YEAR' },
+    ].map((stat, index) => (
+      <React.Fragment key={stat.label}>
+        {index > 0 && <View style={styles.statSeparator} />}
+        <View style={styles.stat}>
+          <Text style={styles.statValue}>{stat.value}</Text>
+          <Text style={styles.statLabel}>{stat.label}</Text>
+        </View>
+      </React.Fragment>
+    ))}
+  </View>
+);
 
 // --- COMPONENT: WeeklyThemeCard ---
 const WeeklyThemeCard = ({ weekInsight }) => (
@@ -22,7 +55,7 @@ const WeeklyThemeCard = ({ weekInsight }) => (
     <Text style={styles.weekDesc}>
       {weekInsight
         ? describeTheme(weekInsight, 'days this week')
-        : 'Complete a ritual this week to see your theme.'}
+        : 'Write an entry this week to see your theme.'}
     </Text>
   </View>
 );
@@ -33,19 +66,22 @@ export const RecapTab = ({ navigation }) => {
   const [monthEntries, setMonthEntries] = useState([]);
   const [monthLabel, setMonthLabel] = useState('');
   const [daysInMonth, setDaysInMonth] = useState(31);
+  const [yearEntries, setYearEntries] = useState([]);
 
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
       (async () => {
         const now = new Date();
-        const [week, month] = await Promise.all([
+        const [week, month, year] = await Promise.all([
           EntryStore.getEntriesBetween(startOfWeek(now), endOfWeek(now)),
           EntryStore.getEntriesBetween(startOfMonth(now), endOfMonth(now)),
+          EntryStore.getEntriesBetween(startOfYear(now), endOfYear(now)),
         ]);
         if (cancelled) return;
         setWeekEntries(week);
         setMonthEntries(month);
+        setYearEntries(year);
         setMonthLabel(monthName(now));
         setDaysInMonth(endOfMonth(now).getDate());
         setLoading(false);
@@ -66,10 +102,23 @@ export const RecapTab = ({ navigation }) => {
 
   const weekInsight = dominantTheme(weekEntries);
   const monthInsight = dominantTheme(monthEntries);
+  const streak = currentStreak(yearEntries);
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <WeeklyThemeCard weekInsight={weekInsight} />
+      <ScreenHeader
+        eyebrow="YOUR PROGRESS"
+        title="Recap"
+        right={<StreakBadge streak={streak} />}
+      />
+
+      <StaggeredItem index={0}>
+        <StatsCard streak={streak} best={longestStreak(yearEntries)} total={yearEntries.length} />
+      </StaggeredItem>
+
+      <StaggeredItem index={1}>
+        <WeeklyThemeCard weekInsight={weekInsight} />
+      </StaggeredItem>
 
       <MonthlyRecap
         monthName={monthLabel}
@@ -92,8 +141,38 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 24,
-    paddingTop: 60,
+    paddingTop: 72,
     paddingBottom: 140,
+  },
+  statsCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.colors.washYellow,
+    borderRadius: theme.borderRadius.large,
+    paddingVertical: 22,
+    marginBottom: 16,
+  },
+  stat: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  statSeparator: {
+    width: 1,
+    alignSelf: 'stretch',
+    backgroundColor: theme.colors.surfaceBorderStrong,
+    marginVertical: 4,
+  },
+  statValue: {
+    ...theme.type.h1,
+    fontSize: 34,
+    color: theme.colors.accentDeep,
+  },
+  statLabel: {
+    ...theme.type.label,
+    fontSize: 10,
+    letterSpacing: 1.4,
+    color: theme.colors.inkSoft,
+    marginTop: 2,
   },
   loadingContainer: {
     flex: 1,
