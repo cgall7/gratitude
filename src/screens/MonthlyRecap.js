@@ -8,7 +8,7 @@ import { StaggeredItem } from '../components/StaggeredItem';
 import { PressableScale } from '../components/PressableScale';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { ThemeCardFlip } from '../components/ThemeCardFlip';
-import { StripePattern } from '../components/StripeTexture';
+import { StripePattern, SolidPattern } from '../components/StripeTexture';
 import { useSvgId } from '../utils/svgId';
 import { tagEntry } from '../utils/themeTagger';
 import { COLS, HEX_ASPECT, combLayout, hexAt, hexPoints } from '../utils/combGeometry';
@@ -25,22 +25,33 @@ const REVEAL_HEX_H = REVEAL_HEX_W * HEX_ASPECT;
 
 const DayCell = ({ day, entries, index, filledCount, cascade, w, h, x, y, points }) => {
   const filled = entries.length > 0;
-  // The hatch is a `<Defs>` fill on the hex itself, so it follows the six
-  // edges exactly — an overlay clipped by `overflow: hidden` would square
-  // off the corners.
-  const hatchId = useSvgId('emptyHatch');
+  // `fill` and `stroke` both route through a per-cell `<Defs>` reference,
+  // filled or not — never a raw theme color. Pixel's device matrix
+  // (2026-08-11) isolated the trigger for a sibling-`<Svg>`-per-cell paint
+  // bug to `Polygon` `fill`/`stroke` differing in *value* between cells —
+  // solid-vs-pattern, or stroke color alone. Byte-identical `Polygon` props
+  // (always a `url(#id)` reference; only the `<Defs>` content behind that id
+  // differs per cell) was the one variant that rendered correctly on device.
+  const fillId = useSvgId('cellFill');
+  const strokeId = useSvgId('cellStroke');
   const cell = (
     <View style={[styles.cell, { width: w, height: h }]}>
       <Svg width={w} height={h}>
-        {!filled && (
-          <Defs>
-            <StripePattern id={hatchId} />
-          </Defs>
-        )}
+        <Defs>
+          {filled ? (
+            <SolidPattern id={fillId} color={theme.colors.accent} />
+          ) : (
+            <StripePattern id={fillId} />
+          )}
+          <SolidPattern
+            id={strokeId}
+            color={filled ? theme.colors.accentDeep : theme.colors.surfaceBorderStrong}
+          />
+        </Defs>
         <Polygon
           points={points}
-          fill={filled ? theme.colors.accent : `url(#${hatchId})`}
-          stroke={filled ? theme.colors.accentDeep : theme.colors.surfaceBorderStrong}
+          fill={`url(#${fillId})`}
+          stroke={`url(#${strokeId})`}
           strokeWidth={1}
         />
       </Svg>

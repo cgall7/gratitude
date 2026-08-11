@@ -34,3 +34,21 @@ export const StripePattern = ({
     />
   </Pattern>
 );
+
+// A flat-color `<Defs>` fill, same paint-server shape as `StripePattern`.
+//
+// Exists so a sibling-per-cell `<Svg>` grid (§14.4 Recap comb) never hands
+// `Polygon` a raw color prop. Pixel's device matrix (2026-08-11) isolated
+// the trigger for a react-native-svg/Fabric mispaint to sibling `<Svg>`
+// roots whose `Polygon` `fill`/`stroke` differ in *value* between cells —
+// solid-vs-pattern, or even just stroke color alone. Byte-identical
+// `Polygon` props (both always a `url(#id)` reference, only the `<Defs>`
+// content behind that id differing per cell) was the one variant that
+// rendered pixel-perfect. Route every color that can vary per-cell —
+// fill AND stroke — through a pattern reference like this one, never a
+// literal theme color, on that Svg root.
+export const SolidPattern = ({ id, color, size = 5 }) => (
+  <Pattern id={id} patternUnits="userSpaceOnUse" width={size} height={size}>
+    <Rect x="0" y="0" width={size} height={size} fill={color} />
+  </Pattern>
+);
