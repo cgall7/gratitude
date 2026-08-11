@@ -8,7 +8,9 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import Svg, { Polygon } from 'react-native-svg';
 import { theme } from '../constants/theme';
+import { hexPoints, HEX_ASPECT } from '../utils/combGeometry';
 import { MonthlyRecap } from './MonthlyRecap';
 import { EntryStore } from '../services/EntryStore';
 import { dominantTheme } from '../utils/themeTagger';
@@ -54,6 +56,30 @@ const StatsCard = ({ streak, best, total }) => (
           <Text style={styles.statLabel}>{stat.label}</Text>
         </View>
       </React.Fragment>
+    ))}
+  </View>
+);
+
+// Which month you're on, and that there are others. A paging scroll with no
+// indicator is a screen that hides its own second half — the swipe is only
+// discoverable by accident.
+//
+// Hexagons rather than dots, from the comb's own `hexPoints`, so the rail is
+// the app's shape at a small size instead of a lookalike (R36's rule applied
+// one scale down). Decorative: the months themselves are the content, and a
+// twelve-stop rail of unlabelled marks would only clutter VoiceOver.
+const RAIL_W = 8;
+const RAIL_H = RAIL_W * HEX_ASPECT;
+
+const MonthRail = ({ count, activeIndex }) => (
+  <View style={styles.rail} accessible={false} importantForAccessibility="no-hide-descendants">
+    {Array.from({ length: count }, (_, index) => (
+      <Svg key={index} width={RAIL_W} height={RAIL_H}>
+        <Polygon
+          points={hexPoints(RAIL_W, RAIL_H)}
+          fill={index === activeIndex ? theme.colors.accentDeep : theme.colors.surfaceBorderStrong}
+        />
+      </Svg>
     ))}
   </View>
 );
@@ -123,6 +149,8 @@ export const RecapTab = ({ navigation }) => {
         <StatsCard streak={streak} best={longestStreak(allEntries)} total={thisYear.length} />
       </StaggeredItem>
 
+      {months.length > 1 && <MonthRail count={months.length} activeIndex={activeIndex} />}
+
       {/* §17.5: one month per page, current month first. The vertical scroll
           owns the screen and this owns the horizontal axis — RN nests the
           two cleanly because they never compete for the same gesture. */}
@@ -182,6 +210,12 @@ const styles = StyleSheet.create({
     padding: 24,
     paddingTop: 72,
     paddingBottom: 140,
+  },
+  rail: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 7,
+    marginBottom: 18,
   },
   statsCard: {
     flexDirection: 'row',

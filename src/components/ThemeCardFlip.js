@@ -86,12 +86,12 @@ export const ThemeCardFlip = ({ themeWord, snippet, caption, delay = 0, onReveal
           { transform: [{ perspective: FLIP_PERSPECTIVE }, { rotateY: backRotate }] },
         ]}
       >
-        {/* Bigger than the 28pt glyph it replaces: the back of this card is
-            a whole gold field with one mark on it, and at 28 the bee read as
-            a smudge in the middle of it. `fieldColor` is the card's own
-            gold, so the band is cut out of the field rather than painted
-            over it. */}
-        <StripedBee size={40} fieldColor={theme.colors.goldField} />
+        {/* Much bigger than the 28pt glyph it replaces. The back is the full
+            card — roughly 345 × 128 of unbroken gold — and drawing it at
+            mock scale made the problem obvious: a 28pt bee on that field is
+            a speck, not a mark. `fieldColor` is the card's own gold, so the
+            band is cut out of the field rather than painted over it. */}
+        <StripedBee size={64} fieldColor={theme.colors.goldField} />
       </Animated.View>
       <Animated.View
         style={[
