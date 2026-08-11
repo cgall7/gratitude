@@ -29,11 +29,19 @@ import { DURATIONS, SPRINGS, staggerDelay, useReducedMotion } from '../constants
 export const StaggeredItem = ({ index, count = 1, children, style, pop = false, replayKey }) => {
   const reduced = useReducedMotion();
   const anim = useRef(new Animated.Value(0)).current;
+  const lastReplay = useRef(replayKey);
 
   useEffect(() => {
-    // No-op on mount (the value is already 0); on a replay it rewinds so the
-    // entrance starts from nothing instead of animating 1 → 1.
-    anim.setValue(0);
+    // Rewind ONLY on a real replay. This effect also re-runs when the OS
+    // Reduce Motion preference flips, and rewinding there would snap every
+    // settled item on screen back to zero and re-play its entrance — the
+    // whole of Today blinking out because someone reached for the
+    // accessibility switch. Left unrewound, that re-fire animates 1 → 1 and
+    // is invisible, which is what it did before `replayKey` existed.
+    if (lastReplay.current !== replayKey) {
+      lastReplay.current = replayKey;
+      anim.setValue(0);
+    }
     if (pop && !reduced) {
       Animated.spring(anim, {
         toValue: 1,
