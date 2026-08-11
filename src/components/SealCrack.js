@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Image, Pressable, StyleSheet, Text } from 'react-native';
+import { Animated, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { theme } from '../constants/theme';
-import { SPRINGS, DURATIONS } from '../constants/motion';
+import { SPRINGS, DURATIONS, useReducedMotion } from '../constants/motion';
 import { BeeTransition } from './BeeTransition';
 import { Bee } from './Bee';
 import { CelebrationRays } from './CelebrationRays';
@@ -33,6 +33,7 @@ const BEE_PATH = {
 };
 
 export const SealCrack = ({ onCracked }) => {
+  const reduced = useReducedMotion();
   const [beeKey, setBeeKey] = useState(0);
   const [cracked, setCracked] = useState(false);
   const [landed, setLanded] = useState(false);
@@ -69,6 +70,15 @@ export const SealCrack = ({ onCracked }) => {
     if (cracked) return;
     setCracked(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    // R17 (Pixel): the full-viewport accentBurst flash is the largest
+    // luminance jump in the app — §14.1 "no exceptions" means reduced
+    // motion skips it outright rather than just shortening it.
+    // CelebrationRays' own reduced-motion glow (below) still carries the
+    // moment.
+    if (reduced) {
+      onCracked?.();
+      return;
+    }
     Animated.sequence([
       Animated.timing(flash, { toValue: 1, duration: DURATIONS.instant, useNativeDriver: true }),
       Animated.timing(flash, { toValue: 0, duration: DURATIONS.quick, useNativeDriver: true }),
@@ -92,7 +102,16 @@ export const SealCrack = ({ onCracked }) => {
         resizeMode="contain"
       />
       <Text style={styles.copy}>Your year, poured.</Text>
-      {cracked && <CelebrationRays />}
+      {cracked && (
+        // R17 (Pixel): CelebrationRays anchors to the center of a 96x96
+        // box (its own doc comment says so) — bare, it was reading the
+        // Pressable's top-left instead of the mark. Same wrapper
+        // convention Onboarding's CelebrationStep already uses, centered
+        // here on the mark rather than a static layout position.
+        <View pointerEvents="none" style={styles.raysStage}>
+          <CelebrationRays />
+        </View>
+      )}
       <Animated.View pointerEvents="none" style={[styles.flash, { opacity: flash }]} />
     </Pressable>
   );
@@ -111,6 +130,17 @@ const styles = StyleSheet.create({
     left: '50%',
     marginTop: -11,
     marginLeft: -11,
+  },
+  raysStage: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    marginTop: -48,
+    marginLeft: -48,
+    width: 96,
+    height: 96,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   copy: {
     ...theme.type.h2,

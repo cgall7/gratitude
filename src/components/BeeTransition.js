@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, StyleSheet, AccessibilityInfo } from 'react-native';
+import { Animated, StyleSheet } from 'react-native';
 import { Bee } from './Bee';
+import { useReducedMotion } from '../constants/motion';
 
 // Per PLANS/HONEYCOMB_DESIGN.md §3 / §9.4: the bee arcs in and lifts off
 // between claim screens, doing narrative work (stitching the argument
@@ -24,14 +25,14 @@ const DEFAULT_PATH = {
 
 export const BeeTransition = ({ triggerKey, path = DEFAULT_PATH, anchorStyle, size = 20 }) => {
   const progress = useRef(new Animated.Value(0)).current;
-  const [reduced, setReduced] = useState(false);
+  // R17 (Pixel): switched from a mount-once AccessibilityInfo read to the
+  // shared subscribing hook so a mid-flight Reduce Motion toggle is
+  // honored, same as every other animating component. The opacity tail
+  // and shared call sites (claim screens, §13.3 login arc) are untouched.
+  const reduced = useReducedMotion();
   const [flying, setFlying] = useState(false);
   const lastTriggerRef = useRef(triggerKey);
   const lastFireRef = useRef(0);
-
-  useEffect(() => {
-    AccessibilityInfo.isReduceMotionEnabled?.().then(setReduced).catch(() => {});
-  }, []);
 
   useEffect(() => {
     if (triggerKey === lastTriggerRef.current) return;

@@ -99,9 +99,19 @@ export const StreakHexTrail = ({ count, onSettle }) => {
   // regardless of trail length; the final hex's success haptic (below) is
   // unconditional and separate from this stride.
   const hapticStride = Math.max(1, Math.ceil(hexes.length / HAPTIC_CAP));
+  // R17 (Pixel): onSettle could double-fire — the zero-length effect fires
+  // it, then `count` arrives async and the real last hex fires it again;
+  // or a live useReducedMotion toggle mid-beat re-runs every Hex effect.
+  // Same settledRef pattern as ThemeCardFlip/FlyingBee's loginArc.
+  const settledRef = useRef(false);
+  const settle = () => {
+    if (settledRef.current) return;
+    settledRef.current = true;
+    onSettle?.();
+  };
 
   useEffect(() => {
-    if (hexes.length === 0) onSettle?.();
+    if (hexes.length === 0) settle();
   }, [hexes.length]);
 
   return (
@@ -113,7 +123,7 @@ export const StreakHexTrail = ({ count, onSettle }) => {
           isLast={i === hexes.length - 1}
           reduced={reduced}
           haptic={i % hapticStride === 0}
-          onIgnite={onSettle}
+          onIgnite={settle}
         />
       ))}
     </View>
