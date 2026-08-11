@@ -1,5 +1,10 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, Text, ScrollView, SafeAreaView, TouchableOpacity, Alert } from 'react-native';
+import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Alert } from 'react-native';
+// react-native's own SafeAreaView is deprecated and warns on every render
+// (confirmed on device — it's what raises the LogBox toast over Legal.js).
+// react-native-safe-area-context is already a dependency, and React
+// Navigation mounts its provider, so this is the drop-in.
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../constants/theme';
 import { useAuth } from '../contexts/AuthContext';

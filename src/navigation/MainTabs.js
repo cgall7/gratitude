@@ -106,18 +106,32 @@ export const MainTabs = () => {
 const styles = StyleSheet.create({
   tabBar: {
     position: 'absolute',
-    left: SIDE_INSET,
+    // `start`/`end`, NOT `left`/`right`. BottomTabBar's own base style
+    // (`styles.bottom`) sets `start: 0, end: 0`, and Yoga gives the logical
+    // properties precedence over the physical ones no matter which style
+    // object lands later — so a `left`/`right` inset here is silently
+    // dropped and the bar renders edge to edge. Measured on device before
+    // the fix: the capsule spanned 0-393pt on a 393pt screen. The pair is
+    // also what makes the split behave in RTL, where the door belongs on
+    // the other side.
+    start: SIDE_INSET,
     // Stops one gap short of the door instead of running the full width.
-    right: SIDE_INSET + DOOR_SIZE + DOOR_GAP,
+    end: SIDE_INSET + DOOR_SIZE + DOOR_GAP,
     bottom: BAR_BOTTOM,
     height: BAR_HEIGHT,
+    // BottomTabBar reserves `insets.bottom` (34pt here) inside its own
+    // height for a bar flush to the screen edge. This one floats 28pt above
+    // it, so that reservation is pure dead band — it's what pushed the old
+    // bar's glyph row 17.4pt above centre, and at 60pt tall it squeezed the
+    // content box to 26pt and pushed the active marker out through the top.
+    paddingBottom: 0,
     borderRadius: theme.borderRadius.large,
     backgroundColor: 'transparent',
     borderTopWidth: 0,
   },
   doorAnchor: {
     position: 'absolute',
-    right: SIDE_INSET,
+    end: SIDE_INSET,
     // Centred on the capsule, so the two read as one row.
     bottom: BAR_BOTTOM + (BAR_HEIGHT - DOOR_SIZE) / 2,
   },
