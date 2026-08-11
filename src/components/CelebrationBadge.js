@@ -3,19 +3,23 @@ import { StyleSheet, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { theme } from '../constants/theme';
-import { DURATIONS, useReducedMotion } from '../constants/motion';
+import { DURATIONS, useReducedMotionState } from '../constants/motion';
 
 // One size, always (Sunbeam §4 R1 ruling) — 96pt, marigold fill, ink
 // checkmark. Scale the moment around it, never the badge itself.
 export const CelebrationBadge = () => {
-  const reduced = useReducedMotion();
+  const { reduced, resolved } = useReducedMotionState();
   const reveal = useRef(new Animated.Value(0)).current;
-  // The hook resolves async and subscribes to live OS toggles, so this
-  // effect can legitimately run more than once — the ref keeps the
-  // success haptic to a single fire either way.
+  // The hook subscribes to live OS toggles, so this effect can
+  // legitimately run more than once — the ref keeps the success haptic
+  // to a single fire either way.
   const hapticFiredRef = useRef(false);
 
   useEffect(() => {
+    // R19: hold the first frame until the OS preference is actually
+    // known — starting the spring on the assumed-`false` value is the
+    // race R18 found. `resolved` flips exactly once per mount.
+    if (!resolved) return;
     // §14.1 Rule 4: reduced motion collapses the pop spring to a flat
     // fade — the same value drives opacity instead of scale below.
     const arrive = reduced
@@ -26,11 +30,12 @@ export const CelebrationBadge = () => {
       hapticFiredRef.current = true;
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     });
-    // R18: when the async hook value lands and re-runs this effect, the
-    // first animation must actually stop — otherwise a Reduce Motion user
-    // gets the spring overshoot on a fade specified as flat.
+    // R18: a live OS toggle re-runs this effect mid-animation — the
+    // cleanup must actually stop the in-flight animation, otherwise a
+    // Reduce Motion user gets the spring overshoot on a fade specified
+    // as flat.
     return () => reveal.stopAnimation();
-  }, [reduced]);
+  }, [reduced, resolved]);
 
   return (
     <Animated.View style={[styles.badge, reduced ? { opacity: reveal } : { transform: [{ scale: reveal }] }]}>
