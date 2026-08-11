@@ -23,7 +23,7 @@ import { CelebrationBadge } from '../components/CelebrationBadge';
 import { CelebrationRays } from '../components/CelebrationRays';
 
 // --- COMPONENT: LockScreen ---
-export const LockScreen = ({ onEnterRitual }) => {
+export const LockScreen = ({ onOpen }) => {
   const { width } = useWindowDimensions();
 
   // Visible demo trigger (Colin, 2026-08-10: wants a real button, not the
@@ -52,7 +52,7 @@ export const LockScreen = ({ onEnterRitual }) => {
         <Text style={styles.logo}>gratitude</Text>
         <Text style={styles.prompt}>Pause.{"\n"}What are you grateful for today?</Text>
 
-        <PrimaryButton onPress={onEnterRitual}>Begin</PrimaryButton>
+        <PrimaryButton onPress={onOpen}>Begin</PrimaryButton>
 
         <PressableScale onPress={handleLoadDemoData} style={styles.demoDataLink}>
           <Text style={styles.demoDataLinkText}>Load demo data</Text>

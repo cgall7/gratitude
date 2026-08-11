@@ -6,8 +6,8 @@ import { theme } from '../constants/theme';
 // Internal stage keys only — never rendered as on-screen text (Deezine,
 // ratified by Sage 2026-08-09). Claims collapse into `why`; signup/name is
 // `you`.
-const STAGE_ORDER = ['welcome', 'why', 'you', 'ritual', 'entry', 'done'];
-const STAGE_LABELS = ['Welcome', 'Why', 'You', 'Ritual', 'Entry', 'Done'];
+const STAGE_ORDER = ['welcome', 'why', 'you', 'moment', 'entry', 'done'];
+const STAGE_LABELS = ['Welcome', 'Why', 'You', 'Moment', 'Entry', 'Done'];
 const A11Y_LABEL = STAGE_LABELS.join(', ');
 
 const CELL_SIZE = 10;

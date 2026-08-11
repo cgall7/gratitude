@@ -5,7 +5,7 @@
 // circle, `title` in h3, `teaser` in bodySm. Expanding a card reveals its
 // `sparks` — feed them straight into the existing <SparkChips> component.
 // Only one category should be expanded at a time (R1 refinement, adopted
-// into spec). Icon names are Ionicons, 22pt, matching the ritual-time card
+// into spec). Icon names are Ionicons, 22pt, matching the check-in-time card
 // pattern.
 export const IDEA_CATEGORIES = [
   {

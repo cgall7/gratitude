@@ -79,7 +79,7 @@ export default function App() {
             {(props) => (
               <LockScreen
                 {...props}
-                onEnterRitual={() => props.navigation.navigate('Input')}
+                onOpen={() => props.navigation.navigate('Input')}
               />
             )}
           </Stack.Screen>
