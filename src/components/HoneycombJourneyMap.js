@@ -2,6 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { View, Animated, StyleSheet } from 'react-native';
 import Svg, { Polygon } from 'react-native-svg';
 import { theme } from '../constants/theme';
+import { useReducedMotion } from '../constants/motion';
 
 // Internal stage keys only — never rendered as on-screen text (Deezine,
 // ratified by Sage 2026-08-09). Claims collapse into `why`; signup/name is
@@ -24,10 +25,29 @@ const hexPoints = (size) => {
 const HEX_POINTS = hexPoints(CELL_SIZE);
 
 const JourneyCell = ({ status }) => {
+  const reduced = useReducedMotion();
   const pulse = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (status !== 'current') return undefined;
+    // Reduce Motion drops the pulse, but it must not drop the marker. The
+    // animated style below applies to the current cell only, so resting at
+    // `pulse = 0` would leave it at opacity 0.55 — dimmer than every
+    // completed cell, i.e. the current step would become the least visible
+    // thing on the map. Rest at 1 instead: scale 1.18, opacity 1, so the
+    // current cell stays the most prominent one and only the motion goes.
+    // (§14.1 "no exceptions" for indefinite motion; R16-R19's principle —
+    // keep the distinction, drop the motion.)
+    if (reduced) {
+      pulse.setValue(1);
+      return undefined;
+    }
+    // Start from the trough every time. Matters on the Reduce Motion
+    // toggle-off path, where the guard above has parked `pulse` at 1: the
+    // sequence leads with a rise, so without this the first cycle after
+    // un-reducing would run backwards before self-correcting. No-op on
+    // mount, where `pulse` is already 0.
+    pulse.setValue(0);
     const loop = Animated.loop(
       Animated.sequence([
         Animated.spring(pulse, { toValue: 1, friction: 9, tension: 60, useNativeDriver: true }),
@@ -36,7 +56,7 @@ const JourneyCell = ({ status }) => {
     );
     loop.start();
     return () => loop.stop();
-  }, [status]);
+  }, [status, reduced, pulse]);
 
   const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.18] });
   const opacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.55, 1] });
