@@ -10,6 +10,7 @@ import { OnboardingFlow } from './src/screens/Onboarding';
 import { LockScreen, InputScreen } from './src/screens/CoreRitual';
 import { EveningMirror } from './src/screens/EveningMirror';
 import { LegalScreen } from './src/screens/Legal';
+import { AccountScreen } from './src/screens/Account';
 import { MainTabs } from './src/navigation/MainTabs';
 import { AuthProvider } from './src/contexts/AuthContext';
 import { OnboardingState } from './src/services/onboardingState';
@@ -152,6 +153,12 @@ export default function App() {
           <Stack.Screen name="Main" component={MainTabs} />
 
           <Stack.Screen name="Legal" component={LegalScreen} options={{ presentation: 'modal' }} />
+
+          {/* Opened by the account door beside the tab capsule (MainTabs
+              Option C). A modal, not a tab: it's the app's only route to
+              sign-out and the legal documents, and it's opened about twice
+              a year. */}
+          <Stack.Screen name="Account" component={AccountScreen} options={{ presentation: 'modal' }} />
 
           <Stack.Screen name="Evening">
             {(props) => (

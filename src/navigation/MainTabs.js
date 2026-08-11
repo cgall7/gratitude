@@ -1,65 +1,28 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { View, StyleSheet, Animated, Platform, AccessibilityInfo } from 'react-native';
-import { BlurView } from 'expo-blur';
+import React, { useEffect, useRef } from 'react';
+import { View, StyleSheet, Animated } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { BottomTabBar, createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { theme } from '../constants/theme';
 import { TodayTab } from '../screens/TodayTab';
 import { RecapTab } from '../screens/RecapTab';
 import { GratitudeWrapped } from '../screens/GratitudeWrapped';
 import { HoneycombTab } from '../screens/HoneycombTab';
 import { TabBarButton } from './TabBarButton';
+import { AccountDoor, DOOR_SIZE } from './AccountDoor';
+import { GlassBackground, useReduceTransparency } from './GlassBackground';
 
 const Tab = createBottomTabNavigator();
 
-// Reduce Transparency is non-negotiable (spec §10): when it's on, the bar
-// falls back to today's exact solid look instead of blurring.
-const useReduceTransparency = () => {
-  const [enabled, setEnabled] = useState(false);
+// Option C, picked by Colin on 2026-08-11. The bar stops being a full-width
+// slab: the capsule hugs its four tabs and the account door sits detached
+// beside it. Both halves of the split are stated here so they can't drift —
+// the door is centred on the capsule, and the capsule ends exactly one gap
+// short of it.
+const SIDE_INSET = 20;
+const DOOR_GAP = 12;
+const BAR_HEIGHT = 60; // was 86: the old bar carried 49.5pt of dead space below its glyphs.
+const BAR_BOTTOM = 28;
 
-  useEffect(() => {
-    AccessibilityInfo.isReduceTransparencyEnabled?.().then(setEnabled).catch(() => {});
-    const sub = AccessibilityInfo.addEventListener?.('reduceTransparencyChanged', setEnabled);
-    return () => sub?.remove?.();
-  }, []);
-
-  return enabled;
-};
-
-// The bar itself stays transparent and casts the shadow (see `tabBar`
-// style); this renders behind it in its own clipped layer — blur + cream
-// veil + specular rim on iOS, opacity fallback on Android, solid surface
-// under Reduce Transparency. It's a separate view from the shadow-casting
-// container on purpose: `overflow: hidden` clips a shadow on the same
-// view as the rounded corners, so the rounding+clipping has to live here
-// instead of on `tabBar`.
-const TabBarBackground = () => {
-  const reduceTransparency = useReduceTransparency();
-
-  if (reduceTransparency) {
-    return <View style={[StyleSheet.absoluteFill, styles.backgroundClip, styles.solidFallback]} />;
-  }
-
-  if (Platform.OS === 'android') {
-    // Sanctioned Android fallback (spec §10): no BlurView, just a lighter
-    // opacity wash — cheaper and avoids readability issues on Android's blur.
-    return <View style={[StyleSheet.absoluteFill, styles.backgroundClip, styles.androidFallback]} />;
-  }
-
-  return (
-    <BlurView
-      intensity={60}
-      tint="systemUltraThinMaterialLight"
-      style={[StyleSheet.absoluteFill, styles.backgroundClip]}
-    >
-      <View style={[StyleSheet.absoluteFill, styles.creamVeil]} />
-      <View style={styles.rim} pointerEvents="none" />
-    </BlurView>
-  );
-};
-
-// Outline glyph at rest, filled glyph when active — the same weight shift
-// real iOS tab bars use to make the current tab unmistakable.
 const TAB_ICONS = {
   Today: { active: 'sunny', inactive: 'sunny-outline' },
   Honeycomb: { active: 'hexagon-multiple', inactive: 'hexagon-multiple-outline', set: MaterialCommunityIcons },
@@ -67,40 +30,49 @@ const TAB_ICONS = {
   Wrapped: { active: 'gift', inactive: 'gift-outline' },
 };
 
-// A full-color pill lands behind the active icon and lifts it slightly —
-// makes the current tab unmistakable at a glance, not just a tint change.
-// The icon itself pops with a spring on the switch so landing on a tab
-// feels alive. Sized up (Colin, 2026-08-09 — tabs felt "messy," wanted
-// bigger and more delightful).
+// The active marker is a soft tonal field one step off the bar, not a
+// saturated marigold badge sitting on top of it. Marigold survives as the
+// 1pt ring around the field — present, but no longer the loudest object on
+// the whole screen. The glyph still springs in on the switch: landing on a
+// tab should feel alive even when the marker is quiet. It no longer lifts —
+// a tonal field that floats reads as a mistake; a filled badge could.
 const TabIcon = ({ routeName, focused }) => {
   const scale = useRef(new Animated.Value(1)).current;
-  const lift = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    if (!focused) {
-      lift.setValue(0);
-      return;
-    }
+    if (!focused) return;
     scale.setValue(0.6);
     Animated.spring(scale, { toValue: 1, friction: 5, tension: 220, useNativeDriver: true }).start();
-    Animated.spring(lift, { toValue: 1, friction: 7, tension: 160, useNativeDriver: true }).start();
   }, [focused]);
 
   const IconComponent = TAB_ICONS[routeName].set ?? Ionicons;
-  const translateY = lift.interpolate({ inputRange: [0, 1], outputRange: [0, -3] });
 
   return (
-    <Animated.View style={[styles.iconPill, focused && styles.iconPillActive, { transform: [{ translateY }] }]}>
+    <View style={[styles.iconPill, focused && styles.iconPillActive]}>
       <Animated.View style={{ transform: [{ scale }] }}>
         <IconComponent
           name={focused ? TAB_ICONS[routeName].active : TAB_ICONS[routeName].inactive}
-          size={27}
+          size={24}
           color={focused ? theme.colors.ink : theme.colors.textSecondary}
         />
       </Animated.View>
-    </Animated.View>
+    </View>
   );
 };
+
+// The capsule and the door are siblings, so the door has to be rendered
+// outside the bar: React Native clips touches to a view's bounds, so a
+// circle drawn past the capsule's edge would be visible and dead. This
+// wrapper spans the screen (`box-none`, so it never eats a tap meant for
+// content) and lets both halves position themselves against it.
+const TabDock = (props) => (
+  <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+    <BottomTabBar {...props} />
+    <View style={styles.doorAnchor} pointerEvents="box-none">
+      <AccountDoor />
+    </View>
+  </View>
+);
 
 export const MainTabs = () => {
   // Glass floats on translucency; Reduce Transparency goes back to the old
@@ -110,6 +82,7 @@ export const MainTabs = () => {
 
   return (
     <Tab.Navigator
+      tabBar={(props) => <TabDock {...props} />}
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarShowLabel: false,
@@ -117,7 +90,7 @@ export const MainTabs = () => {
         tabBarInactiveTintColor: theme.colors.textSecondary,
         tabBarStyle: [styles.tabBar, reduceTransparency ? theme.shadows.card : theme.shadows.glass],
         tabBarItemStyle: styles.tabBarItem,
-        tabBarBackground: () => <TabBarBackground />,
+        tabBarBackground: () => <GlassBackground radius={theme.borderRadius.large} />,
         tabBarButton: (props) => <TabBarButton {...props} />,
         tabBarIcon: ({ focused }) => <TabIcon routeName={route.name} focused={focused} />,
       })}
@@ -133,52 +106,36 @@ export const MainTabs = () => {
 const styles = StyleSheet.create({
   tabBar: {
     position: 'absolute',
-    left: 20,
-    right: 20,
-    bottom: 28,
-    height: 86,
+    left: SIDE_INSET,
+    // Stops one gap short of the door instead of running the full width.
+    right: SIDE_INSET + DOOR_SIZE + DOOR_GAP,
+    bottom: BAR_BOTTOM,
+    height: BAR_HEIGHT,
     borderRadius: theme.borderRadius.large,
     backgroundColor: 'transparent',
     borderTopWidth: 0,
   },
-  // Rounds + clips the background layer only — kept off `tabBar` itself so
-  // its shadow isn't clipped along with the corners (see TabBarBackground).
-  backgroundClip: {
-    borderRadius: theme.borderRadius.large,
-    overflow: 'hidden',
-  },
-  // Reduce Transparency fallback — today's exact solid look, no blur.
-  solidFallback: {
-    backgroundColor: theme.colors.surface,
-  },
-  // Android sanctioned fallback (spec §10): opacity wash, no BlurView.
-  androidFallback: {
-    backgroundColor: theme.colors.surface + 'D9', // 85%
-  },
-  // Blur alone reads cold iOS-grey; this keeps the bar inside the Sunbeam
-  // palette regardless of what's scrolling underneath.
-  creamVeil: {
-    backgroundColor: theme.colors.surface + '8C', // 55%
-  },
-  // ONE 1pt specular edge — the detail that reads as glass, not chrome.
-  rim: {
-    ...StyleSheet.absoluteFillObject,
-    borderRadius: theme.borderRadius.large,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.65)',
+  doorAnchor: {
+    position: 'absolute',
+    right: SIDE_INSET,
+    // Centred on the capsule, so the two read as one row.
+    bottom: BAR_BOTTOM + (BAR_HEIGHT - DOOR_SIZE) / 2,
   },
   tabBarItem: {
     paddingTop: 0,
   },
   iconPill: {
-    width: 60,
-    height: 52,
-    borderRadius: theme.borderRadius.large,
+    width: 56,
+    height: 44,
+    borderRadius: theme.borderRadius.full,
     alignItems: 'center',
     justifyContent: 'center',
   },
   iconPillActive: {
-    backgroundColor: theme.colors.accent,
-    ...theme.shadows.card,
+    backgroundColor: theme.colors.washYellow,
+    borderWidth: 1,
+    // Marigold at 60% — the accent is still the thing marking the tab, just
+    // as an edge rather than a fill.
+    borderColor: 'rgba(255, 210, 0, 0.6)',
   },
 });
