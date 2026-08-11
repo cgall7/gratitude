@@ -437,10 +437,8 @@ const AccountStep = ({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [confirmSent, setConfirmSent] = useState(false);
-  const [agreedToTerms, setAgreedToTerms] = useState(false);
   const isSignUp = mode === 'signup';
-  const canSubmit =
-    email.trim() && password.length >= 6 && (!isSignUp || (name.trim() && agreedToTerms)) && !busy;
+  const canSubmit = email.trim() && password.length >= 6 && (!isSignUp || name.trim()) && !busy;
 
   const attemptSignIn = async () => {
     await HoneycombStore.signIn(email.trim(), password);
@@ -517,6 +515,7 @@ const AccountStep = ({
                 autoCapitalize="words"
                 returnKeyType="next"
                 editable={!busy}
+                maxLength={100}
               />
             )}
             {isSignUp && <View style={styles.inputDivider} />}
@@ -544,31 +543,19 @@ const AccountStep = ({
             />
           </View>
           {isSignUp && (
-            <PressableScale
-              onPress={() => setAgreedToTerms((a) => !a)}
-              haptic={null}
-              style={styles.consentRow}
-            >
-              <View style={[styles.checkbox, agreedToTerms && styles.checkboxChecked]}>
-                {agreedToTerms && <Ionicons name="checkmark" size={14} color={theme.colors.textInverse} />}
-              </View>
-              <Text style={styles.consentText}>
-                I agree to the{' '}
-                <Text
-                  style={styles.consentLink}
-                  onPress={() => navigation?.navigate('Legal', { tab: 'privacy' })}
-                >
-                  Privacy Policy
-                </Text>{' '}
-                and{' '}
-                <Text
-                  style={styles.consentLink}
-                  onPress={() => navigation?.navigate('Legal', { tab: 'terms' })}
-                >
-                  Terms of Service
-                </Text>
+            // No consent checkbox yet: legalCopy.js is still TODO placeholder
+            // text, so requiring agreement to it would be worse than no
+            // checkbox at all. Links stay reachable; re-add the checkbox
+            // once Deezine's real draft replaces the placeholder copy.
+            <Text style={styles.consentText}>
+              <Text style={styles.consentLink} onPress={() => navigation?.navigate('Legal', { tab: 'privacy' })}>
+                Privacy Policy
+              </Text>{' '}
+              and{' '}
+              <Text style={styles.consentLink} onPress={() => navigation?.navigate('Legal', { tab: 'terms' })}>
+                Terms of Service
               </Text>
-            </PressableScale>
+            </Text>
           )}
           {error && <Text style={styles.signUpError}>{error}</Text>}
           <PressableScale onPress={() => setMode(isSignUp ? 'signin' : 'signup')} haptic={null}>
@@ -877,27 +864,6 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: theme.colors.surfaceBorder,
     marginVertical: 14,
-  },
-  consentRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-    marginBottom: 16,
-  },
-  checkbox: {
-    width: 20,
-    height: 20,
-    borderRadius: 6,
-    borderWidth: 1.5,
-    borderColor: theme.colors.surfaceBorderStrong,
-    backgroundColor: theme.colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 2,
-  },
-  checkboxChecked: {
-    backgroundColor: theme.colors.accent,
-    borderColor: theme.colors.accent,
   },
   consentText: {
     ...theme.type.bodySm,

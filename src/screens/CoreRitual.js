@@ -142,6 +142,7 @@ export const InputScreen = ({ onUnlock }) => {
             onChangeText={setText}
             autoFocus
             editable={!unlocking}
+            maxLength={10000}
           />
         </View>
 
