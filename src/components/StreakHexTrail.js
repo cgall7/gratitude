@@ -3,7 +3,7 @@ import { Animated, StyleSheet, View } from 'react-native';
 import Svg, { Polygon } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { theme } from '../constants/theme';
-import { SPRINGS, DURATIONS, useReducedMotion } from '../constants/motion';
+import { SPRINGS, DURATIONS, useReducedMotionState } from '../constants/motion';
 
 // §14.2 Beat 2 — The Streak. Longest streak as a trail of hexes that
 // ignites one-by-one up to the final count; the last hex pops with a
@@ -32,17 +32,19 @@ const hexPoints = (size) =>
     return `${size + size * Math.cos(angle)},${size + size * Math.sin(angle)}`;
   }).join(' ');
 
-const Hex = ({ delay, isLast, reduced, haptic, onIgnite }) => {
+const Hex = ({ delay, isLast, reduced, resolved, haptic, onIgnite }) => {
   const progress = useRef(new Animated.Value(0)).current;
   const glow = useRef(new Animated.Value(0)).current;
   const points = useMemo(() => hexPoints(HEX_SIZE), []);
 
   useEffect(() => {
-    // R18 (Pixel): useReducedMotion resolves async and starts at `null`.
-    // Hold here instead of assuming full-motion — a delay:0 first hex would
+    // R19 (Pixel): hold on `resolved`, from the opt-in useReducedMotionState,
+    // not on a nullable `reduced` — that would have reseeded the shared
+    // useReducedMotion's initial state and broken its same-value bail-out
+    // for every consumer, not just this one. A delay:0 first hex would
     // otherwise fire a real haptic + spring before the promise settles,
     // which is exactly the opt-out a Reduce Motion user asked for.
-    if (reduced === null) return undefined;
+    if (!resolved) return undefined;
 
     if (reduced) {
       // §12.5 Rule 4 / §14.1: reduced motion collapses to a flat fade, no
@@ -78,7 +80,7 @@ const Hex = ({ delay, isLast, reduced, haptic, onIgnite }) => {
       progress.stopAnimation();
       glow.stopAnimation();
     };
-  }, [delay, isLast, reduced, haptic]);
+  }, [delay, isLast, reduced, resolved, haptic]);
 
   // Reduced motion pins scale flat (opacity-only fade) — same Rule 4
   // reading HoneyDropProgress already uses, so a hex/glow never zooms
@@ -109,7 +111,7 @@ const Hex = ({ delay, isLast, reduced, haptic, onIgnite }) => {
 // zero-day streak, since an empty trail otherwise never fires it and the
 // ceremony would stall on Beat 2 for a brand-new user).
 export const StreakHexTrail = ({ count, onSettle }) => {
-  const reduced = useReducedMotion();
+  const { reduced, resolved } = useReducedMotionState();
   const hexes = useMemo(() => Array.from({ length: Math.min(Math.max(count, 0), MAX_HEXES) }), [count]);
   // Fire on every ceil(N/12)-th hex so the tick rate never exceeds the cap
   // regardless of trail length; the final hex's success haptic (below) is
@@ -138,6 +140,7 @@ export const StreakHexTrail = ({ count, onSettle }) => {
           delay={i * IGNITE_STAGGER_MS}
           isLast={i === hexes.length - 1}
           reduced={reduced}
+          resolved={resolved}
           haptic={i % hapticStride === 0}
           onIgnite={settle}
         />

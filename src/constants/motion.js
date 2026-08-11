@@ -72,24 +72,24 @@ export const MAX_TRAIL_PARTICLES = 12;
 // live OS changes (not just read-once-at-mount), so a mid-session
 // accessibility toggle takes effect immediately.
 //
-// R18 (Pixel): the initial read is async (a promise), so every consumer's
-// first render sees a value that hasn't been confirmed yet. This hook
-// resolves that to `null` rather than `false` specifically so it stays
-// backward compatible: `if (reduced)` reads null as falsy, identical to
-// the old default-false behavior, so nothing already written against this
-// hook needs to change. Only a component that fires a one-time side effect
-// on mount (a haptic, a spring that must not run under Reduce Motion)
-// needs to add `if (reduced === null) return;` and wait one render for the
-// real answer instead of assuming full-motion and racing the promise
-// (StreakHexTrail was the worst case — see R18).
+// Deliberately `useState(false)`, not `useState(null)` — R19 (Pixel):
+// resolving `false` onto an already-`false` state is a no-op write, so
+// React bails out and skips the re-render for the (large majority)
+// Reduce-Motion-off case, meaning every `[reduced]`-dep effect across the
+// 7 existing consumers (FlyingBee, GlowOrb, HoneycombGrid, StaggeredItem,
+// StreakBadge, EveningMirror, GratitudeWrapped) runs exactly once. Seeding
+// `null` breaks that bail-out for everyone, not just Reduce-Motion users —
+// `null -> false` is a real state change, so it was a universal double-run
+// regression traded for fixing a race in three new components. Don't
+// change this hook's contract; see `useReducedMotionState` below instead.
 export const useReducedMotion = () => {
-  const [reduced, setReduced] = useState(null);
+  const [reduced, setReduced] = useState(false);
 
   useEffect(() => {
     let mounted = true;
     AccessibilityInfo.isReduceMotionEnabled?.()
       .then((value) => mounted && setReduced(!!value))
-      .catch(() => mounted && setReduced(false));
+      .catch(() => {});
     const subscription = AccessibilityInfo.addEventListener?.('reduceMotionChanged', (value) => {
       if (mounted) setReduced(!!value);
     });
@@ -100,4 +100,35 @@ export const useReducedMotion = () => {
   }, []);
 
   return reduced;
+};
+
+// R19 (Pixel): opt-in sibling for a component that fires a one-time side
+// effect on mount (a haptic, a spring that must not run at all under
+// Reduce Motion) and needs to hold its first frame until the OS
+// preference is actually known, instead of assuming full-motion and
+// racing the async read. `resolved` starts `false` and flips exactly once
+// per mount, regardless of which way `reduced` lands, so effect deps on
+// `resolved` cost the same single extra run for every user — not just the
+// asymmetric hit `useReducedMotion` seeding `null` would have caused.
+// `useReducedMotion` itself keeps its exact original contract and its
+// bail-out; this is additive, not a replacement, so the 7 merged
+// consumers need no changes and no re-audit.
+export const useReducedMotionState = () => {
+  const [state, setState] = useState({ reduced: false, resolved: false });
+
+  useEffect(() => {
+    let mounted = true;
+    AccessibilityInfo.isReduceMotionEnabled?.()
+      .then((value) => mounted && setState({ reduced: !!value, resolved: true }))
+      .catch(() => mounted && setState({ reduced: false, resolved: true }));
+    const subscription = AccessibilityInfo.addEventListener?.('reduceMotionChanged', (value) => {
+      if (mounted) setState({ reduced: !!value, resolved: true });
+    });
+    return () => {
+      mounted = false;
+      subscription?.remove?.();
+    };
+  }, []);
+
+  return state;
 };
