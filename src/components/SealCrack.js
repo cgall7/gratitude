@@ -49,12 +49,17 @@ export const SealCrack = ({ onCracked }) => {
   // BeeTransition's own, close enough for a static-bee handoff with no
   // visible jump.
   const settleShadow = useRef(new Animated.Value(0)).current;
+  const mountedRef = useRef(true);
 
   useEffect(() => {
     // Let the field render a beat before the bee flies in, so the landing
     // reads as an arrival rather than something already mid-flight at mount.
     const t = setTimeout(() => setBeeKey(1), 250);
     return () => clearTimeout(t);
+  }, []);
+
+  useEffect(() => () => {
+    mountedRef.current = false;
   }, []);
 
   useEffect(() => {
@@ -76,7 +81,13 @@ export const SealCrack = ({ onCracked }) => {
     // CelebrationRays' own reduced-motion glow (below) still carries the
     // moment.
     if (reduced) {
-      onCracked?.();
+      // R20 (Pixel): onCracked was firing synchronously, unmounting Beat 0
+      // in the same tick CelebrationRays' SoftGlow substitute mounted — the
+      // glow got ~0 of its 200ms. Hold for that duration so the substitute
+      // is actually seen before the handoff, same length it renders for.
+      setTimeout(() => {
+        if (mountedRef.current) onCracked?.();
+      }, DURATIONS.reducedMotionFade);
       return;
     }
     Animated.sequence([
