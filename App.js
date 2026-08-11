@@ -11,6 +11,8 @@ import { LockScreen, InputScreen } from './src/screens/CoreRitual';
 import { EveningMirror } from './src/screens/EveningMirror';
 import { MainTabs } from './src/navigation/MainTabs';
 import { AuthProvider } from './src/contexts/AuthContext';
+import { OnboardingState } from './src/services/onboardingState';
+import { supabase, isSupabaseConfigured } from './src/services/supabase';
 
 const Stack = createStackNavigator();
 
@@ -20,17 +22,44 @@ SplashScreen.preventAutoHideAsync();
 // foreground it should reopen at onboarding, even if someone finished it
 // or was sitting on Main a minute ago — the pitch should always be fresh
 // for whoever's about to see it. Flip this off once the app is past the
-// demo phase. Cold launches are already covered by initialRouteName below;
-// this covers backgrounding/resuming, which a cold launch alone misses.
+// demo phase. This flag now gates BOTH demo behaviours: the
+// foreground-resume reset below, and forcing every cold launch to start at
+// Onboarding. With it off, cold launches route on the persisted completion
+// flag / live session instead (resolveInitialRoute), so flipping this one
+// constant really is the whole switch.
 const DEMO_MODE = true;
+
+// Cold-launch routing, only consulted when DEMO_MODE is off. Completed
+// onboarding on this device, or an existing signed-in session (fresh
+// install by a returning user), both land on Main. Any storage failure
+// falls back to Onboarding — the worst case is seeing the flow again,
+// never being locked out of it.
+const resolveInitialRoute = async () => {
+  try {
+    if (await OnboardingState.isComplete()) return 'Main';
+    if (isSupabaseConfigured && supabase) {
+      const { data } = await supabase.auth.getSession();
+      if (data?.session) return 'Main';
+    }
+  } catch (e) {
+    // fall through
+  }
+  return 'Onboarding';
+};
 
 export default function App() {
   const [fontsLoaded, setFontsLoaded] = useState(false);
+  const [initialRoute, setInitialRoute] = useState(DEMO_MODE ? 'Onboarding' : null);
   const navigationRef = useRef(null);
   const appState = useRef(AppState.currentState);
 
   useEffect(() => {
     Font.loadAsync(fontAssets).then(() => setFontsLoaded(true));
+  }, []);
+
+  useEffect(() => {
+    if (DEMO_MODE) return;
+    resolveInitialRoute().then(setInitialRoute);
   }, []);
 
   useEffect(() => {
@@ -51,7 +80,9 @@ export default function App() {
     }
   }, [fontsLoaded]);
 
-  if (!fontsLoaded) {
+  // The splash stays up (preventAutoHideAsync above) until both fonts and
+  // the initial route are ready, so the route decision never flashes.
+  if (!fontsLoaded || !initialRoute) {
     return null;
   }
 
@@ -59,7 +90,7 @@ export default function App() {
     <AuthProvider>
       <NavigationContainer ref={navigationRef} onReady={onLayoutRootView}>
         <Stack.Navigator
-          initialRouteName="Onboarding"
+          initialRouteName={initialRoute}
           screenOptions={{
             headerShown: false,
             cardStyle: { backgroundColor: theme.colors.background }

@@ -26,6 +26,7 @@ import { IdeasAccordion } from '../components/IdeasAccordion';
 import { BeeTransition } from '../components/BeeTransition';
 import { FlyingBee } from '../components/FlyingBee';
 import { DevSettings } from '../services/devSettings';
+import { OnboardingState } from '../services/onboardingState';
 import { HoneycombStore } from '../services/HoneycombStore';
 import { useAuth } from '../contexts/AuthContext';
 import { LockScreen, InputScreen } from './CoreRitual';
@@ -579,6 +580,9 @@ export const OnboardingFlow = ({ onDone, initialFlow = 'B', startAt }) => {
   const finish = () => {
     if (finishedRef.current) return;
     finishedRef.current = true;
+    // Fire-and-forget: the flag only matters on the NEXT cold launch, so
+    // navigation doesn't wait on the write.
+    OnboardingState.markComplete();
     onDone();
   };
 
