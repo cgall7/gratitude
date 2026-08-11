@@ -26,6 +26,18 @@ import { DURATIONS, SPRINGS, staggerDelay, useReducedMotion } from '../constants
 // by remounting would tear down and rebuild 31 `<Svg>` cells per page turn.
 // Undefined by default, so it never changes for any existing consumer and
 // the effect fires exactly as often as it did before (R19).
+//
+// R43 FAIL 3 (Pixel + Deezine, 2026-08-11, device-confirmed): index 0's
+// `staggerDelay` is always 0, and both `SpringAnimation.js` and
+// `TimingAnimation.js` special-case a falsy delay to call `start()`
+// synchronously inside this effect instead of via `setTimeout` — so the
+// index-0 item's native animation starts before the JS thread has handed
+// off to native, and the value→view connection for that one item never
+// takes. It reaches its end value but the view stays frozen at the start
+// frame. `staggerDelay` itself is untouched (shared token math, every
+// other index byte-identical); only index 0 is floored to one frame,
+// invisible on its own, so it goes through the deferred `setTimeout` path
+// like every other index does.
 export const StaggeredItem = ({ index, count = 1, children, style, pop = false, replayKey }) => {
   const reduced = useReducedMotion();
   const anim = useRef(new Animated.Value(0)).current;
@@ -54,7 +66,7 @@ export const StaggeredItem = ({ index, count = 1, children, style, pop = false, 
     if (pop && !reduced) {
       Animated.spring(anim, {
         toValue: 1,
-        delay: staggerDelay(index, count),
+        delay: staggerDelay(index, count) || 16,
         ...SPRINGS.tick,
         useNativeDriver: true,
       }).start();
@@ -63,7 +75,7 @@ export const StaggeredItem = ({ index, count = 1, children, style, pop = false, 
     Animated.timing(anim, {
       toValue: 1,
       duration: reduced ? DURATIONS.reducedMotionFade : 380,
-      delay: reduced ? 0 : staggerDelay(index, count),
+      delay: reduced ? 0 : staggerDelay(index, count) || 16,
       useNativeDriver: true,
     }).start();
     return stop;
