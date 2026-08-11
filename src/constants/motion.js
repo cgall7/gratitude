@@ -53,6 +53,13 @@ export const DURATIONS = {
   // Bee glow-trail particle drift + fade (§12.2: "drift and fade out over
   // ~600-900ms" — midpoint).
   trailFade: 750,
+  // Reflective-surface reveal — a card fading up under the thing you just
+  // tapped. §17.5's motion register: taps on Recap resolve with glide, not
+  // celebration, so this is deliberately longer than `quick` and carries no
+  // spring. HoneycombGrid's reveal card already runs this exact number as a
+  // literal; collecting that call site belongs to the §14.1 cohesion sweep
+  // against the settled tree, not to a branch in flight.
+  revealGlide: 260,
   // §14.1 mandate: reduced motion collapses every spring/transition to a
   // flat fade at this duration — "no exceptions." Supersedes §12.5's
   // approximate "~150ms" for the same case (settled at Pixel's gate, logged

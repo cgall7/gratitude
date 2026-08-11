@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
 import { theme } from '../constants/theme';
 import { SPRINGS, DURATIONS, useReducedMotionState } from '../constants/motion';
-import { Bee } from './Bee';
+import { StripedBee } from './StripedBee';
 
 // §14.2 Beat 3 "What You Loved" — one physical card that 3D-flips from a
 // gold back to reveal a theme word (Nunito ExtraBold) + one real entry
@@ -17,7 +17,12 @@ import { Bee } from './Bee';
 // for the settled tree per §12.5's build-order gate.
 const FLIP_PERSPECTIVE = 800;
 
-export const ThemeCardFlip = ({ themeWord, snippet, delay = 0, onRevealed }) => {
+// `caption` is optional and Wrapped does not pass it. §17.5 adopted this
+// card as Recap's month theme, where the sentence the retired PRIMARY THEME
+// card used to carry ("You leaned into X, 8 of 14 days this month") rides in
+// underneath the snippet — nothing lost when that card went. Beat 3 wants
+// the word and the quote alone, so the line simply isn't rendered there.
+export const ThemeCardFlip = ({ themeWord, snippet, caption, delay = 0, onRevealed }) => {
   const flip = useRef(new Animated.Value(0)).current;
   const revealedRef = useRef(false);
   const { reduced, resolved } = useReducedMotionState();
@@ -63,7 +68,7 @@ export const ThemeCardFlip = ({ themeWord, snippet, delay = 0, onRevealed }) => 
   if (reduced) {
     return (
       <Animated.View style={[styles.card, styles.front, { opacity: flip }]}>
-        <CardFace themeWord={themeWord} snippet={snippet} />
+        <CardFace themeWord={themeWord} snippet={snippet} caption={caption} />
       </Animated.View>
     );
   }
@@ -81,7 +86,12 @@ export const ThemeCardFlip = ({ themeWord, snippet, delay = 0, onRevealed }) => 
           { transform: [{ perspective: FLIP_PERSPECTIVE }, { rotateY: backRotate }] },
         ]}
       >
-        <Bee size={28} />
+        {/* Much bigger than the 28pt glyph it replaces. The back is the full
+            card — roughly 345 × 128 of unbroken gold — and drawing it at
+            mock scale made the problem obvious: a 28pt bee on that field is
+            a speck, not a mark. `fieldColor` is the card's own gold, so the
+            band is cut out of the field rather than painted over it. */}
+        <StripedBee size={64} fieldColor={theme.colors.goldField} />
       </Animated.View>
       <Animated.View
         style={[
@@ -90,13 +100,13 @@ export const ThemeCardFlip = ({ themeWord, snippet, delay = 0, onRevealed }) => 
           { transform: [{ perspective: FLIP_PERSPECTIVE }, { rotateY: frontRotate }] },
         ]}
       >
-        <CardFace themeWord={themeWord} snippet={snippet} />
+        <CardFace themeWord={themeWord} snippet={snippet} caption={caption} />
       </Animated.View>
     </View>
   );
 };
 
-const CardFace = ({ themeWord, snippet }) => (
+const CardFace = ({ themeWord, snippet, caption }) => (
   <View style={styles.faceContent}>
     <Text style={styles.themeWord}>{themeWord}</Text>
     {snippet ? (
@@ -104,6 +114,7 @@ const CardFace = ({ themeWord, snippet }) => (
         “{snippet}”
       </Text>
     ) : null}
+    {caption ? <Text style={styles.caption}>{caption}</Text> : null}
   </View>
 );
 
@@ -120,10 +131,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     minHeight: 128,
   },
-  // Gold back: accent as decorative fill behind the ink bee — the §2 rule
-  // (accent never carries text) holds because the back has no text at all.
+  // Gold back: `goldField`, not `accent` (§17.5). This card is a keepsake in
+  // the same family as the Seal and the Year Card, and it used to sit a
+  // visible 1.179:1 step away from both. Decorative fill behind the ink bee —
+  // the §2 rule (accent never carries text) holds because the back has no
+  // text at all.
   back: {
-    backgroundColor: theme.colors.accent,
+    backgroundColor: theme.colors.goldField,
   },
   front: {
     backgroundColor: theme.colors.surface,
@@ -144,5 +158,14 @@ const styles = StyleSheet.create({
     fontFamily: theme.fonts.bodyItalic,
     color: theme.colors.inkSoft,
     textAlign: 'center',
+  },
+  // The stat sentence, set quieter than the quote it follows — the entry is
+  // the reveal, the count is the footnote.
+  caption: {
+    ...theme.type.bodySm,
+    fontSize: 13,
+    color: theme.colors.inkSoft,
+    textAlign: 'center',
+    marginTop: theme.spacing.sm,
   },
 });

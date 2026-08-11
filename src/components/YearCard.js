@@ -1,7 +1,7 @@
 import React from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
 import { theme } from '../constants/theme';
-import { Bee } from './Bee';
+import { StripedBee } from './StripedBee';
 
 // §14.4 Beat 6 "The Year Card" — the static shareable keepsake the burst
 // resolves into. Deliberately motionless: "motion sells the ceremony;
@@ -9,12 +9,6 @@ import { Bee } from './Bee';
 // share-sheet capture and the wiring into GratitudeWrapped.js come with
 // the beat build after the design-pass replay (§12.5 build-order gate).
 //
-// Golden Honey is the icon's gold (§14.4: the ceremony opens and closes
-// on the same field), NOT theme.colors.accent. Beat 0's Seal (Fizz's
-// spine) needs the identical value — promote this to a theme.colors token
-// in the wiring pass so it lands once, not from two pre-replay branches.
-const GOLD_FIELD = '#F0C023';
-
 // Crop-safe zone (§14.4): the card renders at 4:5 portrait. A 1:1 feed
 // crop keeps full width × the center 4/5 of the height; a 9:16 story crop
 // keeps the center ~70% of the width × full height. The numeral + theme
@@ -48,7 +42,10 @@ export const YearCard = ({
         resizeMode="contain"
       />
       <View style={styles.bee}>
-        <Bee size={22} />
+        {/* 30, not the old 22: it stands beside a 44pt spiral mark on the
+            year's keepsake, and a bee that has to be looked for isn't proud.
+            Band knocked out to the card's own gold. */}
+        <StripedBee size={30} fieldColor={theme.colors.goldField} />
       </View>
     </View>
 
@@ -60,8 +57,12 @@ export const YearCard = ({
 );
 
 const styles = StyleSheet.create({
+  // Golden Honey is the icon's gold (§14.4: the ceremony opens and closes on
+  // the same field), NOT theme.colors.accent. It was a local literal here and
+  // in SealCrack; §17.5 promoted it to `goldField` so the two ends of the
+  // ceremony can't drift apart in a retune.
   card: {
-    backgroundColor: GOLD_FIELD,
+    backgroundColor: theme.colors.goldField,
     borderRadius: theme.borderRadius.medium,
     overflow: 'hidden',
     alignItems: 'center',

@@ -1,33 +1,44 @@
-import React, { useCallback, useState } from 'react';
-import { StyleSheet, View, Text, ScrollView, ActivityIndicator } from 'react-native';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
+import {
+  StyleSheet,
+  View,
+  Text,
+  ScrollView,
+  ActivityIndicator,
+  useWindowDimensions,
+} from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import Svg, { Polygon } from 'react-native-svg';
 import { theme } from '../constants/theme';
+import { hexPoints, HEX_ASPECT } from '../utils/combGeometry';
 import { MonthlyRecap } from './MonthlyRecap';
 import { EntryStore } from '../services/EntryStore';
 import { dominantTheme } from '../utils/themeTagger';
-import {
-  startOfWeek,
-  endOfWeek,
-  startOfMonth,
-  endOfMonth,
-  startOfYear,
-  endOfYear,
-  monthName,
-  currentStreak,
-  longestStreak,
-} from '../utils/dateRanges';
+import { recentMonths, currentStreak, longestStreak } from '../utils/dateRanges';
 import { DevVersionTag } from '../components/DevVersionTag';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { StreakBadge } from '../components/StreakBadge';
 import { StaggeredItem } from '../components/StaggeredItem';
-import { GradientCard } from '../components/GradientCard';
-import { GradientIconBadge } from '../components/GradientIconBadge';
 
 const describeTheme = (insight, periodLabel) => {
   if (!insight) return '';
   const { theme: themeName, count, total } = insight;
   return `You leaned into "${themeName}" ${count} of ${total} ${periodLabel}.`;
 };
+
+// One page per month, oldest first — the current month is the last page, so
+// "back in time" is the same leftward swipe it is in a photo roll. The window
+// itself is `recentMonths`; this only hangs each month's entries off it.
+//
+// Sliced from one already-loaded list by ISO prefix rather than re-queried
+// per month: `EntryStore.getEntriesBetween` reloads and re-sorts the whole
+// store on every call, so twelve months would have meant twelve full reads
+// of the same blob.
+const buildMonths = (allEntries) =>
+  recentMonths(new Date(), allEntries[0]?.date ?? null).map((month) => ({
+    ...month,
+    entries: allEntries.filter((entry) => entry.date.startsWith(month.key)),
+  }));
 
 // The three numbers worth chasing, up top where they're the first thing you
 // see — Recap used to open on a theme card with no score of any kind.
@@ -49,48 +60,54 @@ const StatsCard = ({ streak, best, total }) => (
   </View>
 );
 
-// --- COMPONENT: WeeklyThemeCard ---
-const WeeklyThemeCard = ({ weekInsight }) => (
-  <GradientCard
-    colors={theme.gradients.weekWash}
-    style={styles.weekCardOuter}
-    contentStyle={styles.weekCard}
-  >
-    <GradientIconBadge icon="flame" style={styles.weekBadge} />
-    <Text style={styles.weekLabel}>THIS WEEK'S THEME</Text>
-    <Text style={styles.weekValue}>{weekInsight ? weekInsight.theme : 'No entries yet'}</Text>
-    <Text style={styles.weekDesc}>
-      {weekInsight
-        ? describeTheme(weekInsight, 'days this week')
-        : 'Write an entry this week to see your theme.'}
-    </Text>
-  </GradientCard>
+// Which month you're on, and that there are others. A paging scroll with no
+// indicator is a screen that hides its own second half — the swipe is only
+// discoverable by accident.
+//
+// Hexagons rather than dots, from the comb's own `hexPoints`, so the rail is
+// the app's shape at a small size instead of a lookalike (R36's rule applied
+// one scale down). Decorative: the months themselves are the content, and a
+// twelve-stop rail of unlabelled marks would only clutter VoiceOver.
+const RAIL_W = 8;
+const RAIL_H = RAIL_W * HEX_ASPECT;
+
+const MonthRail = ({ count, activeIndex }) => (
+  <View style={styles.rail} accessible={false} importantForAccessibility="no-hide-descendants">
+    {Array.from({ length: count }, (_, index) => (
+      <Svg key={index} width={RAIL_W} height={RAIL_H}>
+        <Polygon
+          points={hexPoints(RAIL_W, RAIL_H)}
+          fill={index === activeIndex ? theme.colors.accentDeep : theme.colors.surfaceBorderStrong}
+        />
+      </Svg>
+    ))}
+  </View>
 );
 
 export const RecapTab = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
-  const [weekEntries, setWeekEntries] = useState([]);
-  const [monthEntries, setMonthEntries] = useState([]);
-  const [monthLabel, setMonthLabel] = useState('');
-  const [daysInMonth, setDaysInMonth] = useState(31);
-  const [yearEntries, setYearEntries] = useState([]);
+  const [allEntries, setAllEntries] = useState([]);
+  // Tracked by month key, not index, so a reload that adds a page (or rolls
+  // over into a new month) doesn't silently move you somewhere else.
+  const [activeKey, setActiveKey] = useState(null);
+  const pagerRef = useRef(null);
+  const landedRef = useRef(false);
+
+  // Same derivation the comb itself uses (R33 footnote): screen width less
+  // the content padding, read live rather than measured. A page width that
+  // arrives from `onLayout` a frame late would race the initial scroll to
+  // the current month.
+  const { width } = useWindowDimensions();
+  const pageWidth = width - 48;
 
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
       (async () => {
-        const now = new Date();
-        const [week, month, year] = await Promise.all([
-          EntryStore.getEntriesBetween(startOfWeek(now), endOfWeek(now)),
-          EntryStore.getEntriesBetween(startOfMonth(now), endOfMonth(now)),
-          EntryStore.getEntriesBetween(startOfYear(now), endOfYear(now)),
-        ]);
+        // One read of the store, sliced twelve ways below.
+        const all = await EntryStore.getAllEntries();
         if (cancelled) return;
-        setWeekEntries(week);
-        setMonthEntries(month);
-        setYearEntries(year);
-        setMonthLabel(monthName(now));
-        setDaysInMonth(endOfMonth(now).getDate());
+        setAllEntries(all);
         setLoading(false);
       })();
       return () => {
@@ -99,6 +116,19 @@ export const RecapTab = ({ navigation }) => {
     }, [])
   );
 
+  const months = useMemo(() => buildMonths(allEntries), [allEntries]);
+  const trackedIndex = months.findIndex((month) => month.key === activeKey);
+  // Falls back to the current month whenever the tracked key isn't in the
+  // list — first render, and any reload that trimmed the window.
+  const activeIndex = trackedIndex >= 0 ? trackedIndex : months.length - 1;
+
+  // `currentStreak`/`longestStreak` read every entry, not just this year's:
+  // "BEST EVER" was measuring the calendar year, so a record set in December
+  // vanished on New Year's Day. "THIS YEAR" stays year-scoped — it says so.
+  const currentYear = String(new Date().getFullYear());
+  const thisYear = allEntries.filter((entry) => entry.date.startsWith(currentYear));
+  const streak = currentStreak(allEntries);
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -106,10 +136,6 @@ export const RecapTab = ({ navigation }) => {
       </View>
     );
   }
-
-  const weekInsight = dominantTheme(weekEntries);
-  const monthInsight = dominantTheme(monthEntries);
-  const streak = currentStreak(yearEntries);
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -120,21 +146,55 @@ export const RecapTab = ({ navigation }) => {
       />
 
       <StaggeredItem index={0}>
-        <StatsCard streak={streak} best={longestStreak(yearEntries)} total={yearEntries.length} />
+        <StatsCard streak={streak} best={longestStreak(allEntries)} total={thisYear.length} />
       </StaggeredItem>
 
-      <StaggeredItem index={1}>
-        <WeeklyThemeCard weekInsight={weekInsight} />
-      </StaggeredItem>
+      {months.length > 1 && <MonthRail count={months.length} activeIndex={activeIndex} />}
 
-      <MonthlyRecap
-        monthName={monthLabel}
-        entries={monthEntries}
-        daysInMonth={daysInMonth}
-        insightTheme={monthInsight ? monthInsight.theme : null}
-        insightDescription={monthInsight ? describeTheme(monthInsight, 'days this month') : null}
-        onPreviewWrapped={() => navigation.navigate('Wrapped')}
-      />
+      {/* §17.5: one month per page, current month first. The vertical scroll
+          owns the screen and this owns the horizontal axis — RN nests the
+          two cleanly because they never compete for the same gesture. */}
+      <ScrollView
+        ref={pagerRef}
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        style={{ width: pageWidth }}
+        onMomentumScrollEnd={(event) => {
+          const index = Math.round(event.nativeEvent.contentOffset.x / pageWidth);
+          const month = months[index];
+          if (month && month.key !== months[activeIndex]?.key) setActiveKey(month.key);
+        }}
+        onContentSizeChange={(contentWidth) => {
+          // Land on the current month once the pages have real width. Guarded
+          // on the ref rather than on mount, because content size fires
+          // again on rotation and re-landing would yank you off June.
+          // The +1 is slack, not superstition: a content width reported a
+          // hair under the exact product would latch this guard shut and
+          // strand the pager on the oldest month forever.
+          if (landedRef.current || contentWidth + 1 < pageWidth * months.length) return;
+          landedRef.current = true;
+          pagerRef.current?.scrollTo({ x: pageWidth * (months.length - 1), animated: false });
+        }}
+      >
+        {months.map((month, index) => {
+          const insight = dominantTheme(month.entries);
+          return (
+            <View key={month.key} style={{ width: pageWidth }}>
+              <MonthlyRecap
+                monthName={month.label}
+                title={month.title}
+                entries={month.entries}
+                daysInMonth={month.daysInMonth}
+                insightTheme={insight ? insight.theme : null}
+                insightDescription={insight ? describeTheme(insight, 'days this month') : null}
+                onPreviewWrapped={() => navigation.navigate('Wrapped')}
+                active={index === activeIndex}
+              />
+            </View>
+          );
+        })}
+      </ScrollView>
 
       <DevVersionTag />
     </ScrollView>
@@ -150,6 +210,12 @@ const styles = StyleSheet.create({
     padding: 24,
     paddingTop: 72,
     paddingBottom: 140,
+  },
+  rail: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 7,
+    marginBottom: 18,
   },
   statsCard: {
     flexDirection: 'row',
@@ -186,45 +252,5 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.background,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  // See MonthlyRecap's `insightCardOuter` — clip and shadow can't share a
-  // node, so radius + shadow live outside and `overflow: hidden` inside,
-  // and the outer node keeps an opaque `backgroundColor` for iOS to derive
-  // the shadow from.
-  weekCardOuter: {
-    width: '100%',
-    marginBottom: 24,
-    borderRadius: theme.borderRadius.large,
-    backgroundColor: theme.colors.surface,
-    ...theme.shadows.card,
-  },
-  weekCard: {
-    borderWidth: 1,
-    borderColor: theme.colors.surfaceBorder,
-    borderRadius: theme.borderRadius.large,
-    padding: 24,
-    alignItems: 'center',
-  },
-  weekBadge: {
-    marginBottom: 12,
-  },
-  weekLabel: {
-    ...theme.type.label,
-    color: theme.colors.accentDeep,
-    marginBottom: 8,
-  },
-  weekValue: {
-    ...theme.type.h1,
-    fontSize: 30,
-    color: theme.colors.textPrimary,
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  weekDesc: {
-    ...theme.type.body,
-    fontSize: 15,
-    lineHeight: 22,
-    color: theme.colors.textSecondary,
-    textAlign: 'center',
   },
 });
