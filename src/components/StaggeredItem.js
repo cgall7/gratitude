@@ -42,6 +42,15 @@ export const StaggeredItem = ({ index, count = 1, children, style, pop = false, 
       lastReplay.current = replayKey;
       anim.setValue(0);
     }
+    // R18, the same hazard StreakHexTrail guards (`:63-66`, `:78-82`): this
+    // effect can re-run while its own entrance is still in flight — a second
+    // month swipe inside the 700ms cascade, or an OS Reduce Motion toggle
+    // mid-entrance. Without this, `setValue(0)` lands under a running native
+    // spring and a second one starts on top of it, two drivers on one value.
+    // The cell that loses that race stays at 0 — invisible, permanently.
+    // Stop first; a settled item stops as a no-op and re-animates 1 → 1
+    // exactly as the note above describes.
+    const stop = () => anim.stopAnimation();
     if (pop && !reduced) {
       Animated.spring(anim, {
         toValue: 1,
@@ -49,7 +58,7 @@ export const StaggeredItem = ({ index, count = 1, children, style, pop = false, 
         ...SPRINGS.tick,
         useNativeDriver: true,
       }).start();
-      return;
+      return stop;
     }
     Animated.timing(anim, {
       toValue: 1,
@@ -57,6 +66,7 @@ export const StaggeredItem = ({ index, count = 1, children, style, pop = false, 
       delay: reduced ? 0 : staggerDelay(index, count),
       useNativeDriver: true,
     }).start();
+    return stop;
   }, [reduced, replayKey]);
 
   if (pop) {
