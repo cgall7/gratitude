@@ -28,18 +28,30 @@
 //   * Flow C app-locking adds a data category this policy has no section for.
 //     It needs new copy, NOT a pre-written sentence — see below.
 //
-// On Flow C specifically, because the obvious reassuring line is not safely
-// writable yet: iOS FamilyControls hands back opaque `ApplicationToken`s that
-// cannot be de-referenced to app names, so "we can see that you locked apps, we
-// cannot see which ones" would be true there. Android has no equivalent —
-// UsageStatsManager and AccessibilityService both expose package names in the
-// clear. And `services/NativeLockInterface.ts` currently specifies
-// `setBlockedApps(appIds: string[])` with bundle IDs as plain strings on BOTH
-// platforms, which would make that sentence false on iOS too. Today the module
-// is an unimplemented stub with zero callers, so the app collects nothing here
-// and silence is correct. What this policy can honestly say is decided by which
-// shape that module actually takes — write the copy when it has a caller, from
-// the code, the same way the rest of this file was written.
+// On Flow C specifically, because the obvious reassuring line — "we can see
+// that you locked apps, we cannot see which ones" — is not one sentence:
+//
+//   * iOS: true by construction once built, not a choice we make. Per Pixel's
+//     R39, ManagedSettingsStore shields take `ApplicationToken`s that can only
+//     come from the user's own FamilyActivityPicker selection, and cannot be
+//     de-referenced to names by the app holding them. Note that
+//     `services/NativeLockInterface.ts` contradicts itself on this without
+//     needing any Apple documentation to see it: lines 7 and 33 cite
+//     FamilyControls and ManagedSettingsStore, while lines 24 and 27 specify
+//     `setBlockedApps(appIds: string[])` with plain bundle IDs. Those cannot
+//     both be built. The framework half of that is Pixel's, from the docs, and
+//     is not verifiable in this repo — the dev build settles it.
+//   * Android: the genuinely open one. UsageStatsManager and
+//     AccessibilityService both expose package names in the clear, and there
+//     may be no opaque equivalent at any price.
+//
+// So the eventual copy may need a platform split, and whether Android's weaker
+// truth caps what we promise everywhere is Colin's call, not this file's.
+//
+// None of it gets written yet. The module is an unimplemented stub with zero
+// callers, so the app collects nothing here today and silence is correct —
+// write the copy when it has a caller, from the code, the same way the rest of
+// this file was written.
 //
 // NOT LEGAL ADVICE and not lawyer-reviewed. This is honest, specific,
 // user-readable copy that describes real behaviour; it still wants a lawyer's
