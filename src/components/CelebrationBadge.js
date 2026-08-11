@@ -25,16 +25,21 @@ export const CelebrationBadge = () => {
     const arrive = reduced
       ? Animated.timing(reveal, { toValue: 1, duration: DURATIONS.reducedMotionFade, useNativeDriver: true })
       : Animated.spring(reveal, { toValue: 1, friction: 4, tension: 140, useNativeDriver: true });
-    Animated.sequence([Animated.delay(200), arrive]).start(() => {
-      if (hapticFiredRef.current) return;
+    const sequence = Animated.sequence([Animated.delay(200), arrive]);
+    sequence.start(({ finished }) => {
+      // R20: a cleanup-triggered stop invokes this callback with
+      // finished:false — the haptic marks the real arrival, so an
+      // interrupted run must not fire it (or latch the ref and silence
+      // the re-run that does arrive).
+      if (!finished || hapticFiredRef.current) return;
       hapticFiredRef.current = true;
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     });
-    // R18: a live OS toggle re-runs this effect mid-animation — the
-    // cleanup must actually stop the in-flight animation, otherwise a
-    // Reduce Motion user gets the spring overshoot on a fade specified
-    // as flat.
-    return () => reveal.stopAnimation();
+    // R18/R20: a live OS toggle re-runs this effect mid-animation — the
+    // cleanup must stop the *composite* handle: `reveal.stopAnimation()`
+    // can't reach the sequence during the 200ms Animated.delay, which
+    // drives its own internal value, not `reveal`.
+    return () => sequence.stop();
   }, [reduced, resolved]);
 
   return (
