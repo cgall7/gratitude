@@ -12,65 +12,87 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../constants/theme';
+import { DURATIONS, useReducedMotion } from '../constants/motion';
 import { EntryStore } from '../services/EntryStore';
 import { tagEntry } from '../utils/themeTagger';
 import { PressableScale } from '../components/PressableScale';
 import { StaggeredItem } from '../components/StaggeredItem';
 import { PrimaryButton } from '../components/PrimaryButton';
+import { GlowOrb } from '../components/GlowOrb';
 import { HoneycombJourneyMap } from '../components/HoneycombJourneyMap';
 import { CelebrationBadge } from '../components/CelebrationBadge';
 import { CelebrationRays } from '../components/CelebrationRays';
 import { IdeasAccordion } from '../components/IdeasAccordion';
 import { BeeTransition } from '../components/BeeTransition';
+import { FlyingBee } from '../components/FlyingBee';
 import { DevSettings } from '../services/devSettings';
 import { HoneycombStore } from '../services/HoneycombStore';
 import { useAuth } from '../contexts/AuthContext';
 
 const HIT_SLOP = { top: 12, bottom: 12, left: 12, right: 12 };
 
-// Flow B claim screens (GUIDES/GRATITUDE_FLOW_B_COPY.md, Pixel gate R5) —
-// frozen copy + frozen accentDeep phrase per screen. Slots between Welcome
-// and Name; everything after Name is shared with Flow A.
-const CLAIM_SCREENS = [
+// Flow B belief screens — frozen copy, see GUIDES/GRATITUDE_ONBOARDING_GIVEN_COPY.md.
+//
+// These replace the four clinical claim screens ("sleep better," "less
+// stress," "bounce back"), which made the same transactional argument every
+// habit app makes: do this, get that outcome. Colin (2026-08-11) asked for a
+// draw toward a gratitude-first life instead — quietly Christian in posture
+// without ever being outwardly so.
+//
+// The hinge: gratitude isn't a technique for feeling better, it's the
+// recognition that most of your life is made of things you were given and
+// didn't arrange. A secular reader hears humility and wonder; a Christian
+// reader hears grace. We never name a giver — the user fills that in.
+//
+// Copy gate every line has to pass: could a devout Christian and a committed
+// atheist each read this and feel it was written for them? Words in play:
+// given, gift, arrived, receive, enough, light, notice, hold. Words never
+// used: God, Jesus, Lord, pray, scripture, church, faith, blessed, worship,
+// sin — and, per Colin 2026-08-11, hallelujah. That one stays a guiding
+// principle for the register, not a word on screen.
+const BELIEF_SCREENS = [
   {
-    icon: 'moon',
-    label: 'ONE REASON',
-    h1: 'Your mind quiets down before it winds down.',
-    accent: 'quiets down',
+    icon: 'sunny',
+    label: 'TO BEGIN',
+    h1: 'The morning showed up without you.',
+    accent: 'without you',
     bodyLg:
-      "Naming one good thing tonight gives your thoughts somewhere to land — so they're not still circling when your head hits the pillow.",
-    cta: 'Next',
-  },
-  {
-    icon: 'cloud',
-    label: 'ANOTHER REASON',
-    h1: 'Worry takes up less room when good things get named.',
-    accent: 'less room',
-    bodyLg:
-      "Naming one thing that went right doesn't erase a hard day. It just stops the hard part from being the whole story.",
-    cta: 'Next',
-  },
-  {
-    icon: 'leaf',
-    label: 'ANOTHER REASON',
-    h1: 'Bad days get easier to bounce back from.',
-    accent: 'bounce back',
-    bodyLg:
-      "The more good you've noticed on ordinary days, the more you have to stand on when a rough one shows up.",
+      'So did the people who know your name. So did a body that woke up working. You arranged none of it — it arrived anyway.',
     cta: 'Next',
   },
   {
     icon: 'heart',
-    label: 'LAST REASON',
-    h1: 'The people you notice, you hold onto.',
-    accent: 'hold onto',
-    bodyLg: 'Naming who made today a little better is a small habit that quietly keeps you close to them.',
+    label: 'THE TURN',
+    h1: 'Noticing is one thing. Saying thanks is another.',
+    accent: 'Saying thanks',
+    bodyLg:
+      'Anyone can make a list. Gratitude is what happens when you let it land — when you receive the day instead of just reviewing it.',
+    cta: 'Next',
+  },
+  {
+    // The mental-health promise, given honestly (§9.3: no invented stats) and
+    // in the order that makes the whole flow land — thanks first, peace as a
+    // byproduct. That ordering is the quietly Christian part, and nobody has
+    // to notice it for it to work.
+    icon: 'moon',
+    label: 'WHAT HAPPENS',
+    h1: "Peace tends to follow, but it's not the point.",
+    accent: "but it's not the point",
+    bodyLg:
+      "People who name what they're thankful for sleep easier and carry less dread. That's real. It's just not why you'd do it — it's what happens when you do.",
     cta: "Let's begin",
   },
 ];
 
-// First claim screen's index in Flow B (step 0 is always Welcome).
-const claimStart = 1;
+// First belief screen's index in Flow B (step 0 is always Welcome).
+const BELIEF_START = 1;
+
+// Shared-step indices, counted from the end of the flow-specific screens.
+const STEP_NAME = 0;
+const STEP_MOMENT = 1;
+const STEP_ENTRY = 2;
+const STEP_CELEBRATION = 3;
+const STEP_ACCOUNT = 4;
 
 // Splits an h1 on its frozen accent phrase and renders that span in
 // accentDeep — ONE word/phrase may carry the color, per §9.
@@ -86,16 +108,14 @@ const renderAccentH1 = (text, accent) => {
   ];
 };
 
-const WHY_OPTIONS = ['Sleep better', 'Less stress', 'Notice the good', 'Just curious'];
-
-const RITUAL_TIMES = [
-  { key: 'morning', icon: 'sunny', label: 'Morning', caption: 'Start the day grounded' },
+const MOMENT_TIMES = [
+  { key: 'morning', icon: 'sunny', label: 'Morning', caption: 'Before the day takes over' },
   { key: 'midday', icon: 'partly-sunny', label: 'Midday', caption: 'A pause in the middle' },
-  { key: 'evening', icon: 'moon', label: 'Evening', caption: 'Wind down and reflect' },
+  { key: 'evening', icon: 'moon', label: 'Evening', caption: 'Before you put the day down' },
 ];
 
 // --- Shared shell: wash background + honeycomb journey map + animated step transitions ---
-const StepShell = ({ step, stage, wash, onBack, children }) => {
+const StepShell = ({ step, stage, wash, onBack, showMap = true, children }) => {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(16)).current;
 
@@ -118,13 +138,42 @@ const StepShell = ({ step, stage, wash, onBack, children }) => {
         ) : (
           <View style={styles.backSpacer} />
         )}
-        <HoneycombJourneyMap stage={stage} />
+        {showMap && <HoneycombJourneyMap stage={stage} />}
       </View>
 
       <Animated.View style={[styles.stepBody, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
         {children}
       </Animated.View>
     </View>
+  );
+};
+
+// The theme has one obvious move: things arriving. Light blooms behind the
+// icon *before* the words land, so the screen performs its own argument —
+// you receive it rather than read it. Reuses the Lock screen's GlowOrb (real
+// radial gradient, no hard circular edge) and collapses to a flat fade under
+// Reduce Motion.
+const ArrivingLight = ({ size = 180 }) => {
+  const reduced = useReducedMotion();
+  const anim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(anim, {
+      toValue: 1,
+      duration: reduced ? DURATIONS.reducedMotionFade : 900,
+      useNativeDriver: true,
+    }).start();
+  }, [reduced]);
+
+  const scale = anim.interpolate({ inputRange: [0, 1], outputRange: [reduced ? 1 : 0.55, 1] });
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[styles.beliefGlow, { opacity: anim, transform: [{ scale }] }]}
+    >
+      <GlowOrb size={size} intensity={0.55} breathe />
+    </Animated.View>
   );
 };
 
@@ -151,47 +200,211 @@ const FlowToggle = ({ flow, onChange }) => (
   </View>
 );
 
-// Demo-mode only: lets Colin jump straight to the logged-in experience
-// without clicking through every step when he just wants to show that
-// side of the app. Sits under the main CTA so "Begin" stays the obvious
-// first choice.
-const WelcomeStep = ({ step, onNext, flow, onChangeFlow, onSkipDemo }) => (
-  <StepShell step={step} stage="welcome" wash={theme.colors.washYellow}>
-    <View style={styles.centerFill}>
-      <Text style={styles.wordmark}>Gratitude</Text>
-      <Text style={styles.h1Center}>A brighter way to end your day.</Text>
-    </View>
-    <FlowToggle flow={flow} onChange={onChangeFlow} />
-    <PrimaryButton onPress={onNext}>Begin</PrimaryButton>
-    <PressableScale onPress={onSkipDemo} style={styles.skipDemoLink}>
-      <Text style={styles.skipDemoText}>Skip to the logged-in view (demo)</Text>
-    </PressableScale>
-  </StepShell>
-);
+// §13.3: the bee flies an inward spiral arc and settles at the wordmark's
+// center once per app open — a flight-path preset on the shared FlyingBee
+// engine, not a second bee. `hasArcedThisLaunch` is a module-level flag
+// (not React state) on purpose: DEMO_MODE's foreground-resume reset
+// (App.js) repeatedly unmounts/remounts this screen back to Welcome, and
+// §13.3 says "fires once per app open, never loops" — a per-component
+// state flag would reset on every one of those remounts and re-fire the
+// arc each time. This flag only resets on a genuine cold launch (new JS
+// context), which is the boundary §13.3 actually means by "app open."
+let hasArcedThisLaunch = false;
 
-// --- Flow B, screens B1–B4: the case for why gratitude matters, one claim ---
-// --- per screen, before the Name ask (GUIDES/GRATITUDE_FLOW_B_COPY.md). ---
-const ClaimStep = ({ step, data, onNext, onBack }) => (
+const WelcomeStep = ({ step, onNext, flow, onChangeFlow, onSkipDemo }) => {
+  const [showArc, setShowArc] = useState(!hasArcedThisLaunch);
+
+  useEffect(() => {
+    if (showArc) hasArcedThisLaunch = true;
+  }, [showArc]);
+
+  return (
+    <StepShell step={step} stage="welcome" wash={theme.colors.washYellow}>
+      <View style={styles.centerFill}>
+        <View style={styles.wordmarkArcAnchor}>
+          <Text style={styles.wordmark}>Gratitude</Text>
+          {showArc && (
+            <FlyingBee
+              preset="loginArc"
+              size={22}
+              style={styles.wordmarkArcBee}
+              onSettle={() => setShowArc(false)}
+            />
+          )}
+        </View>
+        <Text style={styles.h1Center}>Start with what you were given.</Text>
+        <Text style={styles.bodyLgCenter}>One line a day. That's the whole thing.</Text>
+      </View>
+      <FlowToggle flow={flow} onChange={onChangeFlow} />
+      <PrimaryButton onPress={onNext}>Begin</PrimaryButton>
+      <PressableScale onPress={onSkipDemo} style={styles.skipDemoLink}>
+        <Text style={styles.skipDemoText}>Skip to the logged-in view (demo)</Text>
+      </PressableScale>
+    </StepShell>
+  );
+};
+
+// --- Flow B, screens B1–B3: the argument, one beat per screen. Mounted with
+// --- key={step} by the controller so the light + text arrival replays on
+// --- every beat rather than only on first mount. ---
+const BeliefStep = ({ step, data, onNext, onBack }) => (
   <StepShell step={step} stage="why" wash={theme.colors.washYellow} onBack={onBack}>
     <View style={styles.fillBetween}>
       <View style={styles.topContent}>
+        <ArrivingLight />
         <View style={styles.claimIconCircle}>
           <Ionicons name={data.icon} size={22} color={theme.colors.ink} />
         </View>
-        <Text style={styles.claimLabel}>{data.label}</Text>
-        <Text style={styles.h1}>{renderAccentH1(data.h1, data.accent)}</Text>
-        <Text style={styles.bodyLgClaim}>{data.bodyLg}</Text>
+        {/* Indices start at 2 so the words land after the light, not with it. */}
+        <StaggeredItem index={2}>
+          <Text style={styles.claimLabel}>{data.label}</Text>
+        </StaggeredItem>
+        <StaggeredItem index={3}>
+          <Text style={styles.h1}>{renderAccentH1(data.h1, data.accent)}</Text>
+        </StaggeredItem>
+        <StaggeredItem index={4}>
+          <Text style={styles.bodyLgClaim}>{data.bodyLg}</Text>
+        </StaggeredItem>
       </View>
       <PrimaryButton onPress={onNext}>{data.cta}</PrimaryButton>
     </View>
   </StepShell>
 );
 
-// --- Step 2: Sign up — name + email + password, creates the real Supabase
-// --- account right here instead of gating it behind the Honeycomb tab
-// --- (Colin, 2026-08-09). Mirrors HoneycombAuth's create/sign-in toggle so
-// --- returning testers on the same device aren't stuck re-registering.
-const SignUpStep = ({
+// --- Name — just a name. The account ask used to sit here, in front of the
+// --- activation moment; §5 says writing the first entry is the activation
+// --- moment and "everything funnels there," so the signup wall was an
+// --- activation leak. It now runs after the celebration. ---
+const NameStep = ({ step, name, onChangeName, onNext, onBack }) => (
+  <StepShell step={step} stage="you" wash={theme.colors.washYellow} onBack={onBack}>
+    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.fillBetween}>
+      <View style={styles.topContent}>
+        <Text style={styles.h1}>What should we call you?</Text>
+        <Text style={styles.bodySm}>Just so it feels like yours.</Text>
+        <View style={styles.inputCard}>
+          <TextInput
+            style={styles.nameInput}
+            placeholder="Your name"
+            placeholderTextColor={theme.colors.inkSoft}
+            value={name}
+            onChangeText={onChangeName}
+            autoCapitalize="words"
+            returnKeyType="done"
+            onSubmitEditing={name.trim() ? onNext : undefined}
+            autoFocus
+          />
+        </View>
+      </View>
+      <PrimaryButton onPress={onNext} disabled={!name.trim()} style={styles.floatingButton}>
+        Next
+      </PrimaryButton>
+    </KeyboardAvoidingView>
+  </StepShell>
+);
+
+// --- Moment — one clear action, sets the daily check-in ---
+const MomentStep = ({ step, momentTime, onPick, onNext, onBack }) => (
+  <StepShell step={step} stage="ritual" wash={theme.colors.washYellow} onBack={onBack}>
+    <View style={styles.fillBetween}>
+      <View style={styles.topContent}>
+        <Text style={styles.h1}>When will you stop and notice?</Text>
+        <Text style={styles.bodySm}>We'll nudge you once. Gently.</Text>
+        <View style={styles.momentList}>
+          {MOMENT_TIMES.map((option, index) => {
+            const selected = option.key === momentTime;
+            return (
+              <StaggeredItem key={option.key} index={index}>
+                <PressableScale
+                  style={[styles.momentCard, selected && styles.momentCardSelected]}
+                  onPress={() => onPick(option.key)}
+                >
+                  <View style={[styles.iconCircle, selected && styles.iconCircleSelected]}>
+                    <Ionicons name={option.icon} size={22} color={theme.colors.ink} />
+                  </View>
+                  <View style={styles.momentText}>
+                    <Text style={styles.h3}>{option.label}</Text>
+                    <Text style={styles.bodySmMuted}>{option.caption}</Text>
+                  </View>
+                </PressableScale>
+              </StaggeredItem>
+            );
+          })}
+        </View>
+      </View>
+      <PrimaryButton onPress={onNext} disabled={!momentTime}>Next</PrimaryButton>
+    </View>
+  </StepShell>
+);
+
+// --- First entry — the activation moment. Everything funnels here. ---
+// The placeholder carries the whole thesis into the one field that matters
+// most. The Ideas accordion keeps its own approved stem ("I'm grateful
+// for…", GRATITUDE_IDEAS_ACCORDION_COPY.md) — its sparks are written as
+// noun phrases for that stem and don't read grammatically under this one.
+// The two never collide on screen: the placeholder is only visible while
+// the field is empty.
+const FirstEntryStep = ({ step, name, onNext, onBack, onSave }) => {
+  const [text, setText] = useState('');
+  const canSave = !!text.trim();
+
+  const handleSave = () => {
+    if (!canSave) return;
+    onSave(text.trim());
+    onNext();
+  };
+
+  return (
+    <StepShell step={step} stage="entry" wash={theme.colors.washPeach} onBack={onBack}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.fillBetween}>
+        <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+          <Text style={styles.h1}>
+            {name.trim() ? `${name.trim()}, what showed up for you today?` : 'What showed up for you today?'}
+          </Text>
+          <View style={styles.inputCard}>
+            <TextInput
+              style={styles.entryInput}
+              placeholder="Today I was given…"
+              placeholderTextColor={theme.colors.inkSoft}
+              multiline
+              value={text}
+              onChangeText={setText}
+              autoFocus
+            />
+          </View>
+          <IdeasAccordion onPick={(spark) => setText(`I'm grateful for ${spark}.`)} />
+        </ScrollView>
+        <PrimaryButton onPress={handleSave} disabled={!canSave} style={styles.floatingButton}>
+          Save
+        </PrimaryButton>
+      </KeyboardAvoidingView>
+    </StepShell>
+  );
+};
+
+// --- Celebration — always the first-ever-save treatment (the entry step's
+// --- save IS the first-ever save), never the bare badge. "given" closes the
+// --- loop back to the Welcome line. ---
+const CelebrationStep = ({ step, onNext }) => (
+  <StepShell step={step} stage="done" wash={theme.colors.washPeach}>
+    <View style={styles.centerFill}>
+      <View style={styles.badgeStage}>
+        <CelebrationRays />
+        <CelebrationBadge />
+      </View>
+      <Text style={styles.h1Center}>That's one.</Text>
+      <Text style={styles.bodyLgCenter}>
+        Tomorrow it's two. Do that for a while and you'll have a record of everything you were given.
+      </Text>
+    </View>
+    <PrimaryButton onPress={onNext}>Keep it</PrimaryButton>
+  </StepShell>
+);
+
+// --- Account — the ask, now after the payoff instead of in front of it.
+// --- Mirrors HoneycombAuth's create/sign-in toggle so returning testers on
+// --- the same device aren't stuck re-registering. "Not yet" is a real exit:
+// --- entries already live locally, so nobody is held hostage for them. ---
+const AccountStep = ({
   step,
   name,
   email,
@@ -200,7 +413,7 @@ const SignUpStep = ({
   onChangeEmail,
   onChangePassword,
   onNext,
-  onBack,
+  onSkip,
   initialMode = 'signup',
 }) => {
   const [mode, setMode] = useState(initialMode);
@@ -251,7 +464,7 @@ const SignUpStep = ({
 
   if (confirmSent) {
     return (
-      <StepShell step={step} stage="you" wash={theme.colors.washYellow} onBack={onBack}>
+      <StepShell step={step} stage="done" wash={theme.colors.washPeach} showMap={false}>
         <View style={styles.centerFill}>
           <Text style={styles.h1Center}>Check your email</Text>
           <Text style={styles.bodyLgCenter}>
@@ -265,12 +478,14 @@ const SignUpStep = ({
   }
 
   return (
-    <StepShell step={step} stage="you" wash={theme.colors.washYellow} onBack={onBack}>
+    <StepShell step={step} stage="done" wash={theme.colors.washPeach} showMap={false}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.fillBetween}>
         <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-          <Text style={styles.h1}>{isSignUp ? 'Create your account' : 'Welcome back'}</Text>
+          <Text style={styles.h1}>{isSignUp ? 'Keep it.' : 'Welcome back'}</Text>
           <Text style={styles.bodySm}>
-            {isSignUp ? "So your hive knows who's sharing." : 'Sign in to pick up where you left off.'}
+            {isSignUp
+              ? 'Make an account so your entries follow you — and so your hive can see the ones you choose to share.'
+              : 'Sign in to pick up where you left off.'}
           </Text>
           <View style={styles.inputCard}>
             {isSignUp && (
@@ -319,127 +534,16 @@ const SignUpStep = ({
         <PrimaryButton onPress={handleSubmit} disabled={!canSubmit} style={styles.floatingButton}>
           {busy ? (isSignUp ? 'Creating account…' : 'Signing in…') : isSignUp ? 'Create account' : 'Sign in'}
         </PrimaryButton>
+        <PressableScale onPress={onSkip} style={styles.skipDemoLink} haptic={null}>
+          <Text style={styles.notYetText}>Not yet</Text>
+        </PressableScale>
       </KeyboardAvoidingView>
     </StepShell>
   );
 };
 
-// --- Step 3: Why — one-tap chips, personalizes the activation screen's copy ---
-const WhyStep = ({ step, why, onPick, onNext, onBack }) => (
-  <StepShell step={step} stage="why" wash={theme.colors.washYellow} onBack={onBack}>
-    <View style={styles.fillBetween}>
-      <View style={styles.topContent}>
-        <Text style={styles.h1}>What brought you here?</Text>
-        <Text style={styles.bodySm}>This just helps us get to know you.</Text>
-        <View style={styles.chipGrid}>
-          {WHY_OPTIONS.map((option, index) => {
-            const selected = option === why;
-            return (
-              <StaggeredItem key={option} index={index}>
-                <PressableScale style={[styles.chip, selected && styles.chipSelected]} onPress={() => onPick(option)}>
-                  <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{option}</Text>
-                </PressableScale>
-              </StaggeredItem>
-            );
-          })}
-        </View>
-      </View>
-      <PrimaryButton onPress={onNext} disabled={!why}>Next</PrimaryButton>
-    </View>
-  </StepShell>
-);
-
-// --- Step 4: Ritual time — one clear action, sets the daily check-in ---
-const RitualTimeStep = ({ step, ritualTime, onPick, onNext, onBack }) => (
-  <StepShell step={step} stage="ritual" wash={theme.colors.washYellow} onBack={onBack}>
-    <View style={styles.fillBetween}>
-      <View style={styles.topContent}>
-        <Text style={styles.h1}>When's your moment?</Text>
-        <Text style={styles.bodySm}>We'll check in once a day, gently.</Text>
-        <View style={styles.ritualList}>
-          {RITUAL_TIMES.map((option, index) => {
-            const selected = option.key === ritualTime;
-            return (
-              <StaggeredItem key={option.key} index={index}>
-                <PressableScale
-                  style={[styles.ritualCard, selected && styles.ritualCardSelected]}
-                  onPress={() => onPick(option.key)}
-                >
-                  <View style={[styles.iconCircle, selected && styles.iconCircleSelected]}>
-                    <Ionicons name={option.icon} size={22} color={theme.colors.ink} />
-                  </View>
-                  <View style={styles.ritualText}>
-                    <Text style={styles.h3}>{option.label}</Text>
-                    <Text style={styles.bodySmMuted}>{option.caption}</Text>
-                  </View>
-                </PressableScale>
-              </StaggeredItem>
-            );
-          })}
-        </View>
-      </View>
-      <PrimaryButton onPress={onNext} disabled={!ritualTime}>Next</PrimaryButton>
-    </View>
-  </StepShell>
-);
-
-// --- Step 5: First entry — the activation moment. Everything funnels here. ---
-const FirstEntryStep = ({ step, name, onNext, onBack, onSave }) => {
-  const [text, setText] = useState('');
-  const canSave = !!text.trim();
-
-  const handleSave = () => {
-    if (!canSave) return;
-    onSave(text.trim());
-    onNext();
-  };
-
-  return (
-    <StepShell step={step} stage="entry" wash={theme.colors.washPeach} onBack={onBack}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.fillBetween}>
-        <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-          <Text style={styles.h1}>
-            {name.trim() ? `${name.trim()}, what's one good thing from today?` : "What's one good thing from today?"}
-          </Text>
-          <View style={styles.inputCard}>
-            <TextInput
-              style={styles.entryInput}
-              placeholder="I'm grateful for..."
-              placeholderTextColor={theme.colors.inkSoft}
-              multiline
-              value={text}
-              onChangeText={setText}
-              autoFocus
-            />
-          </View>
-          <IdeasAccordion onPick={(spark) => setText(`I'm grateful for ${spark}.`)} />
-        </ScrollView>
-        <PrimaryButton onPress={handleSave} disabled={!canSave} style={styles.floatingButton}>
-          Save
-        </PrimaryButton>
-      </KeyboardAvoidingView>
-    </StepShell>
-  );
-};
-
-// --- Step 6: Celebration — always the first-ever-save treatment (screen 5's ---
-// --- save IS the first-ever save), never the bare badge. ---
-const CelebrationStep = ({ step, name, onDone }) => (
-  <StepShell step={step} stage="done" wash={theme.colors.washPeach}>
-    <View style={styles.centerFill}>
-      <View style={styles.badgeStage}>
-        <CelebrationRays />
-        <CelebrationBadge />
-      </View>
-      <Text style={styles.h1Center}>That's your first entry{name.trim() ? `, ${name.trim()}` : ''}.</Text>
-      <Text style={styles.bodyLgCenter}>Come back tomorrow — this is how it starts to add up.</Text>
-    </View>
-    <PrimaryButton onPress={onDone}>See my Today</PrimaryButton>
-  </StepShell>
-);
-
-// --- Controller: owns the answers, drives Flow A (6 steps) or Flow B (10 —
-// --- adds the four claim screens before Name). Flow read once from the
+// --- Controller: owns the answers, drives Flow A (5 steps) or Flow B (8 —
+// --- adds the three belief screens before Name). Flow read once from the
 // --- hidden dev toggle (DevSettings); Welcome is shared so there's no
 // --- flicker if it resolves a beat after mount. ---
 export const OnboardingFlow = ({ onDone, initialFlow = 'B', startAt }) => {
@@ -449,8 +553,19 @@ export const OnboardingFlow = ({ onDone, initialFlow = 'B', startAt }) => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [why, setWhy] = useState(null);
-  const [ritualTime, setRitualTime] = useState(null);
+  const [momentTime, setMomentTime] = useState(null);
+
+  // App.js's onDone is `navigation.replace('Main')`, which must not run
+  // twice — the account step can reach it both by its own onNext and by the
+  // already-signed-in effect below firing on the same session change.
+  const finishedRef = useRef(false);
+  const finish = () => {
+    if (finishedRef.current) return;
+    finishedRef.current = true;
+    onDone();
+  };
+
+  const sharedOffset = flow === 'B' ? BELIEF_START + BELIEF_SCREENS.length : BELIEF_START;
 
   // Honeycomb's empty state ("Finish signup" / "Sign in") lands here instead
   // of a second auth form on the tab — jump straight to the account step at
@@ -459,8 +574,8 @@ export const OnboardingFlow = ({ onDone, initialFlow = 'B', startAt }) => {
     DevSettings.getOnboardingFlow().then((resolvedFlow) => {
       setFlow(resolvedFlow);
       if (startAt === 'signup' || startAt === 'signin') {
-        const offset = resolvedFlow === 'B' ? claimStart + CLAIM_SCREENS.length : claimStart;
-        setStep(offset);
+        const offset = resolvedFlow === 'B' ? BELIEF_START + BELIEF_SCREENS.length : BELIEF_START;
+        setStep(offset + STEP_ACCOUNT);
       }
     });
   }, []);
@@ -477,21 +592,21 @@ export const OnboardingFlow = ({ onDone, initialFlow = 'B', startAt }) => {
     EntryStore.saveEntry(new Date(), text, tagEntry(text));
   };
 
-  const isClaimStep = flow === 'B' && step >= claimStart && step < claimStart + CLAIM_SCREENS.length;
-  // Bee leads transitions BETWEEN claims only (B1→B2→B3→B4) — 3 flights,
-  // never on the Welcome→B1 or B4→Name boundary (§4 scarcity).
-  const beeKey = isClaimStep && step > claimStart ? step : null;
+  const isBeliefStep = flow === 'B' && step >= BELIEF_START && step < BELIEF_START + BELIEF_SCREENS.length;
+  // Bee leads transitions BETWEEN belief beats only (B1→B2→B3) — 2 flights,
+  // never on the Welcome→B1 or B3→Name boundary (§4 scarcity).
+  const beeKey = isBeliefStep && step > BELIEF_START ? step : null;
 
-  const sharedOffset = flow === 'B' ? claimStart + CLAIM_SCREENS.length : claimStart;
+  const sharedStep = step - sharedOffset;
 
   // Demo mode resets to onboarding on every foreground resume — if this
-  // device already has a real session (signed up on a previous pass),
-  // don't make them create an account again. Skip straight past the step.
+  // device already has a real session (signed up on a previous pass), the
+  // account step has nothing left to ask for. Straight into the app.
   useEffect(() => {
-    if (session && step === sharedOffset) {
-      next();
+    if (session && !isBeliefStep && sharedStep === STEP_ACCOUNT) {
+      finish();
     }
-  }, [session, step, sharedOffset]);
+  }, [session, isBeliefStep, sharedStep]);
 
   let body;
   if (step === 0) {
@@ -501,26 +616,50 @@ export const OnboardingFlow = ({ onDone, initialFlow = 'B', startAt }) => {
         onNext={next}
         flow={flow}
         onChangeFlow={handleChangeFlow}
-        onSkipDemo={onDone}
+        onSkipDemo={finish}
       />
     );
-  } else if (isClaimStep) {
+  } else if (isBeliefStep) {
     body = (
-      <ClaimStep
+      <BeliefStep
+        key={step}
         step={step}
-        data={CLAIM_SCREENS[step - claimStart]}
+        data={BELIEF_SCREENS[step - BELIEF_START]}
         onNext={next}
         onBack={back}
       />
     );
   } else {
-    const sharedStep = step - sharedOffset; // 0=Name, 1=Why, 2=Ritual, 3=FirstEntry, 4+=Celebration
     switch (sharedStep) {
-      case 0:
-        // Already signed in (demo-mode resume) — the effect above skips
-        // this step; render nothing rather than flash the sign-up form.
+      case STEP_NAME:
+        body = (
+          <NameStep step={step} name={name} onChangeName={setName} onNext={next} onBack={back} />
+        );
+        break;
+      case STEP_MOMENT:
+        body = (
+          <MomentStep
+            step={step}
+            momentTime={momentTime}
+            onPick={setMomentTime}
+            onNext={next}
+            onBack={back}
+          />
+        );
+        break;
+      case STEP_ENTRY:
+        body = (
+          <FirstEntryStep step={step} name={name} onNext={next} onBack={back} onSave={handleSaveEntry} />
+        );
+        break;
+      case STEP_CELEBRATION:
+        body = <CelebrationStep step={step} onNext={next} />;
+        break;
+      default:
+        // Already signed in (demo-mode resume) — the effect above finishes
+        // the flow; render nothing rather than flash the account form.
         body = session ? null : (
-          <SignUpStep
+          <AccountStep
             step={step}
             name={name}
             email={email}
@@ -528,33 +667,11 @@ export const OnboardingFlow = ({ onDone, initialFlow = 'B', startAt }) => {
             onChangeName={setName}
             onChangeEmail={setEmail}
             onChangePassword={setPassword}
-            onNext={next}
-            onBack={back}
+            onNext={finish}
+            onSkip={finish}
             initialMode={startAt === 'signin' ? 'signin' : 'signup'}
           />
         );
-        break;
-      case 1:
-        body = <WhyStep step={step} why={why} onPick={setWhy} onNext={next} onBack={back} />;
-        break;
-      case 2:
-        body = (
-          <RitualTimeStep
-            step={step}
-            ritualTime={ritualTime}
-            onPick={setRitualTime}
-            onNext={next}
-            onBack={back}
-          />
-        );
-        break;
-      case 3:
-        body = (
-          <FirstEntryStep step={step} name={name} onNext={next} onBack={back} onSave={handleSaveEntry} />
-        );
-        break;
-      default:
-        body = <CelebrationStep step={step} name={name} onDone={onDone} />;
     }
   }
 
@@ -585,6 +702,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 16,
     ...theme.shadows.card,
+  },
+  // Centered on the 44pt icon circle that opens `topContent` (circle center
+  // sits at 22,22 in that box, so a 180pt orb offsets by 22 - 90 = -68 on
+  // both axes). Absolute + pointerEvents none: it never affects layout, and
+  // the spill past the screen edge is intentional — light falling in, not a
+  // shape sitting on the wash.
+  beliefGlow: {
+    position: 'absolute',
+    left: -68,
+    top: -68,
+    width: 180,
+    height: 180,
   },
   claimLabel: {
     ...theme.type.label,
@@ -625,6 +754,21 @@ const styles = StyleSheet.create({
     ...theme.type.logo,
     color: theme.colors.ink,
     marginBottom: 24,
+  },
+  // §13.3 anchor for the login bee arc — sized to roughly the wordmark's
+  // footprint so the bee's fractional (0-1) flight path resolves against
+  // the mark itself rather than the whole screen.
+  wordmarkArcAnchor: {
+    width: 220,
+    height: 100,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  wordmarkArcBee: {
+    // FlyingBee's `fill` style is absoluteFillObject by default — override
+    // just enough here that "fill" means "fill the anchor," not the
+    // Welcome screen's centerFill parent.
+    position: 'absolute',
   },
   h1: {
     ...theme.type.h1,
@@ -695,37 +839,11 @@ const styles = StyleSheet.create({
     minHeight: 120,
     textAlignVertical: 'top',
   },
-  chipGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    marginTop: 8,
-  },
-  chip: {
-    backgroundColor: theme.colors.surface,
-    borderWidth: 1,
-    borderColor: theme.colors.surfaceBorder,
-    borderRadius: theme.borderRadius.full,
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-  },
-  chipSelected: {
-    backgroundColor: theme.colors.washYellow,
-    borderColor: theme.colors.accent,
-  },
-  chipText: {
-    fontFamily: theme.fonts.bodyMedium,
-    fontSize: 15,
-    color: theme.colors.ink,
-  },
-  chipTextSelected: {
-    fontFamily: theme.fonts.bodySemiBold,
-  },
-  ritualList: {
+  momentList: {
     gap: 12,
     marginTop: 16,
   },
-  ritualCard: {
+  momentCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 16,
@@ -736,7 +854,7 @@ const styles = StyleSheet.create({
     padding: 16,
     ...theme.shadows.card,
   },
-  ritualCardSelected: {
+  momentCardSelected: {
     borderColor: theme.colors.accent,
     borderWidth: 2,
   },
@@ -751,7 +869,7 @@ const styles = StyleSheet.create({
   iconCircleSelected: {
     backgroundColor: theme.colors.accent,
   },
-  ritualText: {
+  momentText: {
     gap: 2,
   },
   badgeStage: {
@@ -799,5 +917,9 @@ const styles = StyleSheet.create({
     ...theme.type.bodySm,
     color: theme.colors.inkSoft,
     textDecorationLine: 'underline',
+  },
+  notYetText: {
+    ...theme.type.bodySm,
+    color: theme.colors.inkSoft,
   },
 });
