@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { StyleSheet, View, Animated } from 'react-native';
 import { theme } from '../constants/theme';
+import { DURATIONS, useReducedMotion } from '../constants/motion';
 
 const RAY_COUNT = 18;
 const PARTICLE_COUNT = 7;
@@ -13,16 +14,44 @@ const PARTICLE_DISTANCE = 60;
 // is what scales the moment instead. Anchors at the center of a 96pt box —
 // pair with a `width: 96, height: 96` wrapper around CelebrationBadge (its
 // one fixed size, per spec).
-export const CelebrationRays = () => (
-  <View style={styles.anchor} pointerEvents="none">
-    {Array.from({ length: RAY_COUNT }).map((_, i) => (
-      <Ray key={i} index={i} angle={(360 / RAY_COUNT) * i} />
-    ))}
-    {Array.from({ length: PARTICLE_COUNT }).map((_, i) => (
-      <Particle key={i} index={i} angle={(360 / PARTICLE_COUNT) * i + 12} />
-    ))}
-  </View>
-);
+export const CelebrationRays = () => {
+  const reduced = useReducedMotion();
+
+  // §14.1 Rule 4 / §14.2 "burst → single soft glow": under Reduce Motion
+  // the 18 spring rays + 7 scattering particles collapse to one soft glow
+  // that fades in and out — same substitute StreakHexTrail's final hex
+  // uses, so every burst call site degrades identically.
+  if (reduced) {
+    return (
+      <View style={styles.anchor} pointerEvents="none">
+        <SoftGlow />
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.anchor} pointerEvents="none">
+      {Array.from({ length: RAY_COUNT }).map((_, i) => (
+        <Ray key={i} index={i} angle={(360 / RAY_COUNT) * i} />
+      ))}
+      {Array.from({ length: PARTICLE_COUNT }).map((_, i) => (
+        <Particle key={i} index={i} angle={(360 / PARTICLE_COUNT) * i + 12} />
+      ))}
+    </View>
+  );
+};
+
+const SoftGlow = () => {
+  const progress = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(progress, { toValue: 1, duration: DURATIONS.reducedMotionFade, useNativeDriver: true }).start();
+  }, []);
+
+  const opacity = progress.interpolate({ inputRange: [0, 0.3, 1], outputRange: [0, 0.6, 0] });
+
+  return <Animated.View style={[styles.softGlow, { opacity }]} />;
+};
 
 const Ray = ({ index, angle }) => {
   const progress = useRef(new Animated.Value(0)).current;
@@ -102,6 +131,17 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
+    backgroundColor: theme.colors.accentBurst,
+  },
+  // Sized to haze just past the 96pt badge it stages, centered on the
+  // same zero-size anchor the rays use.
+  softGlow: {
+    position: 'absolute',
+    left: -60,
+    top: -60,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
     backgroundColor: theme.colors.accentBurst,
   },
 });
