@@ -14,8 +14,12 @@ export const PressableScale = ({
   disabled,
   // §17.7 scope note (R36): RN's Pressable is `accessible: true` by
   // default, so every one of these is already a VoiceOver stop — it just
-  // announces nothing. Optional passthrough so a caller can name the stop
-  // it creates; additive, so no existing consumer changes behaviour.
+  // announces nothing useful. `accessibilityLabel` is a pure passthrough so
+  // a caller can name the stop it creates. `accessibilityRole` is NOT
+  // additive: defaulting it to 'button' changes what all 9 consumer files
+  // announce, from bare content to "<content>, button". That is the
+  // intended change — every consumer is a press target and should say so —
+  // but it is a behaviour change at every call site, not an opt-in.
   accessibilityLabel,
   accessibilityRole = 'button',
 }) => {
