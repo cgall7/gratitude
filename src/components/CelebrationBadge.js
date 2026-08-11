@@ -26,6 +26,10 @@ export const CelebrationBadge = () => {
       hapticFiredRef.current = true;
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     });
+    // R18: when the async hook value lands and re-runs this effect, the
+    // first animation must actually stop — otherwise a Reduce Motion user
+    // gets the spring overshoot on a fade specified as flat.
+    return () => reveal.stopAnimation();
   }, [reduced]);
 
   return (

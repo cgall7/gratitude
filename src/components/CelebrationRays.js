@@ -11,9 +11,9 @@ const PARTICLE_DISTANCE = 60;
 // First-ever-save treatment only (Sunbeam §4, upgraded §11.3): staggered
 // accentBurst rays + scattering particle dots behind the CelebrationBadge,
 // full-bleed washPeach staging. The badge itself never changes size — this
-// is what scales the moment instead. Anchors at the center of a 96pt box —
-// pair with a `width: 96, height: 96` wrapper around CelebrationBadge (its
-// one fixed size, per spec).
+// is what scales the moment instead. Self-centering (R18): the stage fills
+// whatever box it is rendered into and the burst anchors at that box's
+// center, so no wrapper-size contract exists to violate.
 export const CelebrationRays = () => {
   const reduced = useReducedMotion();
 
@@ -21,22 +21,22 @@ export const CelebrationRays = () => {
   // the 18 spring rays + 7 scattering particles collapse to one soft glow
   // that fades in and out — same substitute StreakHexTrail's final hex
   // uses, so every burst call site degrades identically.
-  if (reduced) {
-    return (
-      <View style={styles.anchor} pointerEvents="none">
-        <SoftGlow />
-      </View>
-    );
-  }
-
   return (
-    <View style={styles.anchor} pointerEvents="none">
-      {Array.from({ length: RAY_COUNT }).map((_, i) => (
-        <Ray key={i} index={i} angle={(360 / RAY_COUNT) * i} />
-      ))}
-      {Array.from({ length: PARTICLE_COUNT }).map((_, i) => (
-        <Particle key={i} index={i} angle={(360 / PARTICLE_COUNT) * i + 12} />
-      ))}
+    <View style={styles.stage} pointerEvents="none">
+      <View style={styles.anchor}>
+        {reduced ? (
+          <SoftGlow />
+        ) : (
+          <>
+            {Array.from({ length: RAY_COUNT }).map((_, i) => (
+              <Ray key={i} index={i} angle={(360 / RAY_COUNT) * i} />
+            ))}
+            {Array.from({ length: PARTICLE_COUNT }).map((_, i) => (
+              <Particle key={i} index={i} angle={(360 / PARTICLE_COUNT) * i + 12} />
+            ))}
+          </>
+        )}
+      </View>
     </View>
   );
 };
@@ -106,10 +106,15 @@ const Particle = ({ index, angle }) => {
 };
 
 const styles = StyleSheet.create({
+  // Fill the parent and center the zero-size anchor inside it — the fixed
+  // (48, 48) offset this replaces was only correct inside a 96pt box, a
+  // contract SealCrack violated within a day of it existing (R17 §1).
+  stage: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   anchor: {
-    position: 'absolute',
-    top: 48,
-    left: 48,
     width: 0,
     height: 0,
     alignItems: 'center',
