@@ -59,9 +59,12 @@ const Hex = ({ delay, isLast, reduced, onIgnite }) => {
     return () => clearTimeout(t);
   }, [delay, isLast, reduced]);
 
-  const scale = progress.interpolate({ inputRange: [0, 1], outputRange: [0.3, 1] });
+  // Reduced motion pins scale flat (opacity-only fade) — same Rule 4
+  // reading HoneyDropProgress already uses, so a hex/glow never zooms
+  // even though the underlying Animated.Value still ramps 0->1.
+  const scale = reduced ? 1 : progress.interpolate({ inputRange: [0, 1], outputRange: [0.3, 1] });
   const glowOpacity = glow.interpolate({ inputRange: [0, 0.3, 1], outputRange: [0, 0.6, 0] });
-  const glowScale = glow.interpolate({ inputRange: [0, 1], outputRange: [0.5, 2] });
+  const glowScale = reduced ? 1 : glow.interpolate({ inputRange: [0, 1], outputRange: [0.5, 2] });
 
   return (
     <View style={styles.hexWrap}>
