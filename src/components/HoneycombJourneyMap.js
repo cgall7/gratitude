@@ -24,8 +24,17 @@ const hexPoints = (size) => {
 
 const HEX_POINTS = hexPoints(CELL_SIZE);
 
-const JourneyCell = ({ status }) => {
-  const reduced = useReducedMotion();
+// `reduced` arrives as a prop rather than from the hook here, matching
+// HoneycombGrid's HexCell and StreakHexTrail's Hex — the codebase's other two
+// honeycomb-cell components both already subscribe once in the parent and pass
+// the value down. This was the only one still subscribing per cell. The hook
+// costs an async AccessibilityInfo read plus a native `reduceMotionChanged`
+// listener per call, and every step of onboarding remounts this whole subtree
+// (OnboardingFlow swaps a different step component in at the same tree
+// position, so React unmounts rather than updates), so six cells meant six
+// bridge reads and six listener registrations per step to serve the one cell
+// that reads the value.
+const JourneyCell = ({ status, reduced }) => {
   const pulse = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -84,6 +93,7 @@ const JourneyCell = ({ status }) => {
 // accessibilityLabel carries the six stage words for screen readers.
 export const HoneycombJourneyMap = ({ stage }) => {
   const currentIndex = Math.max(0, STAGE_ORDER.indexOf(stage));
+  const reduced = useReducedMotion();
 
   return (
     <View
@@ -97,6 +107,7 @@ export const HoneycombJourneyMap = ({ stage }) => {
         <JourneyCell
           key={key}
           status={index < currentIndex ? 'completed' : index === currentIndex ? 'current' : 'upcoming'}
+          reduced={reduced}
         />
       ))}
     </View>
