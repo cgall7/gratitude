@@ -44,6 +44,33 @@ const axialToPixel = (q, r, size) => ({
   y: size * (Math.sqrt(3) / 2 * q + Math.sqrt(3) * r),
 });
 
+// Inverse of axialToPixel (flat-top), pre-round — see Red Blob Games'
+// pixel_to_hex. Used by the single hit-test overlay below instead of
+// per-cell Pressables, which is what R25/R34 replaced.
+const pixelToAxialRaw = (x, y, size) => ({
+  q: ((2 / 3) * x) / size,
+  r: ((-1 / 3) * x + (Math.sqrt(3) / 3) * y) / size,
+});
+
+// Cube rounding: nearest-hex-center is exact for a tessellation (the
+// Voronoi region of a hex center is the hexagon itself), so this is the
+// correct hit-test, not an approximation.
+const axialRound = (q, r) => {
+  const x = q;
+  const z = r;
+  const y = -x - z;
+  let rx = Math.round(x);
+  let ry = Math.round(y);
+  let rz = Math.round(z);
+  const xDiff = Math.abs(rx - x);
+  const yDiff = Math.abs(ry - y);
+  const zDiff = Math.abs(rz - z);
+  if (xDiff > yDiff && xDiff > zDiff) rx = -ry - rz;
+  else if (yDiff > zDiff) ry = -rx - rz;
+  else rz = -rx - ry;
+  return { q: rx, r: rz };
+};
+
 const hexPoints = (size) => {
   const pts = [];
   for (let i = 0; i < 6; i += 1) {
@@ -53,7 +80,7 @@ const hexPoints = (size) => {
   return pts.join(' ');
 };
 
-const HexCell = ({ member, size, x, y, delay, onPress, selected, reduced }) => {
+const HexCell = ({ member, size, x, y, delay, selected, reduced }) => {
   const progress = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -85,7 +112,7 @@ const HexCell = ({ member, size, x, y, delay, onPress, selected, reduced }) => {
         },
       ]}
     >
-      <Pressable onPress={() => onPress(member)} hitSlop={4}>
+      <View>
         <Svg width={size * 2} height={size * 2}>
           <Polygon
             points={points}
@@ -98,7 +125,7 @@ const HexCell = ({ member, size, x, y, delay, onPress, selected, reduced }) => {
         <View style={styles.avatarOverlay} pointerEvents="none">
           <Avatar name={member.name} avatarUrl={member.avatarUrl} size={size * 1.05} />
         </View>
-      </Pressable>
+      </View>
     </Animated.View>
   );
 };
@@ -131,13 +158,27 @@ export const HoneycombGrid = ({ members, cellSize = 34 }) => {
     const maxY = Math.max(...positions.map((p) => p.y));
     const width = maxX - minX + cellSize * 2;
     const height = maxY - minY + cellSize * 2;
-    const cells = members.map((member, index) => ({
-      member,
-      x: positions[index].x - minX,
-      y: positions[index].y - minY,
-      delay: index * STAGGER_MS,
-    }));
-    return { cells, width, height };
+    const byAxial = new Map();
+    const cells = members.map((member, index) => {
+      const axial = spiral[index];
+      byAxial.set(`${axial.q},${axial.r}`, member);
+      return {
+        member,
+        x: positions[index].x - minX,
+        y: positions[index].y - minY,
+        delay: index * STAGGER_MS,
+      };
+    });
+    // Single hit-test for the whole cluster (R25/R34): a tap lands on the
+    // hexagon whose center it's nearest to, not on whichever cell's box
+    // happened to paint last. Cell centers sit at (x + cellSize, y + cellSize)
+    // in this same cluster space, so undo that offset before inverting.
+    const hitTest = (tapX, tapY) => {
+      const raw = pixelToAxialRaw(tapX + minX - cellSize, tapY + minY - cellSize, cellSize);
+      const { q, r } = axialRound(raw.q, raw.r);
+      return byAxial.get(`${q},${r}`) ?? null;
+    };
+    return { cells, width, height, hitTest };
   }, [members, cellSize]);
 
   const handlePress = (member) => {
@@ -176,11 +217,18 @@ export const HoneycombGrid = ({ members, cellSize = 34 }) => {
               x={x}
               y={y}
               delay={delay}
-              onPress={handlePress}
               selected={selected?.id === member.id}
               reduced={reduced}
             />
           ))}
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={(e) => {
+              const { locationX, locationY } = e.nativeEvent;
+              const member = layout.hitTest(locationX, locationY);
+              if (member) handlePress(member);
+            }}
+          />
         </Animated.View>
       </View>
 
