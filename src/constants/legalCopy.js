@@ -17,6 +17,30 @@
 // Both are dead schema. If either is ever wired up, this file changes in the
 // same commit — a privacy policy that lags the code is the failure mode here.
 //
+// TRIPWIRE — features on the roadmap that each falsify a specific sentence
+// below. Landing any of these without editing this file ships a false statement
+// in a legal document:
+//
+//   * An avatar image picker falsifies "never requests access to your ... camera
+//     roll" in `What we collect`, and turns the dead `avatars` bucket real.
+//   * Contact-based discovery falsifies "we do not ask for your phone number"
+//     in the same paragraph, and turns `profiles.phone_hash` real.
+//   * Flow C app-locking adds a data category this policy has no section for.
+//     It needs new copy, NOT a pre-written sentence — see below.
+//
+// On Flow C specifically, because the obvious reassuring line is not safely
+// writable yet: iOS FamilyControls hands back opaque `ApplicationToken`s that
+// cannot be de-referenced to app names, so "we can see that you locked apps, we
+// cannot see which ones" would be true there. Android has no equivalent —
+// UsageStatsManager and AccessibilityService both expose package names in the
+// clear. And `services/NativeLockInterface.ts` currently specifies
+// `setBlockedApps(appIds: string[])` with bundle IDs as plain strings on BOTH
+// platforms, which would make that sentence false on iOS too. Today the module
+// is an unimplemented stub with zero callers, so the app collects nothing here
+// and silence is correct. What this policy can honestly say is decided by which
+// shape that module actually takes — write the copy when it has a caller, from
+// the code, the same way the rest of this file was written.
+//
 // NOT LEGAL ADVICE and not lawyer-reviewed. This is honest, specific,
 // user-readable copy that describes real behaviour; it still wants a lawyer's
 // pass before launch, particularly the liability and governing-law terms.
@@ -27,39 +51,62 @@
 // `agreedToTerms`, which must not require agreement to an unpublished document.
 
 // --- The four things that must be filled before publishing ------------------
-// Set each to a real value. This object is the only place to edit; everything
-// below derives from it.
-const FILL = {
-  LEGAL_ENTITY: null, // 'Gratitude', or the registered company name
-  CONTACT_EMAIL: null, // privacy requests + deletion + content removal
-  HOSTING_REGION: null, // Supabase region for project vrpwodqtksjvirdvrqkv
-  EFFECTIVE_DATE: null, // e.g. '11 August 2026'
-};
-
+// One entry per value: what to set, and what a reader sees until it is set.
 // The Legal screen is allowed to ship before this copy is final, so an unfilled
-// value has to read as a sentence rather than as developer debris — a user who
+// value has to read as a sentence rather than as developer debris — someone who
 // opens the page early should see an honest gap, not the word TODO.
-const PLACEHOLDER_TEXT = {
-  LEGAL_ENTITY: '[the publisher of this app — to be named before launch]',
-  CONTACT_EMAIL: '[our contact address — to be published before launch]',
-  HOSTING_REGION: '[a region we will name here before launch]',
-  EFFECTIVE_DATE: 'Draft — not yet published',
+//
+// Value and placeholder live in the SAME entry, and the copy and the publish
+// gate below read them through the SAME predicate, on purpose. The first cut of
+// this file kept two objects and two tests — `??` (null or undefined) for the
+// copy, `!== null` for the gate — and they disagreed. `undefined`, `''` and
+// '   ' all rendered as an unfilled placeholder while flipping the gate to
+// ready, which is the one outcome this whole mechanism exists to prevent:
+// forcing someone to tick "I agree" against a document that still says
+// "[the publisher of this app]". A derived flag is only as good as the
+// predicate it derives through. (Caught by Sage.)
+const FILL = {
+  LEGAL_ENTITY: {
+    value: null, // 'Gratitude', or the registered company name
+    placeholder: '[the publisher of this app — to be named before launch]',
+  },
+  CONTACT_EMAIL: {
+    value: null, // privacy requests + deletion + content removal
+    placeholder: '[our contact address — to be published before launch]',
+  },
+  HOSTING_REGION: {
+    value: null, // Supabase region for project vrpwodqtksjvirdvrqkv
+    placeholder: '[a region we will name here before launch]',
+  },
+  EFFECTIVE_DATE: {
+    value: null, // e.g. '11 August 2026'
+    placeholder: 'Draft — not yet published',
+  },
 };
 
-const filled = (key) => FILL[key] ?? PLACEHOLDER_TEXT[key];
+// The only definition of "published" in this file. Anything that is not a
+// non-empty string is unpublished: null, undefined, '', '   '.
+const isPublished = (value) => typeof value === 'string' && value.trim() !== '';
+
+const filled = (key) => {
+  const entry = FILL[key];
+  // A key with no FILL entry would otherwise interpolate `undefined` into a
+  // legal document. Fail loudly instead. Every call site is a literal in this
+  // file, so this can only fire the first time a developer runs a typo.
+  if (!entry) throw new Error(`legalCopy: no FILL entry for "${key}"`);
+  return isPublished(entry.value) ? entry.value : entry.placeholder;
+};
 
 const LEGAL_ENTITY = filled('LEGAL_ENTITY');
 const CONTACT_EMAIL = filled('CONTACT_EMAIL');
 const HOSTING_REGION = filled('HOSTING_REGION');
 
-export const LEGAL_PLACEHOLDERS = FILL;
-
-// True only once every value above is set. Gate the signup consent checkbox on
-// this: requiring someone to affirmatively agree to a document that is still
-// marked draft is worse than having no checkbox at all. Deriving the flag from
-// FILL rather than maintaining it by hand means the gate cannot drift out of
-// sync with the copy it is gating.
-export const LEGAL_COPY_READY = Object.values(FILL).every((value) => value !== null);
+// True only once every value above is really set. Gate the signup consent
+// checkbox on this: requiring someone to affirmatively agree to a document that
+// is still marked draft is worse than having no checkbox at all. See
+// Onboarding's SignUpStep, which is where the import has to happen for this to
+// be a mechanism rather than a convention.
+export const LEGAL_COPY_READY = Object.values(FILL).every((entry) => isPublished(entry.value));
 
 export const LEGAL_LAST_UPDATED = filled('EFFECTIVE_DATE');
 

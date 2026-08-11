@@ -543,10 +543,17 @@ const AccountStep = ({
             />
           </View>
           {isSignUp && (
-            // No consent checkbox yet: legalCopy.js is still TODO placeholder
-            // text, so requiring agreement to it would be worse than no
-            // checkbox at all. Links stay reachable; re-add the checkbox
-            // once Deezine's real draft replaces the placeholder copy.
+            // No consent checkbox yet. The copy in legalCopy.js is now a real
+            // draft, but four values in it are still unfilled, so it renders
+            // "[the publisher of this app]" and is not publishable — and
+            // requiring agreement to an unpublished document is worse than no
+            // checkbox at all. Links stay reachable so the gap is visible.
+            //
+            // To re-add: import { LEGAL_COPY_READY } from '../constants/legalCopy'
+            // and render the checkbox only when it is true. Gate on that symbol,
+            // not on a judgement that the copy "looks done" — it is derived from
+            // the unfilled values themselves, so it cannot drift out of sync.
+            // `canSubmit` must not require `agreedToTerms` while it is false.
             <Text style={styles.consentText}>
               <Text style={styles.consentLink} onPress={() => navigation?.navigate('Legal', { tab: 'privacy' })}>
                 Privacy Policy
