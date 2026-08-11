@@ -34,28 +34,3 @@ export const StripePattern = ({
     />
   </Pattern>
 );
-
-// A flat-color `<Defs>` fill, same paint-server shape as `StripePattern`.
-//
-// Exists so Recap's sibling-per-cell `<Svg>` grid (§14.4 comb) never hands
-// `Polygon` a raw color prop. Pixel's device matrix (2026-08-11) proved this
-// grid mispaints when siblings mix solid-fill and paint-server (`url(#…)`)
-// `Polygon`s — the two take structurally different CGContext paths on this
-// react-native-svg/Fabric build. Byte-identical `Polygon` props (always a
-// `url(#id)` reference, only the `<Defs>` content behind that id differing
-// per cell) was the variant that rendered pixel-perfect; that's the scope
-// this rule is proven for. Whether plain differing color *values* on an
-// all-solid or all-pattern sibling grid also mispaints is still open —
-// Deezine's counter-examples (JourneyCell, HexCell) work today and aren't
-// covered by this fix — pending Pixel's re-run of that isolated matrix row.
-// Route every color that can vary per-cell on this grid — fill AND stroke —
-// through a pattern reference like this one, never a literal theme color.
-export const SolidPattern = ({ id, color, size = 128 }) => (
-  // Deliberately larger than any hex it paints: a flat color has no repeat,
-  // so this never actually tiles. Avoids RNSVGPainter's constant-spacing
-  // tiling (rounds to whole device pixels) firing ~120x per cell for a
-  // color that has no pattern to preserve — same pixels, no artifact class.
-  <Pattern id={id} patternUnits="userSpaceOnUse" width={size} height={size}>
-    <Rect x="0" y="0" width={size} height={size} fill={color} />
-  </Pattern>
-);

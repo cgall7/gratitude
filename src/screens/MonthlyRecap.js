@@ -3,12 +3,12 @@ import { Animated, Easing, StyleSheet, View, Text, Pressable, useWindowDimension
 import Svg, { Defs, Polygon } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../constants/theme';
-import { DURATIONS, useReducedMotion } from '../constants/motion';
+import { DURATIONS, staggerDelay, useReducedMotion } from '../constants/motion';
 import { StaggeredItem } from '../components/StaggeredItem';
 import { PressableScale } from '../components/PressableScale';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { ThemeCardFlip } from '../components/ThemeCardFlip';
-import { StripePattern, SolidPattern } from '../components/StripeTexture';
+import { StripePattern } from '../components/StripeTexture';
 import { useSvgId } from '../utils/svgId';
 import { tagEntry } from '../utils/themeTagger';
 import { COLS, HEX_ASPECT, combLayout, hexAt, hexPoints } from '../utils/combGeometry';
@@ -23,81 +23,73 @@ import { COLS, HEX_ASPECT, combLayout, hexAt, hexPoints } from '../utils/combGeo
 const REVEAL_HEX_W = 30;
 const REVEAL_HEX_H = REVEAL_HEX_W * HEX_ASPECT;
 
-const DayCell = ({ day, entries, index, filledCount, cascade, w, h, x, y, points }) => {
-  const filled = entries.length > 0;
-  // `fill` and `stroke` both route through a per-cell `<Defs>` reference,
-  // filled or not — never a raw theme color. Pixel's device matrix
-  // (2026-08-11) isolated the trigger for a sibling-`<Svg>`-per-cell paint
-  // bug to `Polygon` `fill`/`stroke` differing in *value* between cells —
-  // solid-vs-pattern, or stroke color alone. Byte-identical `Polygon` props
-  // (always a `url(#id)` reference; only the `<Defs>` content behind that id
-  // differs per cell) was the one variant that rendered correctly on device.
-  const fillId = useSvgId('cellFill');
-  const strokeId = useSvgId('cellStroke');
-  const cell = (
-    <View style={[styles.cell, { width: w, height: h }]}>
-      <Svg width={w} height={h}>
-        <Defs>
-          {filled ? (
-            <SolidPattern id={fillId} color={theme.colors.accent} />
-          ) : (
-            <StripePattern id={fillId} />
-          )}
-          <SolidPattern
-            id={strokeId}
-            color={filled ? theme.colors.accentDeep : theme.colors.surfaceBorderStrong}
-          />
-        </Defs>
-        <Polygon
-          points={points}
-          fill={`url(#${fillId})`}
-          stroke={`url(#${strokeId})`}
-          strokeWidth={1}
-        />
-      </Svg>
-      <View style={styles.dayNumberOverlay} pointerEvents="none">
-        <Text style={[styles.dateText, filled && styles.dateTextFilled]}>{day}</Text>
-      </View>
-    </View>
-  );
+// R38 (Pixel, 2026-08-11 device matrix): a sibling group of `<Svg>` roots
+// displaces the minority configuration by exactly ⅔·cellH, regardless of
+// what its `Polygon` props look like — prop identity was ruled out (variant
+// E), and the trigger is cardinality of Svg-root configs in the group, not
+// color. The only census that rule can't punish is one: the whole comb, the
+// selection ring, and every day's fill/stroke now paint from a SINGLE
+// shared `<Svg>` (below, in the main render), so this file never mounts a
+// second Svg-root config near the grid. Everything below is plain RN views
+// animated on the native driver — no SVG, so nothing here can trigger it.
 
-  // Only the days you actually earned cascade in; empty days are scenery and
-  // shouldn't each cost an animation.
+const CellGlow = ({ index, count, cascade, reduced, w, h }) => {
+  // Same motif as StreakHexTrail's ignite glow (`StreakHexTrail.js:89`) —
+  // one ramp 0→1, read through a bloom-then-fade interpolation, rather than
+  // an explicit up/down animation.
+  const glow = useRef(new Animated.Value(0)).current;
+  const lastCascade = useRef(cascade);
+
+  useEffect(() => {
+    if (lastCascade.current !== cascade) {
+      lastCascade.current = cascade;
+      glow.setValue(0);
+    }
+    // Same R18 hazard `StaggeredItem` guards against: a second month swipe
+    // inside the 700ms cascade re-fires this effect while the previous
+    // glow is still animating. Stop it first so the loser can't strand the
+    // value mid-fade.
+    Animated.timing(glow, {
+      toValue: 1,
+      duration: reduced ? DURATIONS.reducedMotionFade : DURATIONS.arrival,
+      delay: reduced ? 0 : staggerDelay(index, count),
+      useNativeDriver: true,
+    }).start();
+    return () => glow.stopAnimation();
+  }, [reduced, cascade]);
+
+  const opacity = glow.interpolate({ inputRange: [0, 0.3, 1], outputRange: [0, 0.6, 0] });
+  const scale = reduced ? 1 : glow.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1.3] });
+
   return (
-    <View style={[styles.cellPosition, { left: x, top: y }]} pointerEvents="none">
-      {filled ? (
-        <StaggeredItem index={index} count={filledCount} replayKey={cascade} pop>
-          {cell}
-        </StaggeredItem>
-      ) : (
-        cell
-      )}
-    </View>
+    <Animated.View
+      pointerEvents="none"
+      style={[styles.cellGlow, { width: w, height: h, borderRadius: w / 2, opacity, transform: [{ scale }] }]}
+    />
   );
 };
 
-// R35: the selected cell wears the hive's selected treatment — a 2pt ink
-// stroke where a resting filled cell carries 1pt of accentDeep.
-//
-// Drawn as its own layer above every cell rather than as a `strokeWidth` on
-// the selected cell's own polygon, for two reasons the comb creates and the
-// old gapped grid didn't. The polygon sits exactly on its box edge, so half
-// of any stroke falls outside the `<Svg>` and is clipped — fine at 1pt,
-// where the two cells sharing a wall each paint half of it, but it would
-// silently halve a 2pt selection ring. And cells paint in date order, so
-// later days would overdraw the ring's lower-right walls. One extra `<Svg>`
-// with 1pt of bleed on every side, on top, has neither problem.
-const SelectionRing = ({ cell, w, h }) => (
-  <View style={[styles.cellPosition, { left: cell.x - 1, top: cell.y - 1 }]} pointerEvents="none">
-    <Svg width={w + 2} height={h + 2}>
-      <Polygon
-        points={hexPoints(w, h)}
-        transform="translate(1 1)"
-        fill="none"
-        stroke={theme.colors.ink}
-        strokeWidth={2}
-      />
-    </Svg>
+// The comb's paint (fill, stroke, hatch, selection ring) lives entirely in
+// the shared `<Svg>` in the main render now. This is only the stuff that
+// sits ON TOP of that paint: the day numeral (plain RN `<Text>`, always
+// was) and, for a filled day, its ignite glow — the streak trail's motif
+// (`StreakHexTrail.js:163`) applied to a calendar, since a filled cell IS a
+// streak hex igniting (`StaggeredItem.js:10` already said so for the pop).
+// Only the days you actually earned animate; empty days are scenery.
+const DayCell = ({ day, filled, index, filledCount, cascade, reduced, w, h, x, y }) => (
+  <View style={[styles.cellPosition, { left: x, top: y, width: w, height: h }]} pointerEvents="none">
+    {filled && (
+      <CellGlow index={index} count={filledCount} cascade={cascade} reduced={reduced} w={w} h={h} />
+    )}
+    {filled ? (
+      <StaggeredItem index={index} count={filledCount} replayKey={cascade} pop style={styles.dayNumberOverlay}>
+        <Text style={[styles.dateText, styles.dateTextFilled]}>{day}</Text>
+      </StaggeredItem>
+    ) : (
+      <View style={styles.dayNumberOverlay} pointerEvents="none">
+        <Text style={styles.dateText}>{day}</Text>
+      </View>
+    )}
   </View>
 );
 
@@ -186,6 +178,11 @@ export const MonthlyRecap = ({
     [daysInMonth, cellW, cellH]
   );
   const points = useMemo(() => hexPoints(cellW, cellH), [cellW, cellH]);
+  // One hatch pattern per mounted MonthlyRecap, not per cell: R38's shared
+  // root paints every empty cell's hatch from the same `<Defs>` entry, and
+  // the pager keeps several months' combs mounted at once (Pixel's variant
+  // I, 2026-08-11), so the id still has to be unique per screen instance.
+  const hatchId = useSvgId('recapHatch');
 
   // Index entries by day-of-month so each one lands on its real date. The
   // grid used to render every filled day first and then pad with empties,
@@ -266,7 +263,18 @@ export const MonthlyRecap = ({
   const selectedCell = selectedDay === null ? null : cells.find((c) => c.day === selectedDay);
   const selectedEntries = selectedDay === null ? [] : entriesByDay.get(selectedDay) || [];
 
-  let filledSoFar = 0;
+  // One pass, shared by the Svg paint layer, the numeral/glow overlay and
+  // the accessibility layer below — all three walk the same cells in the
+  // same order, so the stagger index a filled day gets for its glow is the
+  // same one it gets for its numeral pop.
+  const cellRenderData = useMemo(() => {
+    let filledSoFar = 0;
+    return cells.map((cell) => {
+      const dayEntries = entriesByDay.get(cell.day) || [];
+      const filled = dayEntries.length > 0;
+      return { cell, dayEntries, filled, index: filled ? filledSoFar++ : 0 };
+    });
+  }, [cells, entriesByDay]);
 
   return (
     <View style={styles.content}>
@@ -310,29 +318,55 @@ export const MonthlyRecap = ({
         </View>
       )}
 
-      {/* The comb — one hexagon per calendar day, in date order */}
+      {/* The comb — one hexagon per calendar day, in date order. Every
+          cell's fill, stroke, hatch, AND the selection ring paint from this
+          one shared `<Svg>` root — see R38 above. 1pt of bleed on every
+          side (root sized w+2/h+2, contents translated +1,+1, positioned at
+          -1,-1) so a full-strength 2pt selection ring on an edge cell has
+          somewhere to paint instead of clipping against the root's own
+          edge — the same trick the old per-cell SelectionRing used, now
+          applied once instead of on every tap. */}
       <View style={[styles.comb, { width: cellW * COLS, height }]}>
-        {cells.map((cell) => {
-          const dayEntries = entriesByDay.get(cell.day) || [];
-          const staggerIndex = dayEntries.length > 0 ? filledSoFar++ : 0;
-          return (
-            <DayCell
+        <Svg width={cellW * COLS + 2} height={height + 2} style={styles.combSvg}>
+          <Defs>
+            <StripePattern id={hatchId} />
+          </Defs>
+          {cellRenderData.map(({ cell, filled }) => (
+            <Polygon
               key={cell.day}
-              day={cell.day}
-              entries={dayEntries}
-              index={staggerIndex}
-              filledCount={entriesByDay.size}
-              cascade={cascade}
-              w={cellW}
-              h={cellH}
-              x={cell.x}
-              y={cell.y}
               points={points}
+              transform={`translate(${cell.x + 1} ${cell.y + 1})`}
+              fill={filled ? theme.colors.accent : `url(#${hatchId})`}
+              stroke={filled ? theme.colors.accentDeep : theme.colors.surfaceBorderStrong}
+              strokeWidth={1}
             />
-          );
-        })}
+          ))}
+          {selectedCell && (
+            <Polygon
+              points={points}
+              transform={`translate(${selectedCell.x + 1} ${selectedCell.y + 1})`}
+              fill="none"
+              stroke={theme.colors.ink}
+              strokeWidth={2}
+            />
+          )}
+        </Svg>
 
-        {selectedCell && <SelectionRing cell={selectedCell} w={cellW} h={cellH} />}
+        {cellRenderData.map(({ cell, filled, index }) => (
+          <DayCell
+            key={cell.day}
+            day={cell.day}
+            filled={filled}
+            index={index}
+            filledCount={entriesByDay.size}
+            cascade={cascade}
+            reduced={reduced}
+            w={cellW}
+            h={cellH}
+            x={cell.x}
+            y={cell.y}
+          />
+        ))}
 
         {/* R33: exactly one Pressable for the whole comb. */}
         <Pressable
@@ -348,24 +382,20 @@ export const MonthlyRecap = ({
             is UNVERIFIED on device — it is the mechanism half of R34's
             ratified requirement and is on the device-pass list. */}
         <View style={StyleSheet.absoluteFill} pointerEvents="none">
-          {cells.map((cell) => {
-            const dayEntries = entriesByDay.get(cell.day) || [];
-            const filled = dayEntries.length > 0;
-            return (
-              <View
-                key={cell.day}
-                accessible
-                accessibilityRole={filled ? 'button' : undefined}
-                accessibilityLabel={
-                  filled
-                    ? `${monthName} ${cell.day}, ${dayEntries.length} ${dayEntries.length === 1 ? 'entry' : 'entries'}`
-                    : `${monthName} ${cell.day}, no entry`
-                }
-                onAccessibilityTap={filled ? () => openDay(cell.day) : undefined}
-                style={[styles.cellPosition, { left: cell.x, top: cell.y, width: cellW, height: cellH }]}
-              />
-            );
-          })}
+          {cellRenderData.map(({ cell, dayEntries, filled }) => (
+            <View
+              key={cell.day}
+              accessible
+              accessibilityRole={filled ? 'button' : undefined}
+              accessibilityLabel={
+                filled
+                  ? `${monthName} ${cell.day}, ${dayEntries.length} ${dayEntries.length === 1 ? 'entry' : 'entries'}`
+                  : `${monthName} ${cell.day}, no entry`
+              }
+              onAccessibilityTap={filled ? () => openDay(cell.day) : undefined}
+              style={[styles.cellPosition, { left: cell.x, top: cell.y, width: cellW, height: cellH }]}
+            />
+          ))}
         </View>
       </View>
 
@@ -432,14 +462,22 @@ const styles = StyleSheet.create({
   cellPosition: {
     position: 'absolute',
   },
-  cell: {
-    alignItems: 'center',
-    justifyContent: 'center',
+  // R38: 1pt bleed on every side so the selection ring's outer 1pt (of its
+  // 2pt stroke, centred on the path) has room to paint on an edge cell
+  // instead of clipping against the root's own bounds.
+  combSvg: {
+    position: 'absolute',
+    left: -1,
+    top: -1,
   },
   dayNumberOverlay: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  cellGlow: {
+    position: 'absolute',
+    backgroundColor: theme.colors.accentBurst,
   },
   dateText: {
     fontSize: 11,
