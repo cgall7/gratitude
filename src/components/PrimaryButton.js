@@ -15,10 +15,16 @@ export const PrimaryButton = ({
   disabled,
   children,
   style,
+  // Forwarded straight to PressableScale's containerStyle — a caller
+  // sizing the button within its own layout (e.g. Recap's centered column
+  // needing `alignSelf: 'stretch'`) needs the outer Pressable node, not the
+  // inner transform layer `style` targets.
+  containerStyle,
   haptic = Haptics.ImpactFeedbackStyle.Light,
 }) => (
   <PressableScale
     style={[styles.button, style]}
+    containerStyle={containerStyle}
     onPress={onPress}
     disabled={disabled}
     scaleTo={0.97}
