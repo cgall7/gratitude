@@ -28,6 +28,7 @@ import { FlyingBee } from '../components/FlyingBee';
 import { DevSettings } from '../services/devSettings';
 import { HoneycombStore } from '../services/HoneycombStore';
 import { useAuth } from '../contexts/AuthContext';
+import { LockScreen, InputScreen } from './CoreRitual';
 
 const HIT_SLOP = { top: 12, bottom: 12, left: 12, right: 12 };
 
@@ -178,12 +179,12 @@ const ArrivingLight = ({ size = 180 }) => {
 };
 
 // --- Step 1: Welcome — show the value before asking for any effort ---
-// Demo-mode only: a visible A/B picker so anyone running the app can switch
+// Demo-mode only: a visible A/B/C picker so anyone running the app can switch
 // flows without knowing the hidden 5-tap gesture (DevVersionTag). Sits below
 // the value prop so it never competes with the actual pitch.
 const FlowToggle = ({ flow, onChange }) => (
   <View style={styles.flowToggleRow}>
-    {['A', 'B'].map((option) => {
+    {['A', 'B', 'C'].map((option) => {
       const selected = option === flow;
       return (
         <PressableScale
@@ -304,7 +305,7 @@ const NameStep = ({ step, name, onChangeName, onNext, onBack }) => (
 
 // --- Moment — one clear action, sets the daily check-in ---
 const MomentStep = ({ step, momentTime, onPick, onNext, onBack }) => (
-  <StepShell step={step} stage="ritual" wash={theme.colors.washYellow} onBack={onBack}>
+  <StepShell step={step} stage="moment" wash={theme.colors.washYellow} onBack={onBack}>
     <View style={styles.fillBetween}>
       <View style={styles.topContent}>
         <Text style={styles.h1}>When will you stop and notice?</Text>
@@ -379,6 +380,20 @@ const FirstEntryStep = ({ step, name, onNext, onBack, onSave }) => {
       </KeyboardAvoidingView>
     </StepShell>
   );
+};
+
+// --- Entry step, Flow C only: screen-lock demo — reuses the real Today-tab
+// --- lock/unlock screens verbatim, so this is an honest preview of the
+// --- actual daily loop, not a mockup of it (Colin, 2026-08-10). No
+// --- StepShell: the demo owns the frame the same way it does in the app.
+// --- InputScreen saves the entry itself, so the controller's onSave path
+// --- isn't wired here — its save IS the first-ever save.
+const LockDemoStep = ({ onNext }) => {
+  const [phase, setPhase] = useState('lock');
+  if (phase === 'entry') {
+    return <InputScreen onUnlock={onNext} />;
+  }
+  return <LockScreen onOpen={() => setPhase('entry')} />;
 };
 
 // --- Celebration — always the first-ever-save treatment (the entry step's
@@ -542,10 +557,12 @@ const AccountStep = ({
   );
 };
 
-// --- Controller: owns the answers, drives Flow A (5 steps) or Flow B (8 —
-// --- adds the three belief screens before Name). Flow read once from the
-// --- hidden dev toggle (DevSettings); Welcome is shared so there's no
-// --- flicker if it resolves a beat after mount. ---
+// --- Controller: owns the answers, drives Flow A (5 steps), Flow B (8 —
+// --- adds the three belief screens before Name), or Flow C (5, same shape
+// --- as A but the entry step demos the real lock/unlock loop instead of
+// --- the plain form). Flow read once from the hidden dev toggle
+// --- (DevSettings); Welcome is shared so there's no flicker if it
+// --- resolves a beat after mount. ---
 export const OnboardingFlow = ({ onDone, initialFlow = 'B', startAt }) => {
   const { session } = useAuth();
   const [flow, setFlow] = useState(initialFlow);
@@ -648,9 +665,12 @@ export const OnboardingFlow = ({ onDone, initialFlow = 'B', startAt }) => {
         );
         break;
       case STEP_ENTRY:
-        body = (
-          <FirstEntryStep step={step} name={name} onNext={next} onBack={back} onSave={handleSaveEntry} />
-        );
+        body =
+          flow === 'C' ? (
+            <LockDemoStep onNext={next} />
+          ) : (
+            <FirstEntryStep step={step} name={name} onNext={next} onBack={back} onSave={handleSaveEntry} />
+          );
         break;
       case STEP_CELEBRATION:
         body = <CelebrationStep step={step} onNext={next} />;
