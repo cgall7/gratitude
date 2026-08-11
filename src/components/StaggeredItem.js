@@ -28,16 +28,33 @@ import { DURATIONS, SPRINGS, staggerDelay, useReducedMotion } from '../constants
 // the effect fires exactly as often as it did before (R19).
 //
 // R43 FAIL 3 (Pixel + Deezine, 2026-08-11, device-confirmed): index 0's
-// `staggerDelay` is always 0, and both `SpringAnimation.js` and
+// `staggerDelay` is always 0, and both `SpringAnimation.js:234` and
 // `TimingAnimation.js` special-case a falsy delay to call `start()`
-// synchronously inside this effect instead of via `setTimeout` — so the
-// index-0 item's native animation starts before the JS thread has handed
-// off to native, and the value→view connection for that one item never
-// takes. It reaches its end value but the view stays frozen at the start
-// frame. `staggerDelay` itself is untouched (shared token math, every
-// other index byte-identical); only index 0 is floored to one frame,
-// invisible on its own, so it goes through the deferred `setTimeout` path
-// like every other index does.
+// synchronously inside this effect instead of deferring via `setTimeout`.
+// Recap's day-1 numeral took that path and rendered frozen at its start
+// frame — the driven value reached 1 while the view never moved. Flooring
+// index 0 to one frame (invisible on its own) heals it, confirmed on
+// device for both cold start and swipe replay. `staggerDelay` itself is
+// untouched: shared token math, every other index byte-identical.
+//
+// The underlying native mechanism is OPEN. An earlier version of this
+// comment asserted that a synchronous start races the JS→native handoff
+// so the value→view connection "never takes" — the device falsified that
+// (R46), and this comment would rather record what was observed than a
+// chain nobody has closed. Every configuration gated with a live Reduce
+// Motion receipt:
+//
+//   timing, sync start, no stop (RecapTab's StatsCard, always)   renders
+//   timing, sync restart after a stop, every index (RM flip)     renders
+//   spring stopped mid-flight -> timing sync restart (RM, cold)  renders
+//   spring, sync start on a value just stopped and rewound       FROZE
+//
+// So the only configuration ever observed to freeze is a native *spring*
+// started synchronously on a value that was just stopped and rewound —
+// the replay path, not synchronous starts in general. This is why the
+// reduced-motion branch below deliberately keeps `delay: 0`: its restart
+// always lands in the timing branch, which cannot reach the failing
+// configuration, and it is device-verified clean across Today and Recap.
 export const StaggeredItem = ({ index, count = 1, children, style, pop = false, replayKey }) => {
   const reduced = useReducedMotion();
   const anim = useRef(new Animated.Value(0)).current;
@@ -54,14 +71,18 @@ export const StaggeredItem = ({ index, count = 1, children, style, pop = false, 
       lastReplay.current = replayKey;
       anim.setValue(0);
     }
-    // R18, the same hazard StreakHexTrail guards (`:63-66`, `:78-82`): this
-    // effect can re-run while its own entrance is still in flight — a second
-    // month swipe inside the 700ms cascade, or an OS Reduce Motion toggle
-    // mid-entrance. Without this, `setValue(0)` lands under a running native
-    // spring and a second one starts on top of it, two drivers on one value.
-    // The cell that loses that race stays at 0 — invisible, permanently.
-    // Stop first; a settled item stops as a no-op and re-animates 1 → 1
-    // exactly as the note above describes.
+    // Stop a live entrance when this item goes away. NOT a double-driver
+    // guard, which is what an earlier version of this comment claimed: an
+    // `AnimatedValue` holds exactly one `_animation`, and both entry points
+    // stop the incumbent before proceeding — `setValue` at
+    // `AnimatedValue.js:197-201`, `animate` at `:316-319`. So the rewind
+    // above and the `.start()` below cannot leave two drivers racing on one
+    // value; RN has already made that unreachable.
+    //
+    // What it does buy is unmount: this effect can be torn down mid-entrance
+    // (a month swipe inside the 700ms cascade, an OS Reduce Motion toggle),
+    // and without this a native animation keeps running against a value
+    // nobody reads. A settled item stops as a no-op.
     const stop = () => anim.stopAnimation();
     if (pop && !reduced) {
       Animated.spring(anim, {
