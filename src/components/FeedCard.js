@@ -133,6 +133,7 @@ export const FeedCard = ({ share, onLikeToggled }) => {
               value={commentText}
               onChangeText={setCommentText}
               editable={!postingComment}
+              maxLength={2000}
             />
             <PressableScale onPress={handlePostComment} disabled={!commentText.trim() || postingComment}>
               <Ionicons name="arrow-up-circle" size={30} color={theme.colors.ink} />

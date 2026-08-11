@@ -431,6 +431,7 @@ const AccountStep = ({
   onNext,
   onSkip,
   initialMode = 'signup',
+  navigation,
 }) => {
   const [mode, setMode] = useState(initialMode);
   const [busy, setBusy] = useState(false);
@@ -514,6 +515,7 @@ const AccountStep = ({
                 autoCapitalize="words"
                 returnKeyType="next"
                 editable={!busy}
+                maxLength={100}
               />
             )}
             {isSignUp && <View style={styles.inputDivider} />}
@@ -540,6 +542,28 @@ const AccountStep = ({
               editable={!busy}
             />
           </View>
+          {isSignUp && (
+            // No consent checkbox yet. The copy in legalCopy.js is now a real
+            // draft, but four values in it are still unfilled, so it renders
+            // "[the publisher of this app]" and is not publishable — and
+            // requiring agreement to an unpublished document is worse than no
+            // checkbox at all. Links stay reachable so the gap is visible.
+            //
+            // To re-add: import { LEGAL_COPY_READY } from '../constants/legalCopy'
+            // and render the checkbox only when it is true. Gate on that symbol,
+            // not on a judgement that the copy "looks done" — it is derived from
+            // the unfilled values themselves, so it cannot drift out of sync.
+            // `canSubmit` must not require `agreedToTerms` while it is false.
+            <Text style={styles.consentText}>
+              <Text style={styles.consentLink} onPress={() => navigation?.navigate('Legal', { tab: 'privacy' })}>
+                Privacy Policy
+              </Text>{' '}
+              and{' '}
+              <Text style={styles.consentLink} onPress={() => navigation?.navigate('Legal', { tab: 'terms' })}>
+                Terms of Service
+              </Text>
+            </Text>
+          )}
           {error && <Text style={styles.signUpError}>{error}</Text>}
           <PressableScale onPress={() => setMode(isSignUp ? 'signin' : 'signup')} haptic={null}>
             <Text style={styles.switchModeText}>
@@ -564,7 +588,7 @@ const AccountStep = ({
 // --- the plain form). Flow read once from the hidden dev toggle
 // --- (DevSettings); Welcome is shared so there's no flicker if it
 // --- resolves a beat after mount. ---
-export const OnboardingFlow = ({ onDone, initialFlow = 'B', startAt }) => {
+export const OnboardingFlow = ({ onDone, initialFlow = 'B', startAt, navigation }) => {
   const { session } = useAuth();
   const [flow, setFlow] = useState(initialFlow);
   const [step, setStep] = useState(0);
@@ -696,6 +720,7 @@ export const OnboardingFlow = ({ onDone, initialFlow = 'B', startAt }) => {
             onNext={finish}
             onSkip={finish}
             initialMode={startAt === 'signin' ? 'signin' : 'signup'}
+            navigation={navigation}
           />
         );
     }
@@ -846,6 +871,15 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: theme.colors.surfaceBorder,
     marginVertical: 14,
+  },
+  consentText: {
+    ...theme.type.bodySm,
+    color: theme.colors.inkSoft,
+    flex: 1,
+  },
+  consentLink: {
+    color: theme.colors.accentDeep,
+    fontFamily: theme.fonts.bodySemiBold,
   },
   signUpError: {
     ...theme.type.bodySm,
