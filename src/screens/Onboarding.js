@@ -293,6 +293,12 @@ const NameStep = ({ step, name, onChangeName, onNext, onBack }) => (
             autoCapitalize="words"
             returnKeyType="done"
             onSubmitEditing={name.trim() ? onNext : undefined}
+            // Shares the `name` state with AccountStep, whose own cap cannot
+            // save it: maxLength limits what a field accepts, it never
+            // truncates a value handed to it. An over-long name entered here
+            // therefore reaches signUp intact and aborts the profiles trigger
+            // as an opaque 500 — the failure this branch exists to prevent.
+            maxLength={100}
             autoFocus
           />
         </View>
@@ -370,6 +376,10 @@ const FirstEntryStep = ({ step, name, onNext, onBack, onSave }) => {
               multiline
               value={text}
               onChangeText={setText}
+              // Matches CoreRitual's entry input and entries_content_length.
+              // Local-only when written, so the failure would surface much
+              // later at Share rather than here.
+              maxLength={10000}
               autoFocus
             />
           </View>
