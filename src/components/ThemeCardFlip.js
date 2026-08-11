@@ -46,8 +46,11 @@ export const ThemeCardFlip = ({ themeWord, snippet, delay = 0, onRevealed }) => 
       ...SPRINGS.reveal,
       useNativeDriver: true,
     }).start(settle);
-    // Fires once per mount by design — Wrapped remounts each beat, so a
-    // re-run guard on `flip` isn't needed and would fight the stagger.
+    // R18: `useReducedMotion` resolves async (false → true after mount for
+    // a Reduce Motion user), so this effect re-runs — the cleanup must
+    // stop the in-flight spring or the flip keeps rotating underneath the
+    // reduced branch's flat fade.
+    return () => flip.stopAnimation();
   }, [reduced]);
 
   if (reduced) {
