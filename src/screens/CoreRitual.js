@@ -1,53 +1,41 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   StyleSheet,
   View,
   Text,
   TextInput,
   Animated,
-  Dimensions,
+  useWindowDimensions,
   KeyboardAvoidingView,
   Platform
 } from 'react-native';
-import * as Haptics from 'expo-haptics';
 import { theme } from '../constants/theme';
 import { getDailyPrompt } from '../constants/prompts';
 import { EntryStore } from '../services/EntryStore';
 import { tagEntry } from '../utils/themeTagger';
-import { PressableScale } from '../components/PressableScale';
 import { SparkChips } from '../components/SparkChips';
-
-const { width, height } = Dimensions.get('window');
+import { PrimaryButton } from '../components/PrimaryButton';
+import { GlowOrb } from '../components/GlowOrb';
+import { CelebrationBadge } from '../components/CelebrationBadge';
+import { CelebrationRays } from '../components/CelebrationRays';
 
 // --- COMPONENT: LockScreen ---
 export const LockScreen = ({ onEnterRitual }) => {
-  const breathe = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(breathe, { toValue: 1, duration: 2400, useNativeDriver: true }),
-        Animated.timing(breathe, { toValue: 0, duration: 2400, useNativeDriver: true }),
-      ])
-    ).start();
-  }, []);
-
-  const glowScale = breathe.interpolate({ inputRange: [0, 1], outputRange: [1, 1.08] });
-  const glowOpacity = breathe.interpolate({ inputRange: [0, 1], outputRange: [0.15, 0.25] });
+  const { width } = useWindowDimensions();
 
   return (
     <View style={styles.container}>
-      <Animated.View
-        style={[styles.glow, { opacity: glowOpacity, transform: [{ scale: glowScale }] }]}
-      />
+      {/* Was a flat 1.5x-screen accent disc at 15-25% opacity, which left a
+          hard circular edge visible across the cream. GlowOrb runs the same
+          light out to fully transparent, so it reads as light instead of a
+          pale yellow shape. */}
+      <GlowOrb size={width * 1.6} breathe intensity={0.55} style={{ top: -width * 0.35 }} />
 
       <View style={styles.content}>
         <Text style={styles.logo}>gratitude</Text>
         <Text style={styles.prompt}>Pause.{"\n"}What are you grateful for today?</Text>
 
-        <PressableScale style={styles.primaryButton} onPress={onEnterRitual}>
-          <Text style={styles.buttonText}>Enter Ritual</Text>
-        </PressableScale>
+        <PrimaryButton onPress={onEnterRitual}>Begin</PrimaryButton>
       </View>
     </View>
   );
@@ -58,8 +46,7 @@ export const InputScreen = ({ onUnlock }) => {
   const [text, setText] = useState('');
   const [unlocking, setUnlocking] = useState(false);
   const formAnim = useRef(new Animated.Value(1)).current;
-  const badgeScale = useRef(new Animated.Value(0)).current;
-  const badgeOpacity = useRef(new Animated.Value(0)).current;
+  const overlayOpacity = useRef(new Animated.Value(0)).current;
   const dailyPrompt = getDailyPrompt();
 
   const handleSave = () => {
@@ -73,21 +60,16 @@ export const InputScreen = ({ onUnlock }) => {
       duration: 250,
       useNativeDriver: true,
     }).start(() => {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Animated.parallel([
-        Animated.spring(badgeScale, {
-          toValue: 1,
-          friction: 5,
-          tension: 140,
-          useNativeDriver: true,
-        }),
-        Animated.timing(badgeOpacity, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-      ]).start(() => {
-        setTimeout(() => onUnlock(text), 900);
+      // CelebrationBadge + CelebrationRays run their own spring, haptic and
+      // burst on mount (spec §4/§11.3) — this used to be a second,
+      // hand-rolled 96pt badge drawing a "✓" as a text character while the
+      // real component sat unused. Fade the overlay in and let them land.
+      Animated.timing(overlayOpacity, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: true,
+      }).start(() => {
+        setTimeout(() => onUnlock(text), 1400);
       });
     });
   };
@@ -98,19 +80,16 @@ export const InputScreen = ({ onUnlock }) => {
       style={styles.container}
     >
       {unlocking && (
-        <View style={styles.unlockOverlay} pointerEvents="none">
-          <Animated.View
-            style={[
-              styles.unlockBadge,
-              { opacity: badgeOpacity, transform: [{ scale: badgeScale }] },
-            ]}
-          >
-            <Text style={styles.unlockCheck}>✓</Text>
-          </Animated.View>
-          <Animated.Text style={[styles.unlockingText, { opacity: badgeOpacity }]}>
-            Unlocked. Enjoy your day.
-          </Animated.Text>
-        </View>
+        <Animated.View
+          style={[styles.unlockOverlay, { opacity: overlayOpacity }]}
+          pointerEvents="none"
+        >
+          <View style={styles.badgeStage}>
+            <CelebrationRays />
+            <CelebrationBadge />
+          </View>
+          <Text style={styles.unlockingText}>Unlocked. Enjoy your day.</Text>
+        </Animated.View>
       )}
 
       <Animated.View style={[styles.content, { opacity: formAnim }]}>
@@ -136,14 +115,9 @@ export const InputScreen = ({ onUnlock }) => {
           />
         </View>
 
-        <PressableScale
-          style={[styles.primaryButton, { backgroundColor: theme.colors.ink }]}
-          onPress={handleSave}
-          disabled={!text.trim() || unlocking}
-          haptic={Haptics.ImpactFeedbackStyle.Medium}
-        >
-          <Text style={[styles.buttonText, { color: theme.colors.background }]}>Unlock Apps</Text>
-        </PressableScale>
+        <PrimaryButton onPress={handleSave} disabled={!text.trim() || unlocking}>
+          Unlock my apps
+        </PrimaryButton>
       </Animated.View>
     </KeyboardAvoidingView>
   );
@@ -155,14 +129,6 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.background,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  glow: {
-    position: 'absolute',
-    width: width * 1.5,
-    height: width * 1.5,
-    backgroundColor: theme.colors.accent,
-    borderRadius: width,
-    top: -width * 0.2,
   },
   content: {
     width: '85%',
@@ -215,44 +181,23 @@ const styles = StyleSheet.create({
     color: theme.colors.textPrimary,
     textAlignVertical: 'top',
   },
-  primaryButton: {
-    backgroundColor: theme.colors.accent,
-    paddingVertical: 20,
-    paddingHorizontal: 40,
-    borderRadius: theme.borderRadius.full,
-    width: '100%',
-    alignItems: 'center',
-    ...theme.shadows.tinted(theme.colors.accent),
-  },
-  buttonText: {
-    ...theme.type.button,
-    color: theme.colors.textPrimary,
-  },
   unlockOverlay: {
     ...StyleSheet.absoluteFillObject,
+    backgroundColor: theme.colors.washPeach,
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 2,
   },
-  unlockBadge: {
+  // CelebrationRays anchors to the center of a 96pt box (its documented
+  // pairing), so the badge needs that exact stage to burst around.
+  badgeStage: {
     width: 96,
     height: 96,
-    borderRadius: 48,
-    backgroundColor: theme.colors.accent,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 24,
-    ...theme.shadows.tinted(theme.colors.accent),
-  },
-  unlockCheck: {
-    fontSize: 44,
-    color: theme.colors.textInverse,
-    fontFamily: theme.fonts.headerExtraBold,
+    marginBottom: 32,
   },
   unlockingText: {
-    fontFamily: theme.fonts.bodySemiBold,
-    color: theme.colors.textPrimary,
-    fontSize: 18,
+    ...theme.type.h3,
+    color: theme.colors.ink,
     textAlign: 'center',
-  }
+  },
 });

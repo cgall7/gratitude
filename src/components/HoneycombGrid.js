@@ -3,6 +3,7 @@ import { View, Text, Animated, StyleSheet, Pressable, Easing } from 'react-nativ
 import Svg, { Polygon } from 'react-native-svg';
 import { theme } from '../constants/theme';
 import { Avatar, avatarColorFor } from './Avatar';
+import { DURATIONS, STAGGER_MS, useReducedMotion } from '../constants/motion';
 
 // Cube-direction walk around a hex ring, center-out — gives us the classic
 // "spiral" fill order (1, 6, 12, 18…) that a honeycomb actually grows in,
@@ -52,20 +53,20 @@ const hexPoints = (size) => {
   return pts.join(' ');
 };
 
-const HexCell = ({ member, size, x, y, delay, onPress, selected }) => {
+const HexCell = ({ member, size, x, y, delay, onPress, selected, reduced }) => {
   const progress = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     Animated.timing(progress, {
       toValue: 1,
-      duration: 420,
-      delay,
-      easing: Easing.out(Easing.back(1.4)),
+      duration: reduced ? DURATIONS.reducedMotionFade : 420,
+      delay: reduced ? 0 : delay,
+      easing: reduced ? Easing.linear : Easing.out(Easing.back(1.4)),
       useNativeDriver: true,
     }).start();
-  }, [progress, delay]);
+  }, [progress, delay, reduced]);
 
-  const scale = progress.interpolate({ inputRange: [0, 1], outputRange: [0.15, 1] });
+  const scale = progress.interpolate({ inputRange: [0, 1], outputRange: [reduced ? 1 : 0.15, 1] });
   const opacity = progress;
   const tint = avatarColorFor(member.name);
   const points = useMemo(() => hexPoints(size), [size]);
@@ -108,17 +109,18 @@ const HexCell = ({ member, size, x, y, delay, onPress, selected }) => {
 // reveal who it is and what they're grateful for.
 export const HoneycombGrid = ({ members, cellSize = 34 }) => {
   const [selected, setSelected] = useState(null);
+  const reduced = useReducedMotion();
   const cameraProgress = useRef(new Animated.Value(0)).current;
   const revealProgress = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     Animated.timing(cameraProgress, {
       toValue: 1,
-      duration: 600,
-      easing: Easing.out(Easing.cubic),
+      duration: reduced ? DURATIONS.reducedMotionFade : 600,
+      easing: reduced ? Easing.linear : Easing.out(Easing.cubic),
       useNativeDriver: true,
     }).start();
-  }, [cameraProgress]);
+  }, [cameraProgress, reduced]);
 
   const layout = useMemo(() => {
     const spiral = hexSpiral(3).slice(0, members.length);
@@ -133,7 +135,7 @@ export const HoneycombGrid = ({ members, cellSize = 34 }) => {
       member,
       x: positions[index].x - minX,
       y: positions[index].y - minY,
-      delay: index * 45,
+      delay: index * STAGGER_MS,
     }));
     return { cells, width, height };
   }, [members, cellSize]);
@@ -143,13 +145,15 @@ export const HoneycombGrid = ({ members, cellSize = 34 }) => {
     setSelected(member);
     Animated.timing(revealProgress, {
       toValue: 1,
-      duration: 260,
-      easing: Easing.out(Easing.cubic),
+      duration: reduced ? DURATIONS.reducedMotionFade : 260,
+      easing: reduced ? Easing.linear : Easing.out(Easing.cubic),
       useNativeDriver: true,
     }).start();
   };
 
-  const cameraScale = cameraProgress.interpolate({ inputRange: [0, 1], outputRange: [1.8, 1] });
+  // The camera dive-in is the screen's signature move, but it's also pure
+  // travel — under Reduce Motion the cluster simply fades up in place.
+  const cameraScale = cameraProgress.interpolate({ inputRange: [0, 1], outputRange: [reduced ? 1 : 1.8, 1] });
   const cameraOpacity = cameraProgress;
 
   return (
@@ -174,6 +178,7 @@ export const HoneycombGrid = ({ members, cellSize = 34 }) => {
               delay={delay}
               onPress={handlePress}
               selected={selected?.id === member.id}
+              reduced={reduced}
             />
           ))}
         </Animated.View>
@@ -187,7 +192,7 @@ export const HoneycombGrid = ({ members, cellSize = 34 }) => {
               opacity: revealProgress,
               transform: [
                 {
-                  translateY: revealProgress.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }),
+                  translateY: revealProgress.interpolate({ inputRange: [0, 1], outputRange: [reduced ? 0 : 10, 0] }),
                 },
               ],
             },

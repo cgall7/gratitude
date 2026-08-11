@@ -5,6 +5,7 @@ import { theme } from '../constants/theme';
 import { HoneycombStore } from '../services/HoneycombStore';
 import { PressableScale } from './PressableScale';
 import { BeeTransition } from './BeeTransition';
+import { Avatar } from './Avatar';
 
 // Like delivery (Sunbeam §11.2): a short lift-off from the heart, carrying
 // the like away rather than the long claim-screen traversal. Same glide
@@ -83,8 +84,15 @@ export const FeedCard = ({ share, onLikeToggled }) => {
   return (
     <View style={styles.card}>
       <View style={styles.header}>
-        <Text style={styles.author}>{share.isOwn ? 'You' : share.author?.display_name ?? 'Someone'}</Text>
-        <Text style={styles.date}>{formatDate(share.entryDate)}</Text>
+        <Avatar
+          name={share.isOwn ? 'You' : share.author?.display_name ?? 'Someone'}
+          avatarUrl={share.author?.avatar_url}
+          size={36}
+        />
+        <View style={styles.headerText}>
+          <Text style={styles.author}>{share.isOwn ? 'You' : share.author?.display_name ?? 'Someone'}</Text>
+          <Text style={styles.date}>{formatDate(share.entryDate)}</Text>
+        </View>
       </View>
       <Text style={styles.content}>"{share.content}"</Text>
 
@@ -149,9 +157,12 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    gap: 12,
+    marginBottom: 12,
+  },
+  headerText: {
+    flex: 1,
   },
   author: {
     ...theme.type.bodySm,
