@@ -68,7 +68,9 @@
 const FILL = {
   LEGAL_ENTITY: {
     value: null, // 'Gratitude', or the registered company name
-    placeholder: '[the publisher of this app — to be named before launch]',
+    // Has to read as a noun phrase in two different sentences: "published by X"
+    // in the policy and "an agreement between you and X" in the terms.
+    placeholder: '[our legal name — to be named before launch]',
   },
   CONTACT_EMAIL: {
     value: null, // privacy requests + deletion + content removal
@@ -91,9 +93,23 @@ const isPublished = (value) => typeof value === 'string' && value.trim() !== '';
 const filled = (key) => {
   const entry = FILL[key];
   // A key with no FILL entry would otherwise interpolate `undefined` into a
-  // legal document. Fail loudly instead. Every call site is a literal in this
-  // file, so this can only fire the first time a developer runs a typo.
-  if (!entry) throw new Error(`legalCopy: no FILL entry for "${key}"`);
+  // legal document, or — worse — leave the copy reading as a placeholder while
+  // LEGAL_COPY_READY below still counted four published values and went true.
+  //
+  // KNOW THE BLAST RADIUS before you change this to something softer: App.js
+  // imports Legal.js which imports this file, all statically, and these calls
+  // run at module scope. A throw here white-screens the app at launch, not just
+  // the Legal modal. That is the intended trade — a rename is a deliberate edit
+  // to a four-key object ten lines above, there is no test suite to catch it,
+  // and failing on every launch beats shipping a legal document that silently
+  // reads as a draft behind a required "I agree". (Blast radius identified by
+  // Sage; keeping the throw is a considered choice, not an oversight.)
+  if (!entry) {
+    throw new Error(
+      `legalCopy: no FILL entry for "${key}" — a FILL key was renamed or removed ` +
+        'without updating its call site in this file. Fix both together.'
+    );
+  }
   return isPublished(entry.value) ? entry.value : entry.placeholder;
 };
 
@@ -119,6 +135,17 @@ export const PRIVACY_POLICY = {
         'What you write stays on your phone. We never receive an entry unless you tap Share, and when you do, only the people you have accepted into your honeycomb can read it.\n\n' +
         'There are no ads in this app. There is no analytics, crash-reporting or tracking code in it either — nothing here reports what you do back to us or to anyone else. We do not sell or share anything about you.\n\n' +
         'The rest of this page is the same thing said precisely.',
+    },
+    // Sits after the short version rather than before it: the opener is the
+    // reassurance a reader came for, and this is the first fact underneath it.
+    // It is also the earliest point a reader can reach us — CONTACT_EMAIL
+    // otherwise doesn't appear until the tenth section.
+    {
+      heading: 'Who we are',
+      body:
+        `This app is published by ${LEGAL_ENTITY}. We are responsible for the information described on this page — in data-protection terms, its controller.\n\n` +
+        `Most of what you write never reaches us at all, so this responsibility is narrower than it usually is: it covers your account, anything you chose to share, and the likes and comments attached to it. The next section says exactly what that means.\n\n` +
+        `Anything you want to ask or ask us to do, ${CONTACT_EMAIL} reaches a person.`,
     },
     {
       heading: 'What we collect',

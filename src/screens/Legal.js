@@ -10,7 +10,9 @@ const DOCS = { privacy: PRIVACY_POLICY, terms: TERMS_OF_SERVICE };
 
 // In-app reader for the Privacy Policy / ToS — reachable from the signup
 // consent checkbox (Onboarding.js) so agreeing is never a blind tap.
-// Content itself lives in constants/legalCopy.js pending Deezine's draft.
+// Content itself lives in constants/legalCopy.js. The draft there is real copy,
+// but four values in it are unfilled, so this screen renders honest bracketed
+// gaps rather than the finished document — see LEGAL_COPY_READY.
 export const LegalScreen = ({ route, navigation }) => {
   const initialTab = route?.params?.tab === 'terms' ? 'terms' : 'privacy';
   const [tab, setTab] = useState(initialTab);
