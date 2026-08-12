@@ -223,7 +223,7 @@ const styles = StyleSheet.create({
   },
   unlockOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: theme.colors.washPeach,
+    backgroundColor: theme.colors.washYellow,
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 2,

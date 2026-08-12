@@ -362,7 +362,7 @@ const FirstEntryStep = ({ step, name, onNext, onBack, onSave }) => {
   };
 
   return (
-    <StepShell step={step} stage="entry" wash={theme.colors.washPeach} onBack={onBack}>
+    <StepShell step={step} stage="entry" wash={theme.colors.washYellow} onBack={onBack}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.fillBetween}>
         <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <Text style={styles.h1}>
@@ -411,7 +411,7 @@ const LockDemoStep = ({ onNext }) => {
 // --- save IS the first-ever save), never the bare badge. "given" closes the
 // --- loop back to the Welcome line. ---
 const CelebrationStep = ({ step, onNext }) => (
-  <StepShell step={step} stage="done" wash={theme.colors.washPeach}>
+  <StepShell step={step} stage="done" wash={theme.colors.washYellow}>
     <View style={styles.centerFill}>
       <View style={styles.badgeStage}>
         <CelebrationRays />
@@ -491,7 +491,7 @@ const AccountStep = ({
 
   if (confirmSent) {
     return (
-      <StepShell step={step} stage="done" wash={theme.colors.washPeach} showMap={false}>
+      <StepShell step={step} stage="done" wash={theme.colors.washYellow} showMap={false}>
         <View style={styles.centerFill}>
           <Text style={styles.h1Center}>Check your email</Text>
           <Text style={styles.bodyLgCenter}>
@@ -505,7 +505,7 @@ const AccountStep = ({
   }
 
   return (
-    <StepShell step={step} stage="done" wash={theme.colors.washPeach} showMap={false}>
+    <StepShell step={step} stage="done" wash={theme.colors.washYellow} showMap={false}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.fillBetween}>
         <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <Text style={styles.h1}>{isSignUp ? 'Keep it.' : 'Welcome back'}</Text>

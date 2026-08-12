@@ -14,7 +14,6 @@ import { DURATIONS, SPRINGS, useReducedMotion } from '../constants/motion';
 // over the whole screen, which just muddied the cream.
 const SLIDE_WASHES = [
   theme.colors.washYellow,
-  theme.colors.washPeach,
   theme.colors.washYellow,
   theme.colors.washSky,
 ];

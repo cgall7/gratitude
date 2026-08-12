@@ -25,9 +25,9 @@ const colors = {
   // Ink on this field is 10.01:1; `accentDeep` is 1.53:1 and must never
   // carry text here (R15).
   goldField: '#F0C023',
-  washYellow: '#FFF3C4', // Pastel wash — Today/check-in moments.
-  washPeach: '#FFE9D9', // Pastel wash — warmth/celebration moments.
-  washSky: '#E4F2FB', // Pastel wash — calm/recap moments. Use sparingly.
+  washYellow: '#FFF3C4', // The warm ground — Sunbeam's default full-bleed wash, activation staging included (R50). A role, not a screen.
+  washPeach: '#FFE9D9', // Retired as a surface (§17.2/R50). Avatar identity swatch ONLY (sub-40pt); no new uses at any size.
+  washSky: '#E4F2FB', // The cool counter-ground — hive surfaces + avatar swatch only (+ one legacy §8 Wrapped slide until §14.2 replaces that screen). Use sparingly (§1).
   danger: '#E5484D', // Destructive only (delete entry). Rarely seen.
 
   // Text / ink
