@@ -5,7 +5,7 @@ import { toISODate } from '../utils/dateRanges';
 // are decorative — never written to Supabase, never counted in real
 // connection/like/comment totals. `HoneycombHive` merges them behind real
 // people so the grid reads as a real, populated hive. Pull this file (and
-// its one call site in HoneycombHive.js) whenever real usage makes it
+// its one call site in HoneycombTab.js) whenever real usage makes it
 // unnecessary.
 const daysAgo = (n) => {
   const d = new Date();

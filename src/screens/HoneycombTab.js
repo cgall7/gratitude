@@ -44,12 +44,12 @@ const toGridMember = (share) => ({
   gratitude: share.content,
   avatarUrl: share.author?.avatar_url,
   isOwn: share.isOwn,
-  isDemo: false,
+  isDemo: share.isDemo ?? false,
 });
 
 const buildHiveMembers = (feed) => {
   const real = feed.map(toGridMember);
-  const combined = real.concat(DEMO_HIVE_MEMBERS);
+  const combined = real.concat(DEMO_HIVE_MEMBERS.map(toGridMember));
   return combined.slice(0, MAX_HIVE_CELLS);
 };
 
