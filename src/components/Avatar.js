@@ -40,7 +40,14 @@ export const avatarColorFor = (name) => AVATAR_WASHES[hashName(name || '') % AVA
 // dies. `washPeach` is out by its own token text ("no new uses at any size").
 // These two are the only tokens whose own comments permit a hive surface.
 //
-// Same `hashName`, so a member's circle and their hex stay correlated.
+// Same `hashName`, so a name always yields the same circle/hex pair. That is
+// DETERMINISM, not correlation — mod 5 and mod 2 of one hash have no visible
+// relationship (Sam's circle is `accentDeep`, his hex `washSky`; Maya's are
+// `washSky` and `washYellow`). Determinism is the property worth having; the
+// word "correlated" promises a color match that was never there.
+//
+// Two tints and nothing distributing them: see the monochrome invariant in
+// demoHive.js before adding names to the demo set.
 const HEX_TINTS = [theme.colors.washYellow, theme.colors.washSky];
 
 export const hexTintFor = (name) => HEX_TINTS[hashName(name || '') % HEX_TINTS.length];
