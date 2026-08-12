@@ -9,6 +9,7 @@ import { ScreenHeader } from '../components/ScreenHeader';
 import { StreakBadge } from '../components/StreakBadge';
 import { StaggeredItem } from '../components/StaggeredItem';
 import { currentStreak, nextMilestone, startOfYear, endOfYear } from '../utils/dateRanges';
+import { TAB_CLEARANCE } from '../navigation/tabBarLayout';
 
 const greeting = (date) => {
   const hour = date.getHours();
@@ -140,7 +141,7 @@ const styles = StyleSheet.create({
   content: {
     padding: 24,
     paddingTop: 72,
-    paddingBottom: 140,
+    paddingBottom: TAB_CLEARANCE,
   },
   streakCard: {
     backgroundColor: theme.colors.washYellow,

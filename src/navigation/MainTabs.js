@@ -10,18 +10,10 @@ import { HoneycombTab } from '../screens/HoneycombTab';
 import { TabBarButton } from './TabBarButton';
 import { AccountDoor, DOOR_SIZE, useHasAccountDoor } from './AccountDoor';
 import { GlassBackground, useReduceTransparency } from './GlassBackground';
+import { SIDE_INSET, DOOR_GAP, BAR_HEIGHT, BAR_BOTTOM } from './tabBarLayout';
 
 const Tab = createBottomTabNavigator();
 
-// Option C, picked by Colin on 2026-08-11. The bar stops being a full-width
-// slab: the capsule hugs its four tabs and the account door sits detached
-// beside it. Both halves of the split are stated here so they can't drift —
-// the door is centred on the capsule, and the capsule ends exactly one gap
-// short of it.
-const SIDE_INSET = 20;
-const DOOR_GAP = 12;
-const BAR_HEIGHT = 60; // was 86: the old bar carried 49.5pt of dead space below its glyphs.
-const BAR_BOTTOM = 28;
 
 const TAB_ICONS = {
   Today: { active: 'sunny', inactive: 'sunny-outline' },

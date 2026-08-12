@@ -19,6 +19,7 @@ import { DevVersionTag } from '../components/DevVersionTag';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { StreakBadge } from '../components/StreakBadge';
 import { StaggeredItem } from '../components/StaggeredItem';
+import { TAB_CLEARANCE } from '../navigation/tabBarLayout';
 
 const describeTheme = (insight, periodLabel) => {
   if (!insight) return '';
@@ -208,7 +209,7 @@ const styles = StyleSheet.create({
   content: {
     padding: 24,
     paddingTop: 72,
-    paddingBottom: 140,
+    paddingBottom: TAB_CLEARANCE,
   },
   rail: {
     flexDirection: 'row',

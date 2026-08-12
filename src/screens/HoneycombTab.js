@@ -15,6 +15,7 @@ import { ScreenHeader } from '../components/ScreenHeader';
 import { BeeTransition } from '../components/BeeTransition';
 import { FlyingBee } from '../components/FlyingBee';
 import { DEMO_HIVE_MEMBERS } from '../constants/demoHive';
+import { TAB_CLEARANCE } from '../navigation/tabBarLayout';
 
 // Share carry (Sunbeam §11.2): the bee lifts the just-shared entry off the
 // button and carries it up toward the grid it just joined.
@@ -344,7 +345,7 @@ const styles = StyleSheet.create({
   content: {
     padding: 24,
     paddingTop: 60,
-    paddingBottom: 140,
+    paddingBottom: TAB_CLEARANCE,
   },
   loadingContainer: {
     flex: 1,
