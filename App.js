@@ -10,6 +10,7 @@ import { OnboardingFlow } from './src/screens/Onboarding';
 import { LockScreen, InputScreen } from './src/screens/CoreRitual';
 import { EveningMirror } from './src/screens/EveningMirror';
 import { LegalScreen } from './src/screens/Legal';
+import { AccountScreen } from './src/screens/Account';
 import { MainTabs } from './src/navigation/MainTabs';
 import { AuthProvider } from './src/contexts/AuthContext';
 import { OnboardingState } from './src/services/onboardingState';
@@ -75,6 +76,13 @@ const resolveInitialRouteWithTimeout = () =>
 export default function App() {
   const [fontsLoaded, setFontsLoaded] = useState(false);
   const [initialRoute, setInitialRoute] = useState(DEMO_MODE ? 'Onboarding' : null);
+  // §13.3: the Welcome loginArc bee must not start flying until the splash
+  // is actually gone — it used to start on mount, spending its whole flight
+  // behind the still-visible splash. SplashScreen.hideAsync() only fires the
+  // native hide (no visible fade is configured anywhere in this app, so the
+  // hide is effectively instant), so the moment that promise resolves is the
+  // real "screen just became visible" signal to gate the arc on.
+  const [splashHidden, setSplashHidden] = useState(false);
   const navigationRef = useRef(null);
   const appState = useRef(AppState.currentState);
 
@@ -99,9 +107,10 @@ export default function App() {
     return () => subscription.remove();
   }, []);
 
-  const onLayoutRootView = useCallback(() => {
+  const onLayoutRootView = useCallback(async () => {
     if (fontsLoaded) {
-      SplashScreen.hideAsync();
+      await SplashScreen.hideAsync();
+      setSplashHidden(true);
     }
   }, [fontsLoaded]);
 
@@ -127,6 +136,7 @@ export default function App() {
                 {...props}
                 startAt={props.route.params?.startAt}
                 onDone={() => props.navigation.replace('Main')}
+                splashHidden={splashHidden}
               />
             )}
           </Stack.Screen>
@@ -152,6 +162,12 @@ export default function App() {
           <Stack.Screen name="Main" component={MainTabs} />
 
           <Stack.Screen name="Legal" component={LegalScreen} options={{ presentation: 'modal' }} />
+
+          {/* Opened by the account door beside the tab capsule (MainTabs
+              Option C). A modal, not a tab: it's the app's only route to
+              sign-out and the legal documents, and it's opened about twice
+              a year. */}
+          <Stack.Screen name="Account" component={AccountScreen} options={{ presentation: 'modal' }} />
 
           <Stack.Screen name="Evening">
             {(props) => (

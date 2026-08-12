@@ -180,12 +180,12 @@ const ArrivingLight = ({ size = 180 }) => {
 };
 
 // --- Step 1: Welcome — show the value before asking for any effort ---
-// Demo-mode only: a visible A/B/C picker so anyone running the app can switch
+// Demo-mode only: a visible B/C picker so anyone running the app can switch
 // flows without knowing the hidden 5-tap gesture (DevVersionTag). Sits below
 // the value prop so it never competes with the actual pitch.
 const FlowToggle = ({ flow, onChange }) => (
   <View style={styles.flowToggleRow}>
-    {['A', 'B', 'C'].map((option) => {
+    {['B', 'C'].map((option) => {
       const selected = option === flow;
       return (
         <PressableScale
@@ -213,12 +213,21 @@ const FlowToggle = ({ flow, onChange }) => (
 // context), which is the boundary §13.3 actually means by "app open."
 let hasArcedThisLaunch = false;
 
-const WelcomeStep = ({ step, onNext, flow, onChangeFlow, onSkipDemo }) => {
-  const [showArc, setShowArc] = useState(!hasArcedThisLaunch);
+const WelcomeStep = ({ step, onNext, flow, onChangeFlow, onSkipDemo, splashHidden }) => {
+  // Starting the arc on mount used to spend its whole flight behind the
+  // still-visible splash (§13.3 follow-up, Pixel/Sage 2026-08-12: "once per
+  // app open" means once VISIBLY, and an arc spent behind the splash is
+  // zero arcs). Gate on the splash-hide signal from App.js instead — by the
+  // time a foreground-resume remount gets here, splash is long gone and
+  // splashHidden is already true, so this fires immediately, same as today.
+  const [showArc, setShowArc] = useState(false);
 
   useEffect(() => {
-    if (showArc) hasArcedThisLaunch = true;
-  }, [showArc]);
+    if (splashHidden && !hasArcedThisLaunch) {
+      hasArcedThisLaunch = true;
+      setShowArc(true);
+    }
+  }, [splashHidden]);
 
   return (
     <StepShell step={step} stage="welcome" wash={theme.colors.washYellow}>
@@ -362,7 +371,7 @@ const FirstEntryStep = ({ step, name, onNext, onBack, onSave }) => {
   };
 
   return (
-    <StepShell step={step} stage="entry" wash={theme.colors.washPeach} onBack={onBack}>
+    <StepShell step={step} stage="entry" wash={theme.colors.washYellow} onBack={onBack}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.fillBetween}>
         <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <Text style={styles.h1}>
@@ -411,7 +420,7 @@ const LockDemoStep = ({ onNext }) => {
 // --- save IS the first-ever save), never the bare badge. "given" closes the
 // --- loop back to the Welcome line. ---
 const CelebrationStep = ({ step, onNext }) => (
-  <StepShell step={step} stage="done" wash={theme.colors.washPeach}>
+  <StepShell step={step} stage="done" wash={theme.colors.washYellow}>
     <View style={styles.centerFill}>
       <View style={styles.badgeStage}>
         <CelebrationRays />
@@ -491,7 +500,7 @@ const AccountStep = ({
 
   if (confirmSent) {
     return (
-      <StepShell step={step} stage="done" wash={theme.colors.washPeach} showMap={false}>
+      <StepShell step={step} stage="done" wash={theme.colors.washYellow} showMap={false}>
         <View style={styles.centerFill}>
           <Text style={styles.h1Center}>Check your email</Text>
           <Text style={styles.bodyLgCenter}>
@@ -505,7 +514,7 @@ const AccountStep = ({
   }
 
   return (
-    <StepShell step={step} stage="done" wash={theme.colors.washPeach} showMap={false}>
+    <StepShell step={step} stage="done" wash={theme.colors.washYellow} showMap={false}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.fillBetween}>
         <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <Text style={styles.h1}>{isSignUp ? 'Keep it.' : 'Welcome back'}</Text>
@@ -592,13 +601,12 @@ const AccountStep = ({
   );
 };
 
-// --- Controller: owns the answers, drives Flow A (5 steps), Flow B (8 —
-// --- adds the three belief screens before Name), or Flow C (5, same shape
-// --- as A but the entry step demos the real lock/unlock loop instead of
-// --- the plain form). Flow read once from the hidden dev toggle
-// --- (DevSettings); Welcome is shared so there's no flicker if it
-// --- resolves a beat after mount. ---
-export const OnboardingFlow = ({ onDone, initialFlow = 'B', startAt, navigation }) => {
+// --- Controller: owns the answers, drives Flow B (8 steps — adds the three
+// --- belief screens before Name) or Flow C (5, entry step demos the real
+// --- lock/unlock loop instead of the plain form). Flow read once from the
+// --- hidden dev toggle (DevSettings); Welcome is shared so there's no
+// --- flicker if it resolves a beat after mount. ---
+export const OnboardingFlow = ({ onDone, initialFlow = 'B', startAt, navigation, splashHidden }) => {
   const { session } = useAuth();
   const [flow, setFlow] = useState(initialFlow);
   const [step, setStep] = useState(0);
@@ -674,6 +682,7 @@ export const OnboardingFlow = ({ onDone, initialFlow = 'B', startAt, navigation 
         flow={flow}
         onChangeFlow={handleChangeFlow}
         onSkipDemo={finish}
+        splashHidden={splashHidden}
       />
     );
   } else if (isBeliefStep) {

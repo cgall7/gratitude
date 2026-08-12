@@ -10,8 +10,10 @@ const PARTICLE_DISTANCE = 60;
 
 // First-ever-save treatment only (Sunbeam §4, upgraded §11.3): staggered
 // accentBurst rays + scattering particle dots behind the CelebrationBadge,
-// full-bleed washPeach staging. The badge itself never changes size — this
-// is what scales the moment instead. Self-centering (R18): the stage fills
+// full-bleed washYellow staging (R50 — activation is no longer wash-
+// differentiated; light and motion carry the moment). The badge itself
+// never changes size — this is what scales the moment instead. Self-
+// centering (R18): the stage fills
 // whatever box it is rendered into and the burst anchors at that box's
 // center, so no wrapper-size contract exists to violate.
 export const CelebrationRays = () => {

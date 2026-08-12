@@ -6,7 +6,6 @@ import { theme } from '../constants/theme';
 import { DURATIONS, staggerDelay, useReducedMotion } from '../constants/motion';
 import { StaggeredItem } from '../components/StaggeredItem';
 import { PressableScale } from '../components/PressableScale';
-import { PrimaryButton } from '../components/PrimaryButton';
 import { ThemeCardFlip } from '../components/ThemeCardFlip';
 import { StripePattern } from '../components/StripeTexture';
 import { useSvgId } from '../utils/svgId';
@@ -175,7 +174,6 @@ export const MonthlyRecap = ({
   daysInMonth = 31,
   insightTheme,
   insightDescription,
-  onPreviewWrapped,
   // False for the pages either side of the one you're looking at. Defaults
   // true so a lone MonthlyRecap behaves exactly as it did before the pager.
   active = true,
@@ -457,14 +455,6 @@ export const MonthlyRecap = ({
           ? `${entriesByDay.size} of ${daysInMonth} days filled in`
           : 'No entries this month yet.'}
       </Text>
-
-      <PrimaryButton
-        onPress={onPreviewWrapped}
-        style={styles.wrappedTeaser}
-        containerStyle={styles.wrappedTeaserContainer}
-      >
-        Preview your annual Wrapped
-      </PrimaryButton>
     </View>
   );
 };
@@ -608,17 +598,5 @@ const styles = StyleSheet.create({
     color: theme.colors.inkSoft,
     marginTop: 16,
     marginBottom: 32,
-  },
-  wrappedTeaser: {
-    marginTop: 4,
-  },
-  // Pixel's device gate (2026-08-11, R43): `alignSelf: 'stretch'` on
-  // `wrappedTeaser` above compiled but couldn't work — `style` on
-  // PressableScale only ever reaches the inner Animated.View, one node
-  // short of the actual flex child. `content`'s `alignItems: 'center'`
-  // shrinks that outer Pressable to its label with no side padding unless
-  // IT claims the cross-axis, which is what `containerStyle` is for.
-  wrappedTeaserContainer: {
-    alignSelf: 'stretch',
   },
 });
