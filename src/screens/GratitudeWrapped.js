@@ -10,8 +10,9 @@ import { dominantTheme } from '../utils/themeTagger';
 import { startOfYear, endOfYear, longestStreak } from '../utils/dateRanges';
 import { DURATIONS, SPRINGS, useReducedMotion } from '../constants/motion';
 
-// Each beat gets its own wash behind the card instead of a flat 12% tint
-// over the whole screen, which just muddied the cream.
+// Beats are grounded on the warm wash, with the closer on sky — washes
+// behind the card instead of a flat 12% tint over the whole screen,
+// which just muddied the cream.
 const SLIDE_WASHES = [
   theme.colors.washYellow,
   theme.colors.washYellow,
