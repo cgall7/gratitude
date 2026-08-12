@@ -57,10 +57,26 @@ const JourneyCell = ({ status, reduced }) => {
     // un-reducing would run backwards before self-correcting. No-op on
     // mount, where `pulse` is already 0.
     pulse.setValue(0);
+    // Timing legs, not springs (§12.5.1d). A breathing loop wants a
+    // specified period, and a spring can't give one: `Animated.sequence`
+    // advances on the animation's *end* callback, which fires at RN's
+    // rest threshold rather than at visibility. With the old `glide`
+    // springs that made the period 1200ms of which ~800ms was a hold at
+    // rest — a cadence nobody chose, and against §14/R9's "almost
+    // obnoxious" ambient-motion want, a marker that was still two thirds
+    // of the time. The springs bought nothing back: at 1.408% overshoot
+    // on this cell's travel that is 0.076px of scale and 0.63% of
+    // opacity, invisible either way.
+    //
+    // 1200ms legs = a 2400ms cycle, continuously moving. Half GlowOrb's
+    // atmospheric breath, because the current-step marker is a
+    // wayfinding cue and should read livelier than background. Easing is
+    // RN's `timing` default (ease-in-out) — same as GlowOrb, which is
+    // the same effect and should share its character.
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.spring(pulse, { toValue: 1, friction: 9, tension: 60, useNativeDriver: true }),
-        Animated.spring(pulse, { toValue: 0, friction: 9, tension: 60, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 1, duration: 1200, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0, duration: 1200, useNativeDriver: true }),
       ])
     );
     loop.start();
