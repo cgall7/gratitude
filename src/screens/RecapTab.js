@@ -84,7 +84,7 @@ const MonthRail = ({ count, activeIndex }) => (
   </View>
 );
 
-export const RecapTab = ({ navigation }) => {
+export const RecapTab = () => {
   const [loading, setLoading] = useState(true);
   const [allEntries, setAllEntries] = useState([]);
   // Tracked by month key, not index, so a reload that adds a page (or rolls
@@ -188,7 +188,6 @@ export const RecapTab = ({ navigation }) => {
                 daysInMonth={month.daysInMonth}
                 insightTheme={insight ? insight.theme : null}
                 insightDescription={insight ? describeTheme(insight, 'days this month') : null}
-                onPreviewWrapped={() => navigation.navigate('Wrapped')}
                 active={index === activeIndex}
               />
             </View>
