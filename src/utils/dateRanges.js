@@ -20,6 +20,49 @@ export const endOfWeek = (date) => {
   return end;
 };
 
+// The hive week window: today plus the six days behind it. One constant so
+// the store's query floor and the view's grouping can never disagree about
+// how long "last 7 days" is.
+export const HIVE_WEEK_DAYS = 7;
+
+export const daysAgoISO = (days, from = new Date()) => {
+  const d = new Date(from);
+  d.setDate(d.getDate() - days);
+  return toISODate(d);
+};
+
+// Header label for a day section in the week view. Split-parse rather than
+// `new Date(iso)` for the same UTC-parsing reason as recentMonths below.
+const dayLabel = (iso, today) => {
+  if (iso === toISODate(today)) return 'Today';
+  if (iso === daysAgoISO(1, today)) return 'Yesterday';
+  const [year, month, day] = iso.split('-').map(Number);
+  return new Date(year, month - 1, day).toLocaleDateString(undefined, { weekday: 'long' });
+};
+
+// Venmo-style day sections for the hive's last-7-days view: newest day
+// first, each holding its shares in the order they arrived (the query
+// already sorts newest-first, and grouping preserves that). A share is
+// filed under the day its gratitude is *about* (`entryDate`), falling back
+// to the day it was shared. Days with nothing in them don't appear — the
+// window itself is the store's job, not this function's.
+export const groupSharesByDay = (shares, today = new Date()) => {
+  const sections = [];
+  const byDate = new Map();
+  for (const share of shares) {
+    const iso = share.entryDate ?? toISODate(share.createdAt);
+    let section = byDate.get(iso);
+    if (!section) {
+      section = { date: iso, label: dayLabel(iso, today), shares: [] };
+      byDate.set(iso, section);
+      sections.push(section);
+    }
+    section.shares.push(share);
+  }
+  sections.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+  return sections;
+};
+
 export const startOfMonth = (date) => new Date(date.getFullYear(), date.getMonth(), 1);
 export const endOfMonth = (date) => new Date(date.getFullYear(), date.getMonth() + 1, 0);
 export const startOfYear = (date) => new Date(date.getFullYear(), 0, 1);

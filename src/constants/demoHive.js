@@ -3,8 +3,11 @@ import { toISODate } from '../utils/dateRanges';
 // Demo-only hive members (Colin's ask, 2026-08-09): the honeycomb should
 // always look lively for demos even with only 1-2 real connections. These are
 // decorative — never written to Supabase, never counted in real
-// connection/like/comment totals, and never interactive (a `demo-N` id is not
-// a uuid, so any write against it is rejected before it reaches a policy).
+// connection/like/comment totals, and never interactive. The read-only
+// register is `FeedCard`'s `isDemo` guard (§18.1.1), which is what keeps the
+// like/comment affordances from rendering at all — the database rejecting a
+// non-uuid `demo-N` id is a backstop that produces a dead control, not the
+// guard itself.
 //
 // `HoneycombTab` merges them into the raw share list; the Today comb maps that
 // list through `toGridMember`, the Last-7-Days view groups it by `entryDate`

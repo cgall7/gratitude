@@ -29,6 +29,10 @@ export const PressableScale = ({
   // but it is a behaviour change at every call site, not an opt-in.
   accessibilityLabel,
   accessibilityRole = 'button',
+  // Pure passthrough like the label: undefined by default, so no existing
+  // consumer's announcement changes. The §18 hive knob is the first caller
+  // that needs a stateful stop ("selected") rather than a plain button.
+  accessibilityState,
 }) => {
   const scale = useRef(new Animated.Value(1)).current;
 
@@ -58,6 +62,7 @@ export const PressableScale = ({
       disabled={disabled}
       accessibilityLabel={accessibilityLabel}
       accessibilityRole={accessibilityRole}
+      accessibilityState={accessibilityState}
     >
       <Animated.View style={[style, { opacity: disabled ? 0.4 : 1, transform: [{ scale }] }]}>
         {children}
