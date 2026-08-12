@@ -16,7 +16,14 @@ export const DevSettings = {
     // plain form) was deleted 2026-08-12 — any device with a stale 'A'
     // falls through to B here rather than staying stuck on a flow the UI
     // can no longer select.
-    return value === 'C' ? value : 'B';
+    const resolved = value === 'C' ? value : 'B';
+    // Self-heal a stale invalid value (e.g. 'A') by writing the resolved
+    // value back — otherwise AsyncStorage holds it forever, waiting for a
+    // future reader that doesn't route through this getter. Skip the write
+    // when value is null (never set): that's the normal fresh-install case,
+    // not a value to correct.
+    if (value !== null && value !== resolved) await AsyncStorage.setItem(FLOW_KEY, resolved);
+    return resolved;
   },
   async setOnboardingFlow(flow) {
     await AsyncStorage.setItem(FLOW_KEY, flow === 'C' ? flow : 'B');
