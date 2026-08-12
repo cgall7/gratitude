@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, Animated, StyleSheet, Pressable, Easing } from 'react-native';
-import Svg, { Polygon } from 'react-native-svg';
+import Svg, { Polygon, Defs, ClipPath, Image as SvgImage } from 'react-native-svg';
 import { theme } from '../constants/theme';
-import { Avatar, avatarColorFor } from './Avatar';
+import { avatarColorFor } from './Avatar';
+import { hexPoints } from './HexShape';
+import { useSvgId } from '../utils/svgId';
 import { DURATIONS, STAGGER_MS, useReducedMotion } from '../constants/motion';
 
 // Cube-direction walk around a hex ring, center-out — gives us the classic
@@ -38,10 +40,19 @@ const hexSpiral = (maxRadius) => {
   return cells;
 };
 
-// Flat-top axial -> pixel, matches the flat-top polygon points in HexCell.
+// ONE ring around one centre. A hex spiral only closes at 1, 7, 19 — at any
+// other count the outer ring is part-built and the whole cluster hangs off
+// to one side, which is what the old cap of 12 did: it left ring 2 five
+// twelfths filled, so the shape's centre of area sat 29.4pt below "You".
+// Seven is the first count that closes, and it is also an honest size for a
+// gratitude circle.
+export const HIVE_SLOTS = 7;
+const SPIRAL = hexSpiral(1);
+
+// Flat-top axial -> pixel, matches the flat-top polygon points in HexShape.
 const axialToPixel = (q, r, size) => ({
   x: size * 1.5 * q,
-  y: size * (Math.sqrt(3) / 2 * q + Math.sqrt(3) * r),
+  y: size * ((Math.sqrt(3) / 2) * q + Math.sqrt(3) * r),
 });
 
 // Inverse of axialToPixel (flat-top), pre-round — see Red Blob Games'
@@ -71,13 +82,85 @@ const axialRound = (q, r) => {
   return { q: rx, r: rz };
 };
 
-const hexPoints = (size) => {
-  const pts = [];
-  for (let i = 0; i < 6; i += 1) {
-    const angle = (Math.PI / 180) * (60 * i);
-    pts.push(`${size + size * Math.cos(angle)},${size + size * Math.sin(angle)}`);
-  }
-  return pts.join(' ');
+const initialsFor = (name) => {
+  const parts = (name || '?').trim().split(/\s+/);
+  const first = parts[0]?.[0] ?? '';
+  const last = parts.length > 1 ? parts[parts.length - 1]?.[0] ?? '' : '';
+  return (first + last).toUpperCase();
+};
+
+// The cell IS the portrait. Before this the grid drew a hexagon and then
+// dropped a fully opaque circle on top of it, so the honeycomb read as
+// circles with corners peeking out — two shapes fighting, at two different
+// densities, for one person. The photo (or the initials wash) is clipped to
+// the hexagon, so a face is simply a cell in a comb.
+const FilledCell = ({ member, size, selected }) => {
+  const clipId = useSvgId('hivecell');
+  const points = useMemo(() => hexPoints(size), [size]);
+  const tint = avatarColorFor(member.name);
+
+  return (
+    <View>
+      <Svg width={size * 2} height={size * 2}>
+        <Defs>
+          <ClipPath id={clipId}>
+            <Polygon points={points} />
+          </ClipPath>
+        </Defs>
+        {member.avatarUrl ? (
+          <SvgImage
+            href={{ uri: member.avatarUrl }}
+            x="0"
+            y="0"
+            width={size * 2}
+            height={size * 2}
+            preserveAspectRatio="xMidYMid slice"
+            clipPath={`url(#${clipId})`}
+          />
+        ) : (
+          <Polygon points={points} fill={tint} />
+        )}
+        <Polygon
+          points={points}
+          fill="none"
+          stroke={selected ? theme.colors.ink : theme.colors.surface}
+          strokeWidth={selected ? 2.5 : 2}
+        />
+      </Svg>
+      {!member.avatarUrl && (
+        <View style={styles.cellOverlay} pointerEvents="none">
+          <Text style={[styles.initials, { fontSize: size * 0.42 }]}>
+            {member.isOwn ? 'You' : initialsFor(member.name)}
+          </Text>
+        </View>
+      )}
+    </View>
+  );
+};
+
+// An empty seat, and an honest one: a quiet outline with a `+`. The grid
+// used to fabricate strangers to fill these, which made a hive of one look
+// like a hive of twelve. An empty cell is also the invite target — the
+// gap in the comb is the thing you tap to close it.
+const EmptyCell = ({ size }) => {
+  const points = useMemo(() => hexPoints(size), [size]);
+
+  return (
+    <View>
+      <Svg width={size * 2} height={size * 2}>
+        <Polygon
+          points={points}
+          fill={theme.colors.surface}
+          fillOpacity={0.45}
+          stroke={theme.colors.surfaceBorderStrong}
+          strokeWidth={1.5}
+        />
+      </Svg>
+      <View style={styles.cellOverlay} pointerEvents="none">
+        <Text style={[styles.plus, { fontSize: size * 0.5 }]}>+</Text>
+      </View>
+    </View>
+  );
 };
 
 const HexCell = ({ member, size, x, y, delay, selected, reduced }) => {
@@ -94,9 +177,6 @@ const HexCell = ({ member, size, x, y, delay, selected, reduced }) => {
   }, [progress, delay, reduced]);
 
   const scale = progress.interpolate({ inputRange: [0, 1], outputRange: [reduced ? 1 : 0.15, 1] });
-  const opacity = progress;
-  const tint = avatarColorFor(member.name);
-  const points = useMemo(() => hexPoints(size), [size]);
 
   return (
     <Animated.View
@@ -108,33 +188,19 @@ const HexCell = ({ member, size, x, y, delay, selected, reduced }) => {
           width: size * 2,
           height: size * 2,
           transform: [{ scale }],
-          opacity,
+          opacity: progress,
         },
       ]}
     >
-      <View>
-        <Svg width={size * 2} height={size * 2}>
-          <Polygon
-            points={points}
-            fill={tint}
-            fillOpacity={selected ? 0.9 : member.isDemo ? 0.35 : 0.55}
-            stroke={selected ? theme.colors.ink : 'rgba(255,255,255,0.7)'}
-            strokeWidth={selected ? 2 : 1.5}
-          />
-        </Svg>
-        <View style={styles.avatarOverlay} pointerEvents="none">
-          <Avatar name={member.name} avatarUrl={member.avatarUrl} size={size * 1.05} />
-        </View>
-      </View>
+      {member ? <FilledCell member={member} size={size} selected={selected} /> : <EmptyCell size={size} />}
     </Animated.View>
   );
 };
 
-// The "super animated" hive: zoom the whole cluster in from far away while
-// each hex cell pops in center-out, like the camera is diving into the
-// honeycomb and cells are filling with people as it arrives. Tap a cell to
-// reveal who it is and what they're grateful for.
-export const HoneycombGrid = ({ members, cellSize = 34 }) => {
+// The hive's Today view: who in your circle has shared today. Seven seats,
+// you in the middle, one ring around you. Tap a face to read what they
+// wrote; tap a gap to invite someone into it.
+export const HoneycombGrid = ({ members, cellSize = 44, onInvitePress }) => {
   const [selected, setSelected] = useState(null);
   const reduced = useReducedMotion();
   const cameraProgress = useRef(new Animated.Value(0)).current;
@@ -150,38 +216,44 @@ export const HoneycombGrid = ({ members, cellSize = 34 }) => {
   }, [cameraProgress, reduced]);
 
   const layout = useMemo(() => {
-    const spiral = hexSpiral(3).slice(0, members.length);
-    const positions = spiral.map((axial) => axialToPixel(axial.q, axial.r, cellSize));
+    // Always seven slots. Members fill them centre-out; the rest stay empty
+    // rather than being padded with people who don't exist.
+    const seated = members.slice(0, HIVE_SLOTS);
+    const positions = SPIRAL.map((axial) => axialToPixel(axial.q, axial.r, cellSize));
     const minX = Math.min(...positions.map((p) => p.x));
-    const maxX = Math.max(...positions.map((p) => p.x));
     const minY = Math.min(...positions.map((p) => p.y));
-    const maxY = Math.max(...positions.map((p) => p.y));
-    const width = maxX - minX + cellSize * 2;
-    const height = maxY - minY + cellSize * 2;
+    const width = Math.max(...positions.map((p) => p.x)) - minX + cellSize * 2;
+    const height = Math.max(...positions.map((p) => p.y)) - minY + cellSize * 2;
+
     const byAxial = new Map();
-    const cells = members.map((member, index) => {
-      const axial = spiral[index];
+    const cells = SPIRAL.map((axial, index) => {
+      const member = seated[index] ?? null;
       byAxial.set(`${axial.q},${axial.r}`, member);
       return {
+        key: member?.id ?? `empty-${axial.q},${axial.r}`,
         member,
         x: positions[index].x - minX,
         y: positions[index].y - minY,
         delay: index * STAGGER_MS,
       };
     });
+
     // Single hit-test for the whole cluster (R25/R34): a tap lands on the
     // hexagon whose center it's nearest to, not on whichever cell's box
     // happened to paint last. Cell centers sit at (x + cellSize, y + cellSize)
     // in this same cluster space, so undo that offset before inverting.
+    // A tap outside the seven slots returns undefined and is ignored.
     const hitTest = (tapX, tapY) => {
       const raw = pixelToAxialRaw(tapX + minX - cellSize, tapY + minY - cellSize, cellSize);
       const { q, r } = axialRound(raw.q, raw.r);
-      return byAxial.get(`${q},${r}`) ?? null;
+      const key = `${q},${r}`;
+      return byAxial.has(key) ? { seat: key, member: byAxial.get(key) } : null;
     };
+
     return { cells, width, height, hitTest };
   }, [members, cellSize]);
 
-  const handlePress = (member) => {
+  const handleSelect = (member) => {
     revealProgress.setValue(0);
     setSelected(member);
     Animated.timing(revealProgress, {
@@ -195,7 +267,6 @@ export const HoneycombGrid = ({ members, cellSize = 34 }) => {
   // The camera dive-in is the screen's signature move, but it's also pure
   // travel — under Reduce Motion the cluster simply fades up in place.
   const cameraScale = cameraProgress.interpolate({ inputRange: [0, 1], outputRange: [reduced ? 1 : 1.8, 1] });
-  const cameraOpacity = cameraProgress;
 
   return (
     <View style={styles.container}>
@@ -206,18 +277,18 @@ export const HoneycombGrid = ({ members, cellSize = 34 }) => {
             height: layout.height,
             alignSelf: 'center',
             transform: [{ scale: cameraScale }],
-            opacity: cameraOpacity,
+            opacity: cameraProgress,
           }}
         >
-          {layout.cells.map(({ member, x, y, delay }) => (
+          {layout.cells.map(({ key, member, x, y, delay }) => (
             <HexCell
-              key={member.id}
+              key={key}
               member={member}
               size={cellSize}
               x={x}
               y={y}
               delay={delay}
-              selected={selected?.id === member.id}
+              selected={!!member && selected?.id === member.id}
               reduced={reduced}
             />
           ))}
@@ -225,8 +296,10 @@ export const HoneycombGrid = ({ members, cellSize = 34 }) => {
             style={StyleSheet.absoluteFill}
             onPress={(e) => {
               const { locationX, locationY } = e.nativeEvent;
-              const member = layout.hitTest(locationX, locationY);
-              if (member) handlePress(member);
+              const hit = layout.hitTest(locationX, locationY);
+              if (!hit) return;
+              if (hit.member) handleSelect(hit.member);
+              else onInvitePress?.();
             }}
             accessible={false}
           />
@@ -247,10 +320,7 @@ export const HoneycombGrid = ({ members, cellSize = 34 }) => {
             },
           ]}
         >
-          <View style={styles.revealHeader}>
-            <Avatar name={selected.name} avatarUrl={selected.avatarUrl} size={36} />
-            <Text style={styles.revealName}>{selected.isOwn ? 'You' : selected.name}</Text>
-          </View>
+          <Text style={styles.revealName}>{selected.isOwn ? 'You' : selected.name}</Text>
           <Text style={styles.revealQuote}>"{selected.gratitude}"</Text>
         </Animated.View>
       )}
@@ -269,14 +339,19 @@ const styles = StyleSheet.create({
   cellWrap: {
     position: 'absolute',
   },
-  avatarOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+  cellOverlay: {
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  initials: {
+    fontFamily: theme.fonts.bodySemiBold,
+    color: theme.colors.ink,
+  },
+  plus: {
+    fontFamily: theme.fonts.body,
+    color: theme.colors.inkSoft,
+    opacity: 0.55,
   },
   revealCard: {
     marginTop: 12,
@@ -287,16 +362,10 @@ const styles = StyleSheet.create({
     padding: 16,
     ...theme.shadows.card,
   },
-  revealHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 8,
-  },
   revealName: {
-    ...theme.type.bodySm,
-    fontFamily: theme.fonts.bodySemiBold,
-    color: theme.colors.textPrimary,
+    ...theme.type.label,
+    color: theme.colors.inkSoft,
+    marginBottom: 8,
   },
   revealQuote: {
     fontFamily: theme.fonts.bodyItalic,
