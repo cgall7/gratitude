@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, Animated, StyleSheet, Pressable, Easing } from 'react-native';
 import Svg, { Polygon, Defs, ClipPath, Image as SvgImage } from 'react-native-svg';
 import { theme } from '../constants/theme';
-import { avatarColorFor } from './Avatar';
+import { hexTintFor } from './Avatar';
 import { hexPoints } from './HexShape';
 import { useSvgId } from '../utils/svgId';
 import { DURATIONS, STAGGER_MS, useReducedMotion } from '../constants/motion';
@@ -102,17 +102,25 @@ const DEMO_OPACITY = 0.45;
 const FilledCell = ({ member, size, selected }) => {
   const clipId = useSvgId('hivecell');
   const points = useMemo(() => hexPoints(size), [size]);
-  const tint = avatarColorFor(member.name);
+  const tint = hexTintFor(member.name);
   const register = member.isDemo && !selected ? DEMO_OPACITY : 1;
 
   return (
-    <View style={{ opacity: register }}>
+    <View>
       <Svg width={size * 2} height={size * 2}>
         <Defs>
           <ClipPath id={clipId}>
             <Polygon points={points} />
           </ClipPath>
         </Defs>
+        {/* The cell is dimmed against `surface`, never against the screen.
+            Fading the whole cell down onto Sunlit Honey composites a cool
+            wash over a warm ground and lands somewhere neither token names:
+            washSky at this register measured (243,245,225) on device —
+            green as the max channel, a sage cell in a honey comb. Backing
+            the tint with white first keeps blue the max channel (243,249,253)
+            and keeps the dimming a matter of strength, not of hue. */}
+        <Polygon points={points} fill={theme.colors.surface} />
         {member.avatarUrl ? (
           <SvgImage
             href={{ uri: member.avatarUrl }}
@@ -122,9 +130,10 @@ const FilledCell = ({ member, size, selected }) => {
             height={size * 2}
             preserveAspectRatio="xMidYMid slice"
             clipPath={`url(#${clipId})`}
+            opacity={register}
           />
         ) : (
-          <Polygon points={points} fill={tint} />
+          <Polygon points={points} fill={tint} fillOpacity={register} />
         )}
         <Polygon
           points={points}
@@ -135,7 +144,7 @@ const FilledCell = ({ member, size, selected }) => {
       </Svg>
       {!member.avatarUrl && (
         <View style={styles.cellOverlay} pointerEvents="none">
-          <Text style={[styles.initials, { fontSize: size * 0.42 }]}>
+          <Text style={[styles.initials, { fontSize: size * 0.42, opacity: register }]}>
             {member.isOwn ? 'You' : initialsFor(member.name)}
           </Text>
         </View>
