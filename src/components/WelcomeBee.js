@@ -65,7 +65,7 @@ export const WelcomeBee = ({ size = 148 }) => {
           <Path d="M18.8 10.8 C19.6 9.9 20.7 9.6 21.6 9.8" stroke={theme.colors.ink} strokeWidth={1.1} strokeLinecap="round" />
         </Svg>
         <Animated.View
-          style={[StyleSheet.absoluteFillObject, { transform: [{ scaleY: wingScaleY }] }]}
+          style={[StyleSheet.absoluteFill, { transform: [{ scaleY: wingScaleY }] }]}
         >
           <Svg width={bodySize} height={bodySize} viewBox="0 0 24 24" fill="none">
             <Ellipse cx={8.5} cy={8.6} rx={3.4} ry={2.1} fill={theme.colors.ink} fillOpacity={0.22} transform="rotate(-24 8.5 8.6)" />
