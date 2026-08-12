@@ -74,7 +74,7 @@ export const StripedBee = ({
         <Path
           d="M6.1 12 A5.8 4.2 0 0 0 6.6 15.6 L15.4 15.6 A5.8 4.2 0 0 0 15.9 12 Z"
           fill={bandColor}
-          fillOpacity={0.9}
+          fillOpacity={bandColor === fieldColor ? 1 : 0.9}
         />
         <Circle cx={17.4} cy={12.2} r={2.5} fill={theme.colors.ink} />
         <Circle cx={18.1} cy={11.5} r={0.55} fill={fieldColor} />
@@ -91,7 +91,7 @@ export const StripedBee = ({
           strokeLinecap="round"
         />
       </Svg>
-      <Animated.View style={[StyleSheet.absoluteFillObject, flutterStyle, wingStyle]}>
+      <Animated.View style={[StyleSheet.absoluteFill, flutterStyle, wingStyle]}>
         <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
           <Ellipse
             cx={8.5}

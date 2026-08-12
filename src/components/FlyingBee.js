@@ -295,7 +295,7 @@ export const FlyingBee = ({ active = true, size = DEFAULT_SIZE, style, preset, o
 
 const styles = StyleSheet.create({
   fill: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     zIndex: 5,
   },
   bee: {
