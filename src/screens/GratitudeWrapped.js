@@ -15,6 +15,7 @@ import { DURATIONS, SPRINGS, useReducedMotion } from '../constants/motion';
 const SLIDE_WASHES = [
   theme.colors.washYellow,
   theme.colors.washYellow,
+  theme.colors.washYellow,
   theme.colors.washSky,
 ];
 
