@@ -213,12 +213,21 @@ const FlowToggle = ({ flow, onChange }) => (
 // context), which is the boundary §13.3 actually means by "app open."
 let hasArcedThisLaunch = false;
 
-const WelcomeStep = ({ step, onNext, flow, onChangeFlow, onSkipDemo }) => {
-  const [showArc, setShowArc] = useState(!hasArcedThisLaunch);
+const WelcomeStep = ({ step, onNext, flow, onChangeFlow, onSkipDemo, splashHidden }) => {
+  // Starting the arc on mount used to spend its whole flight behind the
+  // still-visible splash (§13.3 follow-up, Pixel/Sage 2026-08-12: "once per
+  // app open" means once VISIBLY, and an arc spent behind the splash is
+  // zero arcs). Gate on the splash-hide signal from App.js instead — by the
+  // time a foreground-resume remount gets here, splash is long gone and
+  // splashHidden is already true, so this fires immediately, same as today.
+  const [showArc, setShowArc] = useState(false);
 
   useEffect(() => {
-    if (showArc) hasArcedThisLaunch = true;
-  }, [showArc]);
+    if (splashHidden && !hasArcedThisLaunch) {
+      hasArcedThisLaunch = true;
+      setShowArc(true);
+    }
+  }, [splashHidden]);
 
   return (
     <StepShell step={step} stage="welcome" wash={theme.colors.washYellow}>
@@ -597,7 +606,7 @@ const AccountStep = ({
 // --- lock/unlock loop instead of the plain form). Flow read once from the
 // --- hidden dev toggle (DevSettings); Welcome is shared so there's no
 // --- flicker if it resolves a beat after mount. ---
-export const OnboardingFlow = ({ onDone, initialFlow = 'B', startAt, navigation }) => {
+export const OnboardingFlow = ({ onDone, initialFlow = 'B', startAt, navigation, splashHidden }) => {
   const { session } = useAuth();
   const [flow, setFlow] = useState(initialFlow);
   const [step, setStep] = useState(0);
@@ -673,6 +682,7 @@ export const OnboardingFlow = ({ onDone, initialFlow = 'B', startAt, navigation 
         flow={flow}
         onChangeFlow={handleChangeFlow}
         onSkipDemo={finish}
+        splashHidden={splashHidden}
       />
     );
   } else if (isBeliefStep) {
