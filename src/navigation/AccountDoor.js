@@ -18,14 +18,20 @@ import { GlassBackground, useReduceTransparency } from './GlassBackground';
 export const DOOR_SIZE = 52;
 const DOOR_AVATAR_SIZE = 34;
 
+// Whether the door exists at all. Signed out there is no account to open —
+// every row behind it would be disabled — so the door simply isn't there
+// yet, and MainTabs must not reserve the space beside the capsule for it.
+// The two have to agree or the bar goes lopsided, so the condition lives
+// here once and both read it rather than each testing `session` themselves.
+export const useHasAccountDoor = () => !!useAuth().session;
+
 export const AccountDoor = () => {
   const navigation = useNavigation();
   const { session } = useAuth();
+  const hasDoor = useHasAccountDoor();
   const reduceTransparency = useReduceTransparency();
 
-  // Signed out there is no account to open — every row behind the door
-  // would be disabled — so the door simply isn't there yet.
-  if (!session) return null;
+  if (!hasDoor) return null;
 
   const name = session.user?.user_metadata?.display_name ?? session.user?.email ?? '?';
 

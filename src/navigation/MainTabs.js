@@ -8,7 +8,7 @@ import { RecapTab } from '../screens/RecapTab';
 import { GratitudeWrapped } from '../screens/GratitudeWrapped';
 import { HoneycombTab } from '../screens/HoneycombTab';
 import { TabBarButton } from './TabBarButton';
-import { AccountDoor, DOOR_SIZE } from './AccountDoor';
+import { AccountDoor, DOOR_SIZE, useHasAccountDoor } from './AccountDoor';
 import { GlassBackground, useReduceTransparency } from './GlassBackground';
 
 const Tab = createBottomTabNavigator();
@@ -80,6 +80,13 @@ export const MainTabs = () => {
   // and its background layer agree on which look is active.
   const reduceTransparency = useReduceTransparency();
 
+  // The capsule only stops short when there is something to stop short of.
+  // Signed out the door doesn't render (demo-skip and pre-signup resume both
+  // land in MainTabs, so that state ships), and a capsule still holding 64pt
+  // open for it reads as a bar that lost a tab. Symmetric insets instead:
+  // four tabs, centred, nothing missing.
+  const endInset = useHasAccountDoor() ? SIDE_INSET + DOOR_SIZE + DOOR_GAP : SIDE_INSET;
+
   return (
     <Tab.Navigator
       tabBar={(props) => <TabDock {...props} />}
@@ -88,7 +95,7 @@ export const MainTabs = () => {
         tabBarShowLabel: false,
         tabBarActiveTintColor: theme.colors.textPrimary,
         tabBarInactiveTintColor: theme.colors.textSecondary,
-        tabBarStyle: [styles.tabBar, reduceTransparency ? theme.shadows.card : theme.shadows.glass],
+        tabBarStyle: [styles.tabBar, { end: endInset }, reduceTransparency ? theme.shadows.card : theme.shadows.glass],
         tabBarItemStyle: styles.tabBarItem,
         tabBarBackground: () => <GlassBackground radius={theme.borderRadius.large} />,
         tabBarButton: (props) => <TabBarButton {...props} />,
@@ -115,8 +122,9 @@ const styles = StyleSheet.create({
     // also what makes the split behave in RTL, where the door belongs on
     // the other side.
     start: SIDE_INSET,
-    // Stops one gap short of the door instead of running the full width.
-    end: SIDE_INSET + DOOR_SIZE + DOOR_GAP,
+    // `end` is not here: it depends on whether the door exists, so MainTabs
+    // computes it and overrides this object. Both halves of the pair still
+    // have to be logical properties for the precedence reason above.
     bottom: BAR_BOTTOM,
     height: BAR_HEIGHT,
     // BottomTabBar reserves `insets.bottom` (34pt here) inside its own
