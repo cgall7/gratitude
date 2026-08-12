@@ -114,8 +114,10 @@ const FilledCell = ({ member, size, selected }) => {
           </ClipPath>
         </Defs>
         {/* The cell is dimmed against `surface`, never against the screen.
-            Fading the whole cell down onto Sunlit Honey composites a cool
-            wash over a warm ground and lands somewhere neither token names:
+            Fading the whole cell down onto Sunlit Honey (`background`,
+            #FFF7CC — this container is transparent, so that is the ground)
+            composites a cool wash over a warm ground and lands somewhere
+            neither token names:
             washSky at this register measured (243,245,225) on device —
             green as the max channel, a sage cell in a honey comb. Backing
             the tint with white first keeps blue the max channel (243,249,253)
