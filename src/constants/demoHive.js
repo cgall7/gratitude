@@ -22,7 +22,10 @@ import { toISODate } from '../utils/dateRanges';
 // unnecessary.
 //
 // THE SET IS SIZED, NOT ARBITRARY — §18 partitions on date, which made these
-// load-bearing. Keep them true if you edit the list:
+// load-bearing. All three are asserted by `npm run check:demo-hive`, which
+// runs this module for real and reads HIVE_SLOTS and the tint rotation out of
+// the files that own them — so edit the list, run it, and believe the result
+// rather than this paragraph:
 //
 //   * SEVEN members at daysAgo 0. `HIVE_SLOTS` is 7 (HoneycombGrid.js), and
 //     the grid honestly leaves unfilled seats empty rather than padding them.
@@ -36,8 +39,9 @@ import { toISODate } from '../utils/dateRanges';
 //     fresh demo user ever sees. Nothing distributes them — a name list can
 //     hash all one way by accident, and a 7/0 split is a one-color comb with
 //     no error anywhere. Today it is 3 washYellow / 4 washSky at day 0 and
-//     9 / 10 across all 19, which is luck, not design. Recompute when you add
-//     or rename a member; changing one name is enough to move it.
+//     9 / 10 across all 19, which is luck, not design — changing one name is
+//     enough to move it. The gate holds the minority tint at >= 2 of the
+//     seven: a single odd cell in a ring reads as an accident, not a rotation.
 //
 // Day 0 first, then ascending — the pre-partition call site still takes the
 // first `HIVE_SLOTS` of this list, so today's people have to come first.
