@@ -94,13 +94,19 @@ const initialsFor = (name) => {
 // circles with corners peeking out — two shapes fighting, at two different
 // densities, for one person. The photo (or the initials wash) is clipped to
 // the hexagon, so a face is simply a cell in a comb.
+// Demo members sit a register back from real ones — present enough that the
+// comb reads as populated, quiet enough that they never pass for someone you
+// actually know.
+const DEMO_OPACITY = 0.45;
+
 const FilledCell = ({ member, size, selected }) => {
   const clipId = useSvgId('hivecell');
   const points = useMemo(() => hexPoints(size), [size]);
   const tint = avatarColorFor(member.name);
+  const register = member.isDemo && !selected ? DEMO_OPACITY : 1;
 
   return (
-    <View>
+    <View style={{ opacity: register }}>
       <Svg width={size * 2} height={size * 2}>
         <Defs>
           <ClipPath id={clipId}>
