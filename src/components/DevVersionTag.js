@@ -17,7 +17,6 @@ export const DevVersionTag = () => {
 
   const openPicker = () => {
     Alert.alert('Demo: onboarding flow', 'Pick the opener to replay onboarding with.', [
-      { text: 'Flow A — straight to it', onPress: () => replayWith('A') },
       { text: 'Flow B — why it matters', onPress: () => replayWith('B') },
       { text: 'Flow C — screen lock demo', onPress: () => replayWith('C') },
       { text: 'Cancel', style: 'cancel' },

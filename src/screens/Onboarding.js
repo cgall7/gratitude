@@ -180,12 +180,12 @@ const ArrivingLight = ({ size = 180 }) => {
 };
 
 // --- Step 1: Welcome — show the value before asking for any effort ---
-// Demo-mode only: a visible A/B/C picker so anyone running the app can switch
+// Demo-mode only: a visible B/C picker so anyone running the app can switch
 // flows without knowing the hidden 5-tap gesture (DevVersionTag). Sits below
 // the value prop so it never competes with the actual pitch.
 const FlowToggle = ({ flow, onChange }) => (
   <View style={styles.flowToggleRow}>
-    {['A', 'B', 'C'].map((option) => {
+    {['B', 'C'].map((option) => {
       const selected = option === flow;
       return (
         <PressableScale
@@ -592,12 +592,11 @@ const AccountStep = ({
   );
 };
 
-// --- Controller: owns the answers, drives Flow A (5 steps), Flow B (8 —
-// --- adds the three belief screens before Name), or Flow C (5, same shape
-// --- as A but the entry step demos the real lock/unlock loop instead of
-// --- the plain form). Flow read once from the hidden dev toggle
-// --- (DevSettings); Welcome is shared so there's no flicker if it
-// --- resolves a beat after mount. ---
+// --- Controller: owns the answers, drives Flow B (8 steps — adds the three
+// --- belief screens before Name) or Flow C (5, entry step demos the real
+// --- lock/unlock loop instead of the plain form). Flow read once from the
+// --- hidden dev toggle (DevSettings); Welcome is shared so there's no
+// --- flicker if it resolves a beat after mount. ---
 export const OnboardingFlow = ({ onDone, initialFlow = 'B', startAt, navigation }) => {
   const { session } = useAuth();
   const [flow, setFlow] = useState(initialFlow);
