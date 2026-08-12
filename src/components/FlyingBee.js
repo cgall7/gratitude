@@ -1,6 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, StyleSheet, View } from 'react-native';
-import { Bee } from './Bee';
+import { StripedBee } from './StripedBee';
 import { theme } from '../constants/theme';
 import { DURATIONS, MAX_TRAIL_PARTICLES, useReducedMotion } from '../constants/motion';
 
@@ -14,13 +14,27 @@ import { DURATIONS, MAX_TRAIL_PARTICLES, useReducedMotion } from '../constants/m
 // <FlyingBee> per host), and reduced-motion collapses it to a slow static
 // opacity breathe with zero particles (§12.5 Rule 4 — no exceptions).
 //
+// §13.3 — `preset="loginArc"`: the same engine flown as a one-shot instead
+// of a loop. The bee spirals inward from off-edge, tightens to the anchor's
+// center, fades on settle, and fires `onSettle` when done — Welcome uses it
+// over the wordmark once per app open. Under Reduce Motion (or `active`
+// false) a preset flight renders nothing and settles immediately: an
+// entrance flourish someone asked the OS to suppress is skipped, not
+// slowed. Until this preset existed the Welcome call site silently fell
+// through to the cruise loop and circled the wordmark forever.
+//
+// §17.3 flight ruling — flown as `StripedBee` with `bandColor={accent}`
+// (the host under a cruising bee is never a known field, so a `fieldColor`
+// knockout would paint an opaque band over whatever it's crossing) and
+// `flutter` (airborne render path only — never on the parked/RM pose).
+//
 // Path/posture is a first engine pass (loose 5-point loop, eased timing
 // driver) — Deezine owns cruise posture/wing-flutter/glow-particle design
 // per §12.5 ownership split; swap the waypoint set or easing here without
 // touching the trail/pooling engine.
 const LOOP_MS = 7000;
 const TRAIL_INTERVAL_MS = 160;
-const DEFAULT_SIZE = 20;
+const DEFAULT_SIZE = 44;
 
 // Loose loop in fractional (0-1) container coordinates — five stops
 // (closing back on the first) so the path reads as a lazy figure-eight
@@ -32,7 +46,6 @@ const PATH = [
   { x: 0.42, y: 0.84 },
   { x: 0.14, y: 0.72 },
 ];
-const PATH_INPUT_RANGE = PATH.map((_, i) => i / (PATH.length - 1));
 
 // Rough heading per segment so the bee banks into its turn instead of
 // sliding sideways — deliberately coarse, refined later against real
@@ -42,18 +55,67 @@ const headingBetween = (a, b) => {
   const dy = b.y - a.y;
   return (Math.atan2(dy, dx) * 180) / Math.PI;
 };
-const HEADINGS = PATH.slice(0, -1).map((p, i) => headingBetween(p, PATH[i + 1]));
-const ROTATE_OUTPUT = [...HEADINGS, HEADINGS[0]];
 
-export const FlyingBee = ({ active = true, size = DEFAULT_SIZE, style }) => {
+// `closed` paths (the cruise loop) wrap the final heading back to the
+// first so the loop seam doesn't snap; one-shot presets hold their last
+// heading into the settle instead.
+const buildTrack = (path, { closed }) => {
+  const headings = path.slice(0, -1).map((p, i) => headingBetween(p, path[i + 1]));
+  return {
+    path,
+    inputRange: path.map((_, i) => i / (path.length - 1)),
+    rotateOutput: [...headings, closed ? headings[0] : headings[headings.length - 1]],
+  };
+};
+
+const CRUISE = buildTrack(PATH, { closed: true });
+
+const PRESETS = {
+  // Inward spiral: in from off-right, over the top, down the left edge,
+  // under, then tightening up into the anchor's center. Fades over the
+  // last stretch so the settle reads as the bee alighting, not vanishing.
+  loginArc: {
+    track: buildTrack(
+      [
+        { x: 1.08, y: 0.1 },
+        { x: 0.55, y: -0.12 },
+        { x: 0.1, y: 0.4 },
+        { x: 0.58, y: 0.92 },
+        { x: 0.5, y: 0.5 },
+      ],
+      { closed: false }
+    ),
+    duration: 1800,
+    opacity: { inputRange: [0, 0.08, 0.8, 1], outputRange: [0, 1, 1, 0] },
+  },
+};
+
+export const FlyingBee = ({ active = true, size = DEFAULT_SIZE, style, preset, onSettle }) => {
   const reduced = useReducedMotion();
   const [layout, setLayout] = useState(null);
   const t = useRef(new Animated.Value(0)).current;
   const breathe = useRef(new Animated.Value(0)).current;
   const posRef = useRef({ x: 0, y: 0 });
+  const beeOpacityRef = useRef(1);
   const loopRef = useRef(null);
   const trailTimerRef = useRef(null);
   const nextTrailIndexRef = useRef(0);
+  // Ref so a new callback identity never restarts an in-progress flight.
+  const onSettleRef = useRef(onSettle);
+  onSettleRef.current = onSettle;
+
+  const presetDef = preset ? PRESETS[preset] : null;
+  const track = presetDef ? presetDef.track : CRUISE;
+  const flightSuppressed = reduced || !active;
+
+  // One interpolation node per preset, shared by the render style AND the
+  // trail sampler below — a node built fresh in each place could drift
+  // across re-renders even though both read the same spec. `t` is a stable
+  // ref so this only rebuilds when `preset` itself changes.
+  const presetOpacity = useMemo(
+    () => (presetDef?.opacity ? t.interpolate(presetDef.opacity) : null),
+    [preset]
+  );
 
   // Fixed pool of trail-particle drivers — hard-capped per §12.5 Rule 3
   // (bee trail is the #1 low-end perf risk). Reused round-robin instead of
@@ -74,55 +136,90 @@ export const FlyingBee = ({ active = true, size = DEFAULT_SIZE, style }) => {
 
   // Live numeric read of the current translated position, kept in a ref
   // (not state) so the 160ms trail-drop tick can sample it without
-  // re-rendering the whole component every frame.
+  // re-rendering the whole component every frame. Same pattern covers the
+  // bee's own opacity for one-shot presets — read off the identical
+  // `presetDef.opacity` spec the render interpolates, never a second
+  // hand-derived easing, so a seeded trail particle can never claim a
+  // brighter opacity than the bee it was born from.
   useEffect(() => {
-    if (!layout || reduced || !active) return undefined;
-    const translateX = t.interpolate({ inputRange: PATH_INPUT_RANGE, outputRange: PATH.map((p) => p.x * layout.width) });
-    const translateY = t.interpolate({ inputRange: PATH_INPUT_RANGE, outputRange: PATH.map((p) => p.y * layout.height) });
-    const id = Animated.event(
-      [{ value: { x: translateX, y: translateY } }],
-      { useNativeDriver: false }
-    );
-    // Animated doesn't expose a plain "read combined interpolated value"
-    // API, so we track x/y independently via two lightweight listeners.
+    if (!layout || flightSuppressed) return undefined;
+    const translateX = t.interpolate({ inputRange: track.inputRange, outputRange: track.path.map((p) => p.x * layout.width) });
+    const translateY = t.interpolate({ inputRange: track.inputRange, outputRange: track.path.map((p) => p.y * layout.height) });
     const xId = translateX.addListener(({ value }) => { posRef.current.x = value; });
     const yId = translateY.addListener(({ value }) => { posRef.current.y = value; });
+    let oId = null;
+    if (presetOpacity) {
+      oId = presetOpacity.addListener(({ value }) => { beeOpacityRef.current = value; });
+    } else {
+      beeOpacityRef.current = 1;
+    }
     return () => {
       translateX.removeListener(xId);
       translateY.removeListener(yId);
+      if (presetOpacity) presetOpacity.removeListener(oId);
     };
-  }, [layout, reduced, active]);
+  }, [layout, flightSuppressed, preset, presetOpacity]);
 
-  // Drive the cruise loop.
+  // Drive the flight — looping cruise, or a one-shot preset that settles.
   useEffect(() => {
-    if (!layout || reduced || !active) {
+    if (!layout || flightSuppressed) {
       loopRef.current?.stop();
       return undefined;
     }
     t.setValue(0);
-    loopRef.current = Animated.loop(
-      Animated.timing(t, {
+    if (presetDef) {
+      loopRef.current = Animated.timing(t, {
         toValue: 1,
-        duration: LOOP_MS,
-        easing: Easing.inOut(Easing.ease),
+        duration: presetDef.duration,
+        easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
-      })
-    );
-    loopRef.current.start();
+      });
+      loopRef.current.start(({ finished }) => {
+        if (finished) onSettleRef.current?.();
+      });
+    } else {
+      loopRef.current = Animated.loop(
+        Animated.timing(t, {
+          toValue: 1,
+          duration: LOOP_MS,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        })
+      );
+      loopRef.current.start();
+    }
     return () => loopRef.current?.stop();
-  }, [layout, reduced, active]);
+  }, [layout, flightSuppressed, preset]);
+
+  // A suppressed preset flight settles instantly — the host is waiting on
+  // onSettle to move on, and there is no parked pose for an entrance.
+  useEffect(() => {
+    if (presetDef && flightSuppressed) onSettleRef.current?.();
+  }, [flightSuppressed, preset]);
 
   // Drop a pooled glow-trail particle at the bee's current position on a
   // fixed cadence, fading it out over DURATIONS.trailFade. Paused whenever
-  // the cruise itself is paused (reduced motion, inactive, or no layout).
+  // the flight itself is paused (reduced motion, inactive, or no layout).
+  //
+  // §17.3 R51 addendum 1 (final): seed-scale, don't cut off. An earlier
+  // pass stopped dropping particles once the bee's own fade began, so the
+  // trail went dark for the back ~58% of a one-shot flight — deleting the
+  // named glow from most of the one flight a cold launch actually shows.
+  // Instead every dropped particle's seed opacity is scaled by the bee's
+  // OWN opacity at the moment it's born (`0.8 * beeOpacityRef.current`),
+  // read off the same interpolation the render uses. That satisfies "no
+  // particle outglows the bee it came from" literally — worst case is a
+  // particle seeded a hair before settle, already near-zero — while
+  // keeping the glow lit the whole arc. Cruise opacity is a constant 1, so
+  // the scale is the identity there; no preset-vs-cruise branch needed.
   useEffect(() => {
-    if (!layout || reduced || !active) return undefined;
+    if (!layout || flightSuppressed) return undefined;
     trailTimerRef.current = setInterval(() => {
       const slot = trailPool[nextTrailIndexRef.current];
       nextTrailIndexRef.current = (nextTrailIndexRef.current + 1) % trailPool.length;
       slot.pos.x = posRef.current.x;
       slot.pos.y = posRef.current.y;
-      slot.opacity.setValue(0.8);
+      slot.opacity.setValue(0.8 * beeOpacityRef.current);
       slot.scale.setValue(1);
       forceTrailRender((n) => n + 1);
       Animated.parallel([
@@ -131,12 +228,12 @@ export const FlyingBee = ({ active = true, size = DEFAULT_SIZE, style }) => {
       ]).start();
     }, TRAIL_INTERVAL_MS);
     return () => clearInterval(trailTimerRef.current);
-  }, [layout, reduced, active]);
+  }, [layout, flightSuppressed, preset]);
 
   // Reduced motion (§12.5 Rule 4) / parked (inactive): no flight, no
   // particles — a small static bee that breathes via opacity only.
   useEffect(() => {
-    if (active && !reduced) return undefined;
+    if (!flightSuppressed || presetDef) return undefined;
     const loop = Animated.loop(
       Animated.sequence([
         Animated.timing(breathe, { toValue: 1, duration: DURATIONS.reducedMotionFade * 4, useNativeDriver: true }),
@@ -145,24 +242,26 @@ export const FlyingBee = ({ active = true, size = DEFAULT_SIZE, style }) => {
     );
     loop.start();
     return () => loop.stop();
-  }, [active, reduced]);
+  }, [flightSuppressed, preset]);
 
-  if (!active || reduced) {
+  if (flightSuppressed) {
+    if (presetDef) return null;
     const opacity = breathe.interpolate({ inputRange: [0, 1], outputRange: [0.55, 1] });
     return (
       <View style={[styles.parkedAnchor, style]} pointerEvents="none">
         <Animated.View style={{ opacity }}>
-          <Bee size={size} />
+          <StripedBee size={size} bandColor={theme.colors.accent} />
         </Animated.View>
       </View>
     );
   }
 
-  const translateX = layout ? t.interpolate({ inputRange: PATH_INPUT_RANGE, outputRange: PATH.map((p) => p.x * layout.width) }) : 0;
-  const translateY = layout ? t.interpolate({ inputRange: PATH_INPUT_RANGE, outputRange: PATH.map((p) => p.y * layout.height) }) : 0;
+  const translateX = layout ? t.interpolate({ inputRange: track.inputRange, outputRange: track.path.map((p) => p.x * layout.width) }) : 0;
+  const translateY = layout ? t.interpolate({ inputRange: track.inputRange, outputRange: track.path.map((p) => p.y * layout.height) }) : 0;
   const rotate = layout
-    ? t.interpolate({ inputRange: PATH_INPUT_RANGE, outputRange: ROTATE_OUTPUT.map((deg) => `${deg}deg`) })
+    ? t.interpolate({ inputRange: track.inputRange, outputRange: track.rotateOutput.map((deg) => `${deg}deg`) })
     : '0deg';
+  const flightOpacity = presetOpacity ?? 1;
 
   return (
     <View style={[styles.fill, style]} onLayout={onLayout} pointerEvents="none">
@@ -185,9 +284,9 @@ export const FlyingBee = ({ active = true, size = DEFAULT_SIZE, style }) => {
         ))}
       {layout && (
         <Animated.View
-          style={[styles.bee, { transform: [{ translateX }, { translateY }, { rotate }] }]}
+          style={[styles.bee, { opacity: flightOpacity, transform: [{ translateX }, { translateY }, { rotate }] }]}
         >
-          <Bee size={size} />
+          <StripedBee size={size} bandColor={theme.colors.accent} flutter />
         </Animated.View>
       )}
     </View>

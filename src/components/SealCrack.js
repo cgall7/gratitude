@@ -4,7 +4,7 @@ import * as Haptics from 'expo-haptics';
 import { theme } from '../constants/theme';
 import { SPRINGS, DURATIONS, useReducedMotion } from '../constants/motion';
 import { BeeTransition } from './BeeTransition';
-import { Bee } from './Bee';
+import { StripedBee } from './StripedBee';
 import { CelebrationRays } from './CelebrationRays';
 
 // §14.2 Beat 0 — The Seal. Full gold field, spiral mark static, the bee
@@ -131,15 +131,15 @@ export const SealCrack = ({ onCracked }) => {
           // styles.beeAnchor with no transform, so the crossfade lands in
           // the same spot BeeTransition's flight was already ending at.
           //
-          // §17.3 correction: this bee is filed under "standing/keepsake"
-          // and is therefore listed for Deezine's Recap swap, but it is not
-          // a standing bee — it is the last frame of a BeeTransition flight,
-          // crossfading from the `<Bee>` that BeeTransition renders
-          // internally. Swapping only this one to StripedBee makes the
-          // handoff pop from unstriped to striped mid-fade. It is a FLIGHT
-          // site and moves with BeeTransition, on the flows branch.
+          // §17.3 correction: this bee is not a standing/keepsake bee — it
+          // is the last frame of a BeeTransition flight, crossfading from
+          // the `StripedBee` that BeeTransition renders internally. Register
+          // follows provenance: a bee that flew in stays in flight register
+          // (painted `bandColor={accent}`) even standing on gold, so props
+          // here are prop-identical to BeeTransition's internal render —
+          // same size, same bandColor — and the crossfade never pops.
           <Animated.View pointerEvents="none" style={[styles.beeAnchor, { opacity: staticBeeOpacity }]}>
-            <Bee size={22} />
+            <StripedBee size={22} bandColor={theme.colors.accent} />
           </Animated.View>
         )}
         <Image
@@ -187,7 +187,7 @@ const styles = StyleSheet.create({
     left: EYE_LEFT,
     marginTop: -11,
     marginLeft: -11,
-    // R22 (Pixel): the landed static <Bee> is an earlier sibling than
+    // R22 (Pixel): the landed static <StripedBee> is an earlier sibling than
     // <Image> with no zIndex of its own — RN paints in tree order
     // regardless of position:absolute. It was invisible only because its
     // footprint fell entirely inside the mark's transparent eye; matches

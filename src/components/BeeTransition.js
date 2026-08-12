@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, StyleSheet } from 'react-native';
-import { Bee } from './Bee';
+import { StripedBee } from './StripedBee';
+import { theme } from '../constants/theme';
 import { useReducedMotion } from '../constants/motion';
 
 // Per PLANS/HONEYCOMB_DESIGN.md §3 / §9.4: the bee arcs in and lifts off
@@ -23,7 +24,15 @@ const DEFAULT_PATH = {
   rotate: ['-4deg', '-18deg'],
 };
 
-export const BeeTransition = ({ triggerKey, path = DEFAULT_PATH, anchorStyle, size = 20 }) => {
+// §17.3 flight ruling: a bee mid-transition crosses arbitrary content, so
+// it renders `StripedBee` with `bandColor={accent}` (painted, field-
+// independent) hardcoded internally rather than as a forwarded prop — no
+// call site has ever needed to vary it, and hardcoding keeps the engine
+// signature frozen per R16. `flutter` is on for the live flight only; the
+// reduced-motion fade stays a static pose, same as FlyingBee's parked path.
+// Default size 20 → 32 — the claim arc crosses text, and 32 reads as a
+// character without going cartoon (44 is the ambient cruiser's register).
+export const BeeTransition = ({ triggerKey, path = DEFAULT_PATH, anchorStyle, size = 32 }) => {
   const progress = useRef(new Animated.Value(0)).current;
   // R17 (Pixel): switched from a mount-once AccessibilityInfo read to the
   // shared subscribing hook so a mid-flight Reduce Motion toggle is
@@ -58,7 +67,7 @@ export const BeeTransition = ({ triggerKey, path = DEFAULT_PATH, anchorStyle, si
     const opacity = progress.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, 1, 0] });
     return (
       <Animated.View pointerEvents="none" style={[styles.wrap, anchorStyle, { opacity }]}>
-        <Bee size={size} />
+        <StripedBee size={size} bandColor={theme.colors.accent} />
       </Animated.View>
     );
   }
@@ -73,7 +82,7 @@ export const BeeTransition = ({ triggerKey, path = DEFAULT_PATH, anchorStyle, si
       pointerEvents="none"
       style={[styles.wrap, anchorStyle, { opacity, transform: [{ translateX }, { translateY }, { rotate }] }]}
     >
-      <Bee size={size} />
+      <StripedBee size={size} bandColor={theme.colors.accent} flutter />
     </Animated.View>
   );
 };
