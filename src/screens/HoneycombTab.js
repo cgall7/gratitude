@@ -14,7 +14,7 @@ import { HoneycombGrid, HIVE_SLOTS } from '../components/HoneycombGrid';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { BeeTransition } from '../components/BeeTransition';
 import { FlyingBee } from '../components/FlyingBee';
-import { DEMO_HIVE_MEMBERS } from '../constants/demoHive';
+import { demoHiveShares } from '../constants/demoHive';
 import { TAB_CLEARANCE } from '../navigation/tabBarLayout';
 
 // Share carry (Sunbeam §11.2): the bee lifts the just-shared entry off the
@@ -54,7 +54,7 @@ const toGridMember = (share) => ({
 
 const buildHiveMembers = (feed) => {
   const real = feed.map(toGridMember);
-  return real.concat(DEMO_HIVE_MEMBERS.map(toGridMember)).slice(0, HIVE_SLOTS);
+  return real.concat(demoHiveShares().map(toGridMember)).slice(0, HIVE_SLOTS);
 };
 
 const RequestRow = ({ request, onRespond }) => (
