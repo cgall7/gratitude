@@ -7,7 +7,8 @@
     "start": "expo start",
     "ios": "expo run:ios",
     "android": "expo run:android",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "test": "node scripts/check-demo-hive.js"
   },
   "dependencies": {
     "@expo-google-fonts/dancing-script": "^0.4.2",
