@@ -205,50 +205,60 @@ const HoneycombFeed = () => {
   const knownFeedIdsRef = useRef(null);
 
   const loadAll = useCallback(async ({ suppressArrival = false } = {}) => {
-    const today = toISODate(new Date());
-    const [feedResult, weekFeedRaw, connectionsResult, requestsResult, entry, hiveState] = await Promise.all([
-      HoneycombStore.listFeed(),
-      // Window floor: today minus six days, inclusive — 7 day-buckets total.
-      HoneycombStore.listFeedSince(daysAgoISO(HIVE_WEEK_DAYS - 1)),
-      HoneycombStore.listConnections(),
-      HoneycombStore.listIncomingRequests(),
-      EntryStore.getEntry(new Date()),
-      // A blooming decoration failing must not take down the membership
-      // list, the feed, or friend requests — five things that exist in prod
-      // today riding on one that doesn't yet (Sage, thread e10d0fed:
-      // list_hive_state 404s until its migration is applied). Holds after
-      // the migration lands too, for the RPC that times out or errors.
-      HoneycombStore.listHiveState().catch(() => []),
-    ]);
+    // finally, not a trailing call: any of the six Promise.all members below
+    // rejecting — or hasSharedDate() further down — must still clear the
+    // spinner. Before this, only the happy path reached setLoading(false),
+    // so a rejection left the tab spinning forever with no exit (Sage,
+    // thread e10d0fed). This doesn't add an error state — that's unowned,
+    // filed to Pixel's queue in the same post — it only guarantees the
+    // loading indicator itself can't get stuck.
+    try {
+      const today = toISODate(new Date());
+      const [feedResult, weekFeedRaw, connectionsResult, requestsResult, entry, hiveState] = await Promise.all([
+        HoneycombStore.listFeed(),
+        // Window floor: today minus six days, inclusive — 7 day-buckets total.
+        HoneycombStore.listFeedSince(daysAgoISO(HIVE_WEEK_DAYS - 1)),
+        HoneycombStore.listConnections(),
+        HoneycombStore.listIncomingRequests(),
+        EntryStore.getEntry(new Date()),
+        // A blooming decoration failing must not take down the membership
+        // list, the feed, or friend requests — five things that exist in
+        // prod today riding on one that doesn't yet (Sage, thread e10d0fed:
+        // list_hive_state 404s until its migration is applied). Holds after
+        // the migration lands too, for the RPC that times out or errors.
+        HoneycombStore.listHiveState().catch(() => []),
+      ]);
 
-    // Join hive-state facts onto real shares only, before the demo set gets
-    // concatenated in (HoneycombTab.js `partitionHive`) — demo shares carry
-    // no `authorId` a fact row could match against, so joining after that
-    // point silently overwrites Maya/Theo/Jonah's authored states with
-    // `false` (R61, thread e10d0fed, Pixel). `!share.isDemo` is belt-and-
-    // braces: real shares never carry the flag, so this is always true here.
-    const bloomingByMember = new Map(hiveState.map((row) => [row.member_id, row.last_note_received_at]));
-    const weekFeedResult = weekFeedRaw.map((share) =>
-      share.isDemo ? share : { ...share, blooming: isBlooming(bloomingByMember.get(share.authorId)) }
-    );
+      // Join hive-state facts onto real shares only, before the demo set gets
+      // concatenated in (HoneycombTab.js `partitionHive`) — demo shares carry
+      // no `authorId` a fact row could match against, so joining after that
+      // point silently overwrites Maya/Theo/Jonah's authored states with
+      // `false` (R61, thread e10d0fed, Pixel). `!share.isDemo` is belt-and-
+      // braces: real shares never carry the flag, so this is always true here.
+      const bloomingByMember = new Map(hiveState.map((row) => [row.member_id, row.last_note_received_at]));
+      const weekFeedResult = weekFeedRaw.map((share) =>
+        share.isDemo ? share : { ...share, blooming: isBlooming(bloomingByMember.get(share.authorId)) }
+      );
 
-    // Feed arrival: fire only when a share we haven't seen yet lands at the
-    // top on a refresh — not on first load (so the bee never greets an
-    // empty hive filling in for the first time), and not right after our
-    // own share, which already got its own carry flight off the button.
-    if (knownFeedIdsRef.current && !suppressArrival) {
-      const hasNewArrival = feedResult.some((share) => !knownFeedIdsRef.current.has(share.id));
-      if (hasNewArrival) setFeedArrivalKey((key) => key + 1);
+      // Feed arrival: fire only when a share we haven't seen yet lands at the
+      // top on a refresh — not on first load (so the bee never greets an
+      // empty hive filling in for the first time), and not right after our
+      // own share, which already got its own carry flight off the button.
+      if (knownFeedIdsRef.current && !suppressArrival) {
+        const hasNewArrival = feedResult.some((share) => !knownFeedIdsRef.current.has(share.id));
+        if (hasNewArrival) setFeedArrivalKey((key) => key + 1);
+      }
+      knownFeedIdsRef.current = new Set(feedResult.map((share) => share.id));
+
+      setFeed(feedResult);
+      setWeekFeed(weekFeedResult);
+      setConnections(connectionsResult);
+      setIncomingRequests(requestsResult);
+      setTodayEntry(entry);
+      setAlreadySharedToday(entry ? await HoneycombStore.hasSharedDate(today) : false);
+    } finally {
+      setLoading(false);
     }
-    knownFeedIdsRef.current = new Set(feedResult.map((share) => share.id));
-
-    setFeed(feedResult);
-    setWeekFeed(weekFeedResult);
-    setConnections(connectionsResult);
-    setIncomingRequests(requestsResult);
-    setTodayEntry(entry);
-    setAlreadySharedToday(entry ? await HoneycombStore.hasSharedDate(today) : false);
-    setLoading(false);
   }, []);
 
   useFocusEffect(
