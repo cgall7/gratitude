@@ -377,14 +377,15 @@ const HoneycombFeed = () => {
 
       <HiveViewToggle view={hiveView} onChange={setHiveView} />
 
-      {/* §18/R-Sage(thread e10d0fed, §4): the toggle names two views of the
-          comb — today's grid vs. the last 7 days — and switches only that
-          content region. Add-a-friend, requests, the share CTA, and the
-          feed belong to the screen, not to either arm: they used to live
-          inside the "today" branch only, which meant a pending friend
-          request or the add-friend control was invisible for as long as
-          someone left the toggle on "Last 7 days." No failure required —
-          that's the toggle's normal, undocumented state. */}
+      {/* §18/§23.2 (thread e10d0fed, §4): does this arm's absence change what
+          the screen asserts, or only what the user can do? Add-a-friend,
+          requests, and the share CTA are controls — losing them cost an
+          action, so they render at screen level regardless of hiveView.
+          The feed is content, and weekFeed is a same-table subset of it
+          (HoneycombStore.listFeed vs .listFeedSince); rendering both at
+          once double-draws every share from the last 7 days. So the feed
+          stays paired with the comb inside the "today" arm — the toggle
+          switches comb+feed vs. week-list, chrome stays put either way. */}
       {hiveView === 'week' ? (
         <WeekView
           sections={weekSections}
@@ -392,7 +393,30 @@ const HoneycombFeed = () => {
           onLikeToggled={handleLikeToggled}
         />
       ) : (
-        <HoneycombGrid members={todayMembers} onInvitePress={() => setAddOpen(true)} />
+        <>
+          <HoneycombGrid members={todayMembers} onInvitePress={() => setAddOpen(true)} />
+
+          {feed.length === 0 ? (
+            connections.length === 0 ? (
+              <View style={[styles.emptyState, styles.emptyStateYellow]}>
+                <Text style={styles.emptyTitle}>Your hive is quiet.</Text>
+                <Text style={styles.emptyBody}>Add a connection by email to get started.</Text>
+              </View>
+            ) : (
+              <View style={[styles.emptyState, styles.emptyStateSky]}>
+                <Text style={styles.emptyTitle}>Nothing in the hive yet.</Text>
+                <Text style={styles.emptyBody}>Be the first — share today's entry…</Text>
+              </View>
+            )
+          ) : (
+            <View style={styles.feedTopAnchor}>
+              <BeeTransition triggerKey={feedArrivalKey} path={FEED_ARRIVAL_PATH} anchorStyle={styles.feedArrivalBeeAnchor} size={16} />
+              {feed.map((share) => (
+                <FeedCard key={share.id} share={share} onLikeToggled={handleLikeToggled} />
+              ))}
+            </View>
+          )}
+        </>
       )}
 
       <View style={styles.addCard}>
@@ -451,27 +475,6 @@ const HoneycombFeed = () => {
       )}
       {todayEntry && alreadySharedToday && (
         <Text style={styles.sharedConfirmation}>Shared to your hive.</Text>
-      )}
-
-      {feed.length === 0 ? (
-        connections.length === 0 ? (
-          <View style={[styles.emptyState, styles.emptyStateYellow]}>
-            <Text style={styles.emptyTitle}>Your hive is quiet.</Text>
-            <Text style={styles.emptyBody}>Add a connection by email to get started.</Text>
-          </View>
-        ) : (
-          <View style={[styles.emptyState, styles.emptyStateSky]}>
-            <Text style={styles.emptyTitle}>Nothing in the hive yet.</Text>
-            <Text style={styles.emptyBody}>Be the first — share today's entry…</Text>
-          </View>
-        )
-      ) : (
-        <View style={styles.feedTopAnchor}>
-          <BeeTransition triggerKey={feedArrivalKey} path={FEED_ARRIVAL_PATH} anchorStyle={styles.feedArrivalBeeAnchor} size={16} />
-          {feed.map((share) => (
-            <FeedCard key={share.id} share={share} onLikeToggled={handleLikeToggled} />
-          ))}
-        </View>
       )}
       </ScrollView>
     </View>
