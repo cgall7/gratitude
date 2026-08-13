@@ -157,15 +157,25 @@ invariant('gapped real-world history', gapped);
 // shape claims to read from has to actually be in the file.
 {
   const todaySource = await readFile(path.join(ROOT, 'src/screens/TodayTab.js'), 'utf8');
-  if (
-    /setStreak\(\s*currentStreak\(\s*allEntries\b/.test(todaySource) &&
-    /EntryStore\.getAllEntries\(\)/.test(todaySource)
-  ) {
-    ok('TodayTab static check: streak call site reads allEntries, not a year-windowed set');
+  // Two conjuncts, two messages: a predicate written as `a && b` and
+  // reported with a single message keeps compiling as the check gets more
+  // precise, but the message stops describing which conjunct actually
+  // failed. Happened three times in this block already (Sage, thread
+  // 19e90cf8) — say what was checked, not a summary of the older,
+  // single-condition version of the check.
+  const shapeOk = /setStreak\(\s*currentStreak\(\s*allEntries\b/.test(todaySource);
+  const sourceOk = /EntryStore\.getAllEntries\(\)/.test(todaySource);
+  if (shapeOk && sourceOk) {
+    ok('TodayTab static check: streak call site reads allEntries, and allEntries comes from getAllEntries()');
+  } else if (!shapeOk) {
+    bad(
+      'TodayTab static check',
+      'setStreak(currentStreak(allEntries, ...)) not found — call site changed shape, reverted to a year-windowed set, or the binding was renamed; re-verify by hand (Sage, thread 19e90cf8 §2)'
+    );
   } else {
     bad(
       'TodayTab static check',
-      'setStreak(currentStreak(allEntries, ...)) not found — the streak call site changed shape, was reverted to a year-windowed set, or the binding was renamed; re-verify by hand (Sage, thread 19e90cf8 §2)'
+      'setStreak(currentStreak(allEntries, ...)) is present but EntryStore.getAllEntries() is not — `allEntries` is bound to something else, which is the January-1st bug wearing the right name (Sage, thread 19e90cf8 §2)'
     );
   }
 }
