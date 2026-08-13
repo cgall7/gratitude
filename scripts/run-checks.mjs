@@ -45,8 +45,18 @@
 // sites, and still passes its setup assertions reports `1 passed, 0 failed`
 // and is green here — correctly, by the only information this file has.
 // Rule 3 fires when a gate asserts nothing AT ALL, which is the rarest way
-// an empty universe shows up; every real instance in this repo so far had a
-// gate with 10-34 assertions and one empty loop inside it.
+// an empty LOGIC universe shows up; every real instance in this repo so far
+// had a gate with 10-34 assertions and one empty loop inside it.
+//
+// Completely dark is, however, exactly what an INFRASTRUCTURE failure looks
+// like, and infrastructure fails on ordinary days for ordinary reasons — a
+// stray process on the embedded-postgres port was enough. On that path rule
+// 3 is redundancy and not the first line: a gate that dies exits non-zero
+// and `code !== 0` has already caught it. Checked rather than assumed — the
+// three PG gates each `process.exit(1)` from their harness catch, and the
+// other six are top-level, where a throw exits non-zero on its own. So rule
+// 3's real job is the gate whose catch logs and forgets to exit, in a branch
+// that by definition only runs on days when something is already wrong.
 //
 //   >> Therefore, a REQUIREMENT ON GATES that this runner cannot enforce
 //   >> for you: an enumerator must assert on its own count before it loops.
@@ -75,6 +85,22 @@ const SKIP = 'SKIP';
 const COLOR = Boolean(process.stdout.isTTY) && !process.env.NO_COLOR;
 const c = (code, text) => (COLOR ? `[${code}m${text}[0m` : text);
 const rule = (label) => c(1, `── ${label} ${'─'.repeat(Math.max(1, 56 - label.length))}`);
+
+// --- Is an opt-out switched ON? ----------------------------------------
+// Not `!== undefined`. `SKIP_PG_GATES=0` is somebody typing the variable's
+// name in order to say NO, and merely-defined would read that as a yes —
+// authorising the very skip the operator just switched off. The three real
+// gates read `=== '1'`, so a runner using `!== undefined` is looser than the
+// gates it is vouching for, which is the wrong way round for an
+// authorisation check.
+//
+// Affirmative values are listed rather than negative ones excluded, so an
+// unrecognised value fails CLOSED: `SKIP_PG_GATES=maybe` does not authorise
+// anything, and a gate that skipped on it lands red saying so instead of
+// going quietly green. A short list of literal values, not a registry of
+// gates or variables — nothing has to be told about a new opt-out.
+const AFFIRMATIVE = new Set(['1', 'true', 'yes', 'on']);
+const isSet = (v) => AFFIRMATIVE.has(String(process.env[v] ?? '').trim().toLowerCase());
 
 // --- Enumerate ---------------------------------------------------------
 // Every scripts/check-*.mjs is a gate. This runner's own file deliberately
@@ -190,26 +216,56 @@ for (const gate of gates) {
   //     set variable, and a gate printing "SKIPPED — HOME is not writable"
   //     authorised itself with someone else's environment. Verified as a
   //     real hole before narrowing it, not imagined.
-  const skipLine = (/^.*:\s*SKIPPED\b.*$/m.exec(out) || [])[0] ?? null;
-  const namedVars = skipLine ? skipLine.match(/\bSKIP_[A-Z0-9_]+\b/g) || [] : [];
-  const authorised = namedVars.some((v) => process.env[v] !== undefined);
-  const skipped = Boolean(skipLine) && passed + failed === 0 && authorised;
+  //     Every line mentioning SKIPPED is scanned, not just the first, and
+  //     not only ones prefixed with the gate's name. A gate can satisfy the
+  //     SKIP_* convention this contract documents and still print its line
+  //     in a shape a tighter pattern misses — and then it lands red for
+  //     "empty universe", which is the correct verdict with the wrong
+  //     diagnosis, sending its author looking for a missing loop.
+  const skipLines = out.match(/^.*\bSKIPPED\b.*$/gm) || [];
+  const namedVars = [...new Set(skipLines.flatMap((l) => l.match(/\bSKIP_[A-Z0-9_]+\b/g) || []))];
+  const setVars = namedVars.filter(isSet);
+  const skipped = skipLines.length > 0 && passed + failed === 0 && setVars.length > 0;
 
   // Exit 0 while asserting nothing is not a pass: the gate went dark, and
   // nobody asked it to. Authorised skips are exempt — they said so, and the
   // operator agreed.
   const empty = code === 0 && !skipped && passed + failed === 0;
 
+  // Exited non-zero, but no assertion of its own reported a failure. Every
+  // gate here counts a failed assertion before exiting 1, so the two only
+  // come apart when the gate DIED — a harness error, a throw outside the
+  // counter, a failure to spawn. That is a different sentence from "an
+  // assertion failed", and without it the summary prints a bare tally
+  // ("0 passed, 0 failed") next to FAIL, which is data and not a diagnosis.
+  // The narrow zero/zero case is the one that misleads worst, because it
+  // renders one line away from the empty-universe row and reads exactly like
+  // it — a real misattribution, not a hypothetical: a run of this suite with
+  // port 54329 held by a stray process was read as the empty-universe rule
+  // making a catch, when the exit code had already caught it.
+  //
+  // Deliberately not restricted to zero assertions. A gate that asserts
+  // twenty things, passes them all and then dies at the twenty-first prints
+  // "20 passed, 0 failed" beside FAIL, which reads as a contradiction rather
+  // than a bare fact and is the commoner shape of the same defect.
+  const died = code !== 0 && failed === 0;
+
   results.push({
     name,
     verdict: code !== 0 || empty ? FAIL : skipped ? SKIP : PASS,
+    code,
+    died,
     empty,
     // Only used to explain an unauthorised skip; a plain dark gate has none.
-    unauthorisedSkip: empty && Boolean(skipLine),
-    // The opt-out(s) this skip named and that are actually set, so the
+    unauthorisedSkip: empty && skipLines.length > 0,
+    // Named a SKIP_* but it isn't switched on — worth saying differently
+    // from naming nothing at all, since one is a typo and the other is a
+    // gate deciding for itself.
+    namedButUnset: empty && namedVars.length > 0,
+    // The opt-out(s) this skip named and that are actually on, so the
     // summary can tell you what to unset without this file knowing any
     // variable's name in advance.
-    optOuts: skipped ? namedVars.filter((v) => process.env[v] !== undefined) : [],
+    optOuts: skipped ? setVars : [],
     passed,
     failed,
   });
@@ -221,14 +277,28 @@ const failed = results.filter((r) => r.verdict === FAIL);
 const skips = results.filter((r) => r.verdict === SKIP);
 
 console.log(`\n${rule('summary')}`);
+// One branch per reason a verdict can be reached, and the branch says the
+// reason. Kept in that shape on purpose: five separate times this afternoon,
+// across three files, a predicate learned a new way to be red and the
+// sentence beside it stayed a summary of the old one — a message written for
+// a single condition keeps compiling after the condition becomes a
+// disjunction, so nothing forces a revisit. The standing question, cheaper
+// than rediscovering it: WHEN A CHECK GAINS A BRANCH, DOES THE OUTPUT GAIN A
+// SENTENCE? If the new branch renders as an existing message, it is the
+// existing message that is now wrong.
 for (const r of results) {
   const tally = r.verdict === SKIP
     ? 'did not run'
     : r.unauthorisedSkip
-      ? 'declared itself SKIPPED without naming a SKIP_* variable that is set — nobody asked for this'
+      ? r.namedButUnset
+        ? 'declared itself SKIPPED, but the SKIP_* variable it names is not switched on'
+        : 'declared itself SKIPPED without naming a SKIP_* variable — nobody asked for this'
       : r.empty
         ? 'exited 0 but asserted nothing — a gate over an empty universe'
-        : `${r.passed} passed, ${r.failed} failed`;
+        : r.died
+          ? `exited ${r.code} without reporting a failed assertion — the gate itself failed to run` +
+            (r.passed ? ` (${r.passed} assertion(s) had passed before it died)` : '')
+          : `${r.passed} passed, ${r.failed} failed`;
   console.log(`  ${r.verdict.padEnd(5)} ${r.name.padEnd(width)}  ${tally}`);
 }
 
@@ -242,13 +312,23 @@ console.log(
 );
 
 if (skips.length) {
-  const optOuts = [...new Set(skips.flatMap((r) => r.optOuts))].sort();
-  console.log(
-    '\n' +
-      c(33, `  ${skips.length} gate(s) DID NOT RUN: ${skips.map((r) => r.name).join(', ')}`) +
-      '\n' +
-      c(33, `  This run does not cover what they assert. Unset ${optOuts.join(', ')} to close that hole.`)
-  );
+  // Grouped BY VARIABLE rather than listed flat, because authorisation is
+  // per-variable and not per-gate: one flag silences everything that cites
+  // it, and a gate acquires the citation by copying another gate's skip
+  // block. (That propagation has already happened once here —
+  // check-hive-state-rls's skip block justifies itself by pointing at
+  // check-seeds-rls's.) Grouped, a Postgres flag silencing something that
+  // isn't a Postgres gate is a line you read; flat, it's a thing you would
+  // have to already suspect. The runner can't tell which gates a variable
+  // is *entitled* to silence — that would be a registry — so it shows you
+  // the grouping and lets you notice.
+  const byVar = new Map();
+  for (const r of skips) for (const v of r.optOuts) byVar.set(v, [...(byVar.get(v) || []), r.name]);
+  console.log('\n' + c(33, `  ${skips.length} gate(s) DID NOT RUN — this run does not cover what they assert:`));
+  for (const v of [...byVar.keys()].sort()) {
+    console.log(c(33, `    ${v} silenced: ${byVar.get(v).join(', ')}`));
+  }
+  console.log(c(33, `  Unset ${[...byVar.keys()].sort().join(', ')} to close that hole.`));
 }
 
 if (driftErrors.length) {
