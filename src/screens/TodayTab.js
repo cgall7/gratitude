@@ -33,6 +33,16 @@ const streakCaption = (streak) => {
 
 const ME_TARGET = { id: 'me', name: 'Me' };
 
+// Pixel's ruling (2026-08-13, thread e10d0fed §1): the picker cannot be a
+// filter — the streak/total stay target-independent by ruling, so nothing
+// above them may look like it scopes them. The picker attaches to the
+// compose affordance instead, and the CTA states its own scope in words.
+const composeLabel = (targets, activeTargetId) => {
+  const target = targets.find((t) => t.id === activeTargetId);
+  if (!target || target.id === ME_TARGET.id) return "Write today's entry";
+  return `Write about ${target.name}`;
+};
+
 // §8b.1 target picker. `targets` defaults to Me-only, so a user with zero
 // Private Hives sees this screen render byte-identically to before the
 // picker existed — TargetPicker itself only mounts once there's something
@@ -91,12 +101,6 @@ export const TodayTab = ({ navigation, targets = [ME_TARGET] }) => {
           right={<StreakBadge streak={streak} />}
         />
 
-        {targets.length > 1 && (
-          <View style={styles.targetPickerRow}>
-            <TargetPicker targets={targets} activeId={activeTargetId} onSelect={setActiveTargetId} />
-          </View>
-        )}
-
         <StaggeredItem index={0}>
           <View style={styles.streakCard}>
             <Text style={styles.streakCaption}>{streakCaption(streak)}</Text>
@@ -104,11 +108,13 @@ export const TodayTab = ({ navigation, targets = [ME_TARGET] }) => {
             <View style={styles.statRow}>
               <View style={styles.stat}>
                 <Text style={styles.statValue}>{streak}</Text>
-                <Text style={styles.statLabel}>DAY STREAK</Text>
+                <Text style={styles.statLabel}>DAYS</Text>
+                <Text style={styles.statLabelSub}>IN A ROW</Text>
               </View>
               <View style={styles.stat}>
                 <Text style={styles.statValue}>{total}</Text>
-                <Text style={styles.statLabel}>THIS YEAR</Text>
+                <Text style={styles.statLabel}>ENTRIES</Text>
+                <Text style={styles.statLabelSub}>THIS YEAR</Text>
               </View>
             </View>
           </View>
@@ -126,8 +132,13 @@ export const TodayTab = ({ navigation, targets = [ME_TARGET] }) => {
               <Text style={styles.emptyBody}>
                 One line is enough. Write it, and your apps unlock for the day.
               </Text>
+              {targets.length > 1 && (
+                <View style={styles.targetPickerRow}>
+                  <TargetPicker targets={targets} activeId={activeTargetId} onSelect={setActiveTargetId} />
+                </View>
+              )}
               <PrimaryButton onPress={() => navigation.getParent()?.navigate('Lock')}>
-                Write today's entry
+                {composeLabel(targets, activeTargetId)}
               </PrimaryButton>
             </View>
           )}
@@ -160,6 +171,7 @@ const styles = StyleSheet.create({
     paddingBottom: TAB_CLEARANCE,
   },
   targetPickerRow: {
+    alignSelf: 'stretch',
     marginBottom: 16,
   },
   streakCard: {
@@ -193,6 +205,13 @@ const styles = StyleSheet.create({
     ...theme.type.label,
     color: theme.colors.inkSoft,
     marginTop: 4,
+  },
+  // Pixel's ruling (§2): the label states unit (line 1) + scope (line 2) —
+  // `ENTRIES THIS YEAR` on one line overflows the stat column at 375pt
+  // before any gutter is allowed between the two stats.
+  statLabelSub: {
+    ...theme.type.label,
+    color: theme.colors.inkSoft,
   },
   emptyCard: {
     backgroundColor: theme.colors.surface,
