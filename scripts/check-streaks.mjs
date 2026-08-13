@@ -111,6 +111,48 @@ invariant('gapped real-world history', gapped);
   }
 }
 
+// Pixel (thread 19e90cf8, same day, following this work): TodayTab.js calls
+// `currentStreak(yearEntries, now)` instead of `currentStreak(allEntries,
+// now)` — RecapTab.js already carries the fix for this exact class ("'BEST
+// EVER' was measuring the calendar year, so a record set in December
+// vanished on New Year's Day"), and Today never got it. A year-scoped call
+// can never legitimately exceed the all-entries call — the narrower window
+// is a subset of the wider one — and the two must be equal whenever the run
+// doesn't cross January 1st. TodayTab.js itself can't be imported here (RN
+// + JSX, same reason RecapTab.js can't be), so this asserts the property on
+// `currentStreak` directly; it holds regardless of which branch fixes the
+// call site (fixed independently on fizz/today-streak-scope, since the bug
+// predates P0-2 and is already live on main).
+{
+  const crossYearAnchor = new Date(2026, 0, 10); // Jan 10 — mid an ongoing run
+  const crossYearRun = Array.from({ length: 27 }, (_, i) => ({ date: dateAt(i, crossYearAnchor) }));
+  const crossYearThisYear = crossYearRun.filter((e) => e.date.startsWith('2026'));
+  const crossFull = currentStreak(crossYearRun, crossYearAnchor);
+  const crossYearOnly = currentStreak(crossYearThisYear, crossYearAnchor);
+  if (crossYearOnly < crossFull) {
+    ok(`year-scoped currentStreak understates a cross-boundary run: this-year (${crossYearOnly}) < all-time (${crossFull})`);
+  } else {
+    bad(
+      'year-scoped currentStreak, cross-boundary run',
+      `this-year=${crossYearOnly} all-time=${crossFull}, expected this-year strictly less`
+    );
+  }
+
+  const withinYearAnchor = new Date(2026, 5, 10); // June 10 — nowhere near a year boundary
+  const withinYearRun = Array.from({ length: 27 }, (_, i) => ({ date: dateAt(i, withinYearAnchor) }));
+  const withinYearThisYear = withinYearRun.filter((e) => e.date.startsWith('2026'));
+  const withinFull = currentStreak(withinYearRun, withinYearAnchor);
+  const withinYearOnly = currentStreak(withinYearThisYear, withinYearAnchor);
+  if (withinYearOnly === withinFull) {
+    ok(`year-scoped currentStreak matches all-time when the run doesn't cross Jan 1: both ${withinFull}`);
+  } else {
+    bad(
+      'year-scoped currentStreak, within-year run',
+      `this-year=${withinYearOnly} all-time=${withinFull}, expected equal`
+    );
+  }
+}
+
 // RecapTab.js's buildMonths (the pager fix, thread 19e90cf8 §3) can't be
 // imported here: it pulls in react-native and JSX, which this plain-Node
 // gate can't parse. Sage's fallback — "assert on recentMonths(now, earliest)
