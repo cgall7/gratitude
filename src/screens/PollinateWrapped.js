@@ -39,7 +39,7 @@ const DEMO_SLIDES = [
   },
   {
     title: "Pure Consistency",
-    subtitle: "Longest Streak",
+    subtitle: "Longest Streak, 2026",
     value: "42 Days",
     label: "Unstoppable positivity",
     color: theme.colors.accentDeep
@@ -76,7 +76,7 @@ const buildSlidesFromEntries = (entries, year) => {
     },
     {
       title: "Pure Consistency",
-      subtitle: "Longest Streak",
+      subtitle: `Longest Streak, ${year}`,
       value: `${streak} Day${streak === 1 ? '' : 's'}`,
       label: "Unstoppable positivity",
       color: theme.colors.accentDeep
