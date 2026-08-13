@@ -35,11 +35,23 @@ const describeTheme = (insight, periodLabel) => {
 // per month: `EntryStore.getEntriesBetween` reloads and re-sorts the whole
 // store on every call, so twelve months would have meant twelve full reads
 // of the same blob.
-const buildMonths = (allEntries) =>
-  recentMonths(new Date(), allEntries[0]?.date ?? null).map((month) => ({
+const buildMonths = (allEntries) => {
+  // Earliest date computed directly rather than read off allEntries[0]:
+  // that assumed ascending order, which is EntryStore's contract today but
+  // not a guarantee `recentMonths` can enforce on its caller (Sage, thread
+  // 19e90cf8: the same assumption flipped `longestStreak` to 1 under a
+  // descending query, and would silently collapse this pager to one page
+  // the same way). Killing the precondition here means the pager can't
+  // regress no matter what order a future Supabase adapter returns.
+  const earliestISO = allEntries.reduce(
+    (min, entry) => (min === null || entry.date < min ? entry.date : min),
+    null
+  );
+  return recentMonths(new Date(), earliestISO).map((month) => ({
     ...month,
     entries: allEntries.filter((entry) => entry.date.startsWith(month.key)),
   }));
+};
 
 // The three numbers worth chasing, up top where they're the first thing you
 // see — Recap used to open on a theme card with no score of any kind.

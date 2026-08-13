@@ -15,7 +15,8 @@
     "check:load-state": "node scripts/check-load-state.mjs",
     "check:seed-view": "node scripts/check-seed-view.mjs",
     "check:hive-state-rls": "node scripts/check-hive-state-rls.mjs",
-    "test": "npm run check:demo-hive && npm run check:seeds-contract && npm run check:plant-seed && npm run check:load-state && npm run check:seed-view && npm run check:seeds-rls && npm run check:hive-state-rls",
+    "check:streaks": "node scripts/check-streaks.mjs",
+    "test": "npm run check:demo-hive && npm run check:seeds-contract && npm run check:plant-seed && npm run check:load-state && npm run check:seed-view && npm run check:seeds-rls && npm run check:hive-state-rls && npm run check:streaks",
     "deploy:migrations": "bash scripts/deploy-migrations.sh"
   },
   "dependencies": {
