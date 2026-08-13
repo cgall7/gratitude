@@ -61,3 +61,19 @@ $$;
 revoke all on function public.has_shared_date(date) from public;
 revoke execute on function public.has_shared_date(date) from anon;
 grant execute on function public.has_shared_date(date) to authenticated;
+
+-- Bumble's rig (thread 19e90cf8, 2026-08-13, T3) caught this before it
+-- shipped: Postgres ORs permissive policies together, so a naive
+-- `visibility`-checking SELECT policy could only ever widen access, never
+-- restrict it — `entries_select_via_share` already grants read to every
+-- accepted connection once a `shares` row exists, regardless of
+-- `visibility`. `as restrictive` is required: it ANDs against every
+-- permissive policy instead of ORing, so a row marked 'private' is closed
+-- to everyone but its author even if a `shares` row also exists for it
+-- (the exact state `shareEntry`'s duplicate-insert produces today, and
+-- the state 8b's addressed hive delivery will produce going forward).
+-- Verified against both directions in Bumble's rig: the leak closes, and
+-- the author still reads her own private row.
+create policy "entries_select_respect_visibility" on public.entries
+  as restrictive for select
+  using (auth.uid() = user_id or visibility <> 'private');
