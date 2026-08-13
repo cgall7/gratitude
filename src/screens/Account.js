@@ -30,10 +30,11 @@ const HIT_SLOP = { top: 12, bottom: 12, left: 12, right: 12 };
 //   3. Support needs to know which build someone is on.
 //
 // Deliberately NOT here yet: "contact us" and "delete my account". Both
-// need a working support address, and the one in the policy draft
-// (`gratitudeapp.com`) has no MX record and redirects to a different
-// company's gratitude app. A row that silently goes nowhere is worse than
-// an absent row, so they land when the address does.
+// need a working support address and we still don't have one. The old
+// brand's `gratitudeapp.com` had no MX record and redirected to a different
+// company's app; the new brand's `pollinateapp.xyz` isn't registered yet
+// (§19.4 — Colin is buying it, tracked as pending). A row that silently goes
+// nowhere is worse than an absent row, so they land when the address does.
 const Row = ({ icon, label, onPress, tone }) => (
   <PressableScale onPress={onPress} accessibilityLabel={label} style={styles.row}>
     <Ionicons name={icon} size={19} color={tone === 'danger' ? theme.colors.danger : theme.colors.inkSoft} />
