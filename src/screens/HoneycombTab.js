@@ -320,11 +320,7 @@ const HoneycombFeed = () => {
     if (!todayEntry || sharing) return;
     setSharing(true);
     try {
-      await HoneycombStore.shareEntry({
-        date: toISODate(new Date()),
-        text: todayEntry.text,
-        theme: todayEntry.theme,
-      });
+      await HoneycombStore.shareEntry({ entryId: todayEntry.id });
       setShareCarryKey((key) => key + 1);
       await loadAll({ suppressArrival: true });
     } catch (err) {

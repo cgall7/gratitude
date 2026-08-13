@@ -19,6 +19,8 @@ import { MainTabs } from './src/navigation/MainTabs';
 import { AuthProvider } from './src/contexts/AuthContext';
 import { OnboardingState } from './src/services/onboardingState';
 import { supabase, isSupabaseConfigured } from './src/services/supabase';
+import { EntryStore } from './src/services/EntryStore';
+import { tagEntry } from './src/utils/themeTagger';
 
 const Stack = createStackNavigator();
 
@@ -158,7 +160,14 @@ export default function App() {
             {(props) => (
               <InputScreen
                 {...props}
-                onUnlock={() => props.navigation.replace('Main')}
+                onUnlock={async (text) => {
+                  // InputScreen stopped saving itself when the pre-auth
+                  // onboarding paths started buffering its text instead
+                  // (P0-2 fix, thread 19e90cf8). This is the one caller with
+                  // a real session already — it owns the write now.
+                  await EntryStore.saveEntry(new Date(), text, tagEntry(text));
+                  props.navigation.replace('Main');
+                }}
               />
             )}
           </Stack.Screen>

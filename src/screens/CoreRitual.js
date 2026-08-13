@@ -13,7 +13,6 @@ import {
 import { theme } from '../constants/theme';
 import { getDailyPrompt } from '../constants/prompts';
 import { EntryStore } from '../services/EntryStore';
-import { tagEntry } from '../utils/themeTagger';
 import * as Haptics from 'expo-haptics';
 import { SparkChips } from '../components/SparkChips';
 import { PrimaryButton } from '../components/PrimaryButton';
@@ -81,8 +80,11 @@ export const InputScreen = ({ onUnlock }) => {
 
   const handleSave = () => {
     if (!text.trim() || unlocking) return;
-    const themeTag = tagEntry(text);
-    EntryStore.saveEntry(new Date(), text, themeTag);
+    // Does not call EntryStore.saveEntry here — during onboarding (Flow C)
+    // there is no session yet and the write would throw 'Not signed in'
+    // (Sage, thread 19e90cf8: identical shape to Onboarding.js's own
+    // pre-auth entry step). onUnlock hands the raw text to the caller,
+    // which buffers it and saves once an account exists.
     setUnlocking(true);
 
     Animated.timing(formAnim, {
@@ -99,7 +101,30 @@ export const InputScreen = ({ onUnlock }) => {
         duration: 200,
         useNativeDriver: true,
       }).start(() => {
-        setTimeout(() => onUnlock(text), 1400);
+        setTimeout(() => {
+          // Bumble caught this (thread 19e90cf8, 2026-08-13): the signed-in
+          // caller's onUnlock (App.js) now does a real EntryStore.saveEntry
+          // before navigating, so it can reject — a discarded setTimeout
+          // return used to mean a failure left the celebration overlay up
+          // forever with unlocking stuck true and no way to retry.
+          // Promise.resolve wraps the demo-mode caller too (Onboarding.js's
+          // LockDemoStep.onSave is synchronous), so this is safe either way.
+          Promise.resolve(onUnlock(text)).catch(() => {
+            Alert.alert("Couldn't unlock", "Your entry didn't save — try again.");
+            Animated.parallel([
+              Animated.timing(overlayOpacity, {
+                toValue: 0,
+                duration: 200,
+                useNativeDriver: true,
+              }),
+              Animated.timing(formAnim, {
+                toValue: 1,
+                duration: 200,
+                useNativeDriver: true,
+              }),
+            ]).start(() => setUnlocking(false));
+          });
+        }, 1400);
       });
     });
   };
