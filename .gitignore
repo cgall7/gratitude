@@ -35,3 +35,6 @@ yarn-error.*
 /ios
 /android
 
+
+# scratch cluster created by check:seeds-rls (removed on a clean run)
+.seeds-rls-pgdata/

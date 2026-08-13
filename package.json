@@ -9,7 +9,8 @@
     "android": "expo run:android",
     "web": "expo start --web",
     "check:demo-hive": "node scripts/check-demo-hive.mjs",
-    "test": "npm run check:demo-hive"
+    "check:seeds-rls": "node scripts/check-seeds-rls.mjs",
+    "test": "npm run check:demo-hive && npm run check:seeds-rls"
   },
   "dependencies": {
     "@expo-google-fonts/dancing-script": "^0.4.2",
@@ -40,6 +41,8 @@
     "react-native-web": "^0.21.2"
   },
   "devDependencies": {
+    "embedded-postgres": "^18.4.0-beta.17",
+    "pg": "^8.23.0",
     "typescript": "~6.0.3"
   }
 }
