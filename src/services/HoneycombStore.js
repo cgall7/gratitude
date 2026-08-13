@@ -117,6 +117,17 @@ export const HoneycombStore = {
     return (data ?? []).map((row) => (row.requester_id === user.id ? row.addressee : row.requester));
   },
 
+  // Project 6.7 — facts, not derived states (see the migration comment for
+  // why). Each row is { member_id, display_name, avatar_url, last_entry_date,
+  // last_note_received_at } for one accepted connection; callers derive
+  // active/blooming with src/utils/hiveState.js against their own clock.
+  async listHiveState() {
+    const client = requireSupabase();
+    const { data, error } = await client.rpc('list_hive_state');
+    if (error) throw error;
+    return data ?? [];
+  },
+
   // --- Entries & sharing -----------------------------------------------
   async shareEntry({ date, text, theme }) {
     const client = requireSupabase();

@@ -9,7 +9,8 @@
     "android": "expo run:android",
     "web": "expo start --web",
     "check:demo-hive": "node scripts/check-demo-hive.mjs",
-    "test": "npm run check:demo-hive"
+    "check:hive-state-rls": "node scripts/check-hive-state-rls.mjs",
+    "test": "npm run check:demo-hive && npm run check:hive-state-rls"
   },
   "dependencies": {
     "@expo-google-fonts/dancing-script": "^0.4.2",
