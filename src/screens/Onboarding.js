@@ -244,7 +244,14 @@ const WelcomeStep = ({ step, onNext, flow, onChangeFlow, onSkipDemo, splashHidde
           )}
         </View>
         <Text style={styles.h1Center}>Start with what you were given.</Text>
-        <Text style={styles.bodyLgCenter}>One line a day. That's the whole thing.</Text>
+        {/* Was "That's the whole thing." R15 wrote it to promise low friction
+            and it did that well, but it also asserted the product ends at the
+            journal — which is the exact claim The Ruling reverses ("the
+            journal is the foundation the social network grows on"). It is the
+            standalone-journal promise, on our first screen, in our own voice.
+            "That's how it starts" keeps the one-line-a-day promise verbatim
+            and flips terminal to foundational. Nothing unbuilt is named. */}
+        <Text style={styles.bodyLgCenter}>One line a day. That's how it starts.</Text>
       </View>
       <FlowToggle flow={flow} onChange={onChangeFlow} />
       <PrimaryButton onPress={onNext}>Begin</PrimaryButton>

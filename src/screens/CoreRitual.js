@@ -54,7 +54,16 @@ export const LockScreen = ({ onOpen }) => {
             opening on a wordmark and a question. */}
         <WelcomeBee size={132} />
         <Text style={styles.logo}>Pollinate</Text>
-        <Text style={styles.prompt}>Pause.{"\n"}What are you grateful for today?</Text>
+        {/* Was "Pause. / What are you grateful for today?" — the subject-less
+            journal question, and it asked something this screen has no field
+            for: one tap later InputScreen asks its own rotating
+            `dailyPrompt.question` over the actual input, so the gate's
+            question was always discarded. A gate aims; the next screen asks.
+            "Think of someone" is the aim The Ruling implies — gratitude in
+            Pollinate is about a person, and a person is what a Private Hive,
+            a seed and the feed all need as input. It claims nothing the app
+            can't do: the answer still lands in the same free-text field. */}
+        <Text style={styles.prompt}>Pause.{"\n"}Think of someone.</Text>
 
         {/* Medium, not the default Light: this is the one tap in the app
             that crosses a threshold rather than adjusting something. */}
