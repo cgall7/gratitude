@@ -11,6 +11,8 @@ import { TabBarButton } from './TabBarButton';
 import { AccountDoor, DOOR_SIZE, useHasAccountDoor } from './AccountDoor';
 import { GlassBackground, useReduceTransparency } from './GlassBackground';
 import { SIDE_INSET, DOOR_GAP, BAR_HEIGHT, BAR_BOTTOM } from './tabBarLayout';
+import { UnreadDot } from '../components/UnreadDot';
+import { useNotes } from '../contexts/NotesContext';
 
 const Tab = createBottomTabNavigator();
 
@@ -30,6 +32,9 @@ const TAB_ICONS = {
 // a tonal field that floats reads as a mistake; a filled badge could.
 const TabIcon = ({ routeName, focused }) => {
   const scale = useRef(new Animated.Value(1)).current;
+  // Notes has no push infra, so this is the same NotesContext poll/focus
+  // refresh the Honeycomb header dot reads — one count, two badges.
+  const { unreadCount } = useNotes();
 
   useEffect(() => {
     if (!focused) return;
@@ -41,12 +46,15 @@ const TabIcon = ({ routeName, focused }) => {
 
   return (
     <View style={[styles.iconPill, focused && styles.iconPillActive]}>
-      <Animated.View style={{ transform: [{ scale }] }}>
+      <Animated.View style={[styles.iconGlyphWrap, { transform: [{ scale }] }]}>
         <IconComponent
           name={focused ? TAB_ICONS[routeName].active : TAB_ICONS[routeName].inactive}
           size={24}
           color={focused ? theme.colors.ink : theme.colors.textSecondary}
         />
+        {routeName === 'Honeycomb' && (
+          <UnreadDot visible={unreadCount > 0} style={styles.tabUnreadDot} />
+        )}
       </Animated.View>
     </View>
   );
@@ -144,6 +152,13 @@ const styles = StyleSheet.create({
     borderRadius: theme.borderRadius.full,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  iconGlyphWrap: {
+    position: 'relative',
+  },
+  tabUnreadDot: {
+    top: -3,
+    right: -6,
   },
   iconPillActive: {
     backgroundColor: theme.colors.washYellow,

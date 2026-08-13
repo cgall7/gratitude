@@ -15,6 +15,7 @@ import { NotesInbox } from './src/screens/NotesInbox';
 import { ComposeNote } from './src/screens/ComposeNote';
 import { MainTabs } from './src/navigation/MainTabs';
 import { AuthProvider } from './src/contexts/AuthContext';
+import { NotesProvider } from './src/contexts/NotesContext';
 import { OnboardingState } from './src/services/onboardingState';
 import { supabase, isSupabaseConfigured } from './src/services/supabase';
 
@@ -124,6 +125,7 @@ export default function App() {
 
   return (
     <AuthProvider>
+      <NotesProvider>
       <NavigationContainer ref={navigationRef} onReady={onLayoutRootView}>
         <Stack.Navigator
           initialRouteName={initialRoute}
@@ -189,6 +191,7 @@ export default function App() {
           </Stack.Screen>
         </Stack.Navigator>
       </NavigationContainer>
+      </NotesProvider>
     </AuthProvider>
   );
 }

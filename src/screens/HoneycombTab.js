@@ -4,12 +4,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { theme } from '../constants/theme';
 import { useAuth } from '../contexts/AuthContext';
+import { useNotes } from '../contexts/NotesContext';
 import { HoneycombStore, WEEK_FEED_LIMIT } from '../services/HoneycombStore';
 import { EntryStore } from '../services/EntryStore';
 import { toISODate, daysAgoISO, groupSharesByDay, HIVE_WEEK_DAYS } from '../utils/dateRanges';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { PressableScale } from '../components/PressableScale';
 import { FeedCard } from '../components/FeedCard';
+import { UnreadDot } from '../components/UnreadDot';
 import { HoneycombGrid, HIVE_SLOTS } from '../components/HoneycombGrid';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { BeeTransition } from '../components/BeeTransition';
@@ -221,6 +223,15 @@ const HoneycombFeed = () => {
     }, [loadAll])
   );
 
+  // Notes has no push infra (7.5 is unbuilt), so a focus refetch is what
+  // catches a note that arrived while the tab was backgrounded.
+  const { unreadCount, refresh: refreshNotes } = useNotes();
+  useFocusEffect(
+    useCallback(() => {
+      refreshNotes();
+    }, [refreshNotes])
+  );
+
   const handleAddConnection = async () => {
     const email = addEmail.trim();
     if (!email || addBusy) return;
@@ -309,7 +320,10 @@ const HoneycombFeed = () => {
           // Project 7 entry point — modal route lives on the root stack,
           // not this tab's own navigator, hence getParent().
           <PressableScale onPress={() => navigation.getParent()?.navigate('Notes')} haptic={null}>
-            <Ionicons name="mail-outline" size={22} color={theme.colors.ink} />
+            <View style={styles.mailIconWrap}>
+              <Ionicons name="mail-outline" size={22} color={theme.colors.ink} />
+              <UnreadDot visible={unreadCount > 0} style={styles.mailUnreadDot} />
+            </View>
           </PressableScale>
         }
       />
@@ -455,6 +469,13 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: theme.colors.background,
+  },
+  mailIconWrap: {
+    position: 'relative',
+  },
+  mailUnreadDot: {
+    top: -2,
+    right: -2,
   },
   scroll: {
     flex: 1,

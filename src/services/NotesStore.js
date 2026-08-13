@@ -59,6 +59,23 @@ export const NotesStore = {
     return data ?? [];
   },
 
+  // Same filter shape as listReceived, but a head-only count query — the
+  // tab/header badge polls this on an interval and shouldn't pull the full
+  // joined row set (avatars, sender/recipient profiles) just to get a number.
+  async countUnread() {
+    const client = requireSupabase();
+    const {
+      data: { user },
+    } = await client.auth.getUser();
+    const { count, error } = await client
+      .from('notes')
+      .select('id', { count: 'exact', head: true })
+      .eq('recipient_id', user.id)
+      .is('read_at', null);
+    if (error) throw error;
+    return count ?? 0;
+  },
+
   async markRead(noteId) {
     const client = requireSupabase();
     const { error } = await client
