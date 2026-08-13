@@ -53,6 +53,14 @@ npx --yes supabase migration list
 # without applying it. It turns "is anything going to be skipped?" from
 # something you have to reason about into something you read. Same flags as
 # the real push below, so what it prints is what the next command does.
+#
+# One caveat, checked rather than assumed: `db push` also syncs vault secrets
+# from supabase/config.toml before migrations, and that part is not obviously
+# covered by "don't actually apply them". There is no supabase/config.toml in
+# this repo, so today there is nothing for it to write. If one is ever added
+# WITH vault secrets, verify that before trusting this step to be read-only,
+# or give this line --skip-vault (and accept that it then differs from the
+# push it is previewing).
 echo
 echo "Dry run — exactly the migrations 'db push' would apply. Anything listed as"
 echo "local-only above but absent here is a migration push will skip; re-run with"
