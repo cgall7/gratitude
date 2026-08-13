@@ -31,20 +31,31 @@
 //      Postgres-backed gates into no-ops that exit 0; folded into a pass
 //      count that reads as "everything green" while three security gates did
 //      not run. Skips are counted, named, and flagged separately below.
-//   3. A gate that exits 0 having asserted NOTHING is red, not green. Exit 0
-//      over an empty universe is the failure shape this suite's own gates
-//      keep finding in each other (an RLS check that enumerated zero tables,
-//      a scope check that resolved zero call sites) — and the runner is the
-//      one place it can be caught for all of them at once. It also closes
-//      the skip-detection hole below it: skip is recognised by the word
-//      SKIPPED in a gate's output, so a gate that grows a NEW quiet
-//      bail-out path would read as PASS — but it reaches here with zero
-//      assertions, and lands as red rather than as silent coverage.
-//      The contract this asserts: every gate prints `N passed, M failed`,
-//      and a run of it that asserts nothing is a broken gate.
+//   3. A gate that exits 0 having asserted NOTHING is red, not green. This
+//      catches a gate going completely dark — most usefully a NEW quiet
+//      bail-out path (no database, no fixture, flag off) that exits 0
+//      without declaring itself a skip. The contract: every gate prints
+//      `N passed, M failed`, and a run of it that asserts nothing is a
+//      broken gate, not a passing one.
+//   4. A SKIP must be one somebody ASKED for. See the skip rules below.
 //
-// Exit code is 1 if any gate failed, 0 otherwise. Declared skips do not fail
-// the run — the opt-out is deliberate and documented — but they are
+// WHAT THIS RUNNER CANNOT DO, since it is the obvious thing to assume it
+// does: it reads each gate's totals, so it cannot see an empty universe
+// INSIDE a gate. A gate that enumerates zero tables, or resolves zero call
+// sites, and still passes its setup assertions reports `1 passed, 0 failed`
+// and is green here — correctly, by the only information this file has.
+// Rule 3 fires when a gate asserts nothing AT ALL, which is the rarest way
+// an empty universe shows up; every real instance in this repo so far had a
+// gate with 10-34 assertions and one empty loop inside it.
+//
+//   >> Therefore, a REQUIREMENT ON GATES that this runner cannot enforce
+//   >> for you: an enumerator must assert on its own count before it loops.
+//   >> `if (tables.length === 0) bad(...)`. A gate is allowed to be green;
+//   >> it is not allowed to be green and empty, and only the gate itself is
+//   >> standing anywhere it can tell the difference.
+//
+// Exit code is 1 if any gate failed, 0 otherwise. Authorised skips do not
+// fail the run — the opt-out is deliberate and documented — but they are
 // impossible to miss in the summary.
 
 import { spawn } from 'node:child_process';
@@ -144,20 +155,61 @@ for (const gate of gates) {
   // non-zero is a failure — the number is the claim, the exit code is the
   // outcome, and where they disagree the outcome wins.
   const counts = [...out.matchAll(/(\d+) passed, (\d+) failed/g)].pop();
-  const skipped = /:\s*SKIPPED\b/.test(out);
   const passed = counts ? Number(counts[1]) : 0;
   const failed = counts ? Number(counts[2]) : 0;
 
-  // Exit 0 while asserting nothing is not a pass. Either the gate found an
-  // empty universe (the hole), or it bailed out down a path that does not
-  // announce itself as a skip (also the hole). Declared skips are exempt —
-  // they said so.
+  // --- Is this a skip? Two conditions, and neither is the word alone. ---
+  //
+  // (a) It has to be the WHOLE gate. `SKIPPED` used to be matched against
+  //     the entire output, so one sub-check reporting itself skipped
+  //     ("materialized view policy check: SKIPPED — no views in schema")
+  //     reclassified a gate that asserted five things as "did not run",
+  //     while those five assertions still landed in the suite total. The
+  //     summary then contradicted itself in one block. A gate that asserted
+  //     something is PASS or FAIL on its merits regardless of its prose.
+  //
+  // (b) Somebody has to have ASKED for it. This is the load-bearing half,
+  //     because of how (a) interacts with rule 3: once a skip is defined as
+  //     "declared itself empty", the word SKIPPED becomes the one thing a
+  //     gate can print to opt ITSELF out of the empty-universe rule and
+  //     still exit 0 green. So the skip line has to name an environment
+  //     variable that is actually set in this process — which is what the
+  //     real opt-out already does ("SKIPPED — SKIP_PG_GATES=1 set
+  //     explicitly"). A gate deciding on its own that today it will not run
+  //     names nothing, and lands red under rule 3 instead.
+  //
+  //     Deliberately read out of the message rather than checked against a
+  //     list of known opt-out variables here: a list is a registration, and
+  //     a runner you have to tell about things has the hole gates exist to
+  //     close. The cost is a naming convention — an opt-out has to be called
+  //     SKIP_something — which is a rule rather than a registry, and the one
+  //     that exists already follows it.
+  //
+  //     That convention is load-bearing, not decoration. A first draft
+  //     accepted ANY all-caps token in the skip line that happened to be a
+  //     set variable, and a gate printing "SKIPPED — HOME is not writable"
+  //     authorised itself with someone else's environment. Verified as a
+  //     real hole before narrowing it, not imagined.
+  const skipLine = (/^.*:\s*SKIPPED\b.*$/m.exec(out) || [])[0] ?? null;
+  const namedVars = skipLine ? skipLine.match(/\bSKIP_[A-Z0-9_]+\b/g) || [] : [];
+  const authorised = namedVars.some((v) => process.env[v] !== undefined);
+  const skipped = Boolean(skipLine) && passed + failed === 0 && authorised;
+
+  // Exit 0 while asserting nothing is not a pass: the gate went dark, and
+  // nobody asked it to. Authorised skips are exempt — they said so, and the
+  // operator agreed.
   const empty = code === 0 && !skipped && passed + failed === 0;
 
   results.push({
     name,
     verdict: code !== 0 || empty ? FAIL : skipped ? SKIP : PASS,
     empty,
+    // Only used to explain an unauthorised skip; a plain dark gate has none.
+    unauthorisedSkip: empty && Boolean(skipLine),
+    // The opt-out(s) this skip named and that are actually set, so the
+    // summary can tell you what to unset without this file knowing any
+    // variable's name in advance.
+    optOuts: skipped ? namedVars.filter((v) => process.env[v] !== undefined) : [],
     passed,
     failed,
   });
@@ -172,9 +224,11 @@ console.log(`\n${rule('summary')}`);
 for (const r of results) {
   const tally = r.verdict === SKIP
     ? 'did not run'
-    : r.empty
-      ? 'exited 0 but asserted nothing — a gate over an empty universe'
-      : `${r.passed} passed, ${r.failed} failed`;
+    : r.unauthorisedSkip
+      ? 'declared itself SKIPPED without naming a SKIP_* variable that is set — nobody asked for this'
+      : r.empty
+        ? 'exited 0 but asserted nothing — a gate over an empty universe'
+        : `${r.passed} passed, ${r.failed} failed`;
   console.log(`  ${r.verdict.padEnd(5)} ${r.name.padEnd(width)}  ${tally}`);
 }
 
@@ -188,11 +242,12 @@ console.log(
 );
 
 if (skips.length) {
+  const optOuts = [...new Set(skips.flatMap((r) => r.optOuts))].sort();
   console.log(
     '\n' +
       c(33, `  ${skips.length} gate(s) DID NOT RUN: ${skips.map((r) => r.name).join(', ')}`) +
       '\n' +
-      c(33, '  This run does not cover what they assert. Unset SKIP_PG_GATES to close that hole.')
+      c(33, `  This run does not cover what they assert. Unset ${optOuts.join(', ')} to close that hole.`)
   );
 }
 
