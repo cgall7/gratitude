@@ -1,10 +1,11 @@
 # Pollinate strategy docs
 
-Canonical, versioned copies of the docs driving the Pollinate pivot. Previously these only existed in individual agents' local workspaces — moved here so anyone with repo access (including Colin) can read them without going through an agent.
+**Gold source, posted by Colin 2026-08-13T15:45Z.** These four files replace the previous `POLLINATE_{STRATEGY,PRD,DELIVERY_SLICES}.md` set, which Colin instructed us to delete. The old files carried agent addenda layered on top of an earlier direction; these are Colin's own cleaned-up versions and supersede them entirely. Do not reintroduce the deleted files or re-add addenda to these — raise a question in the channel instead.
 
-- [`POLLINATE_STRATEGY.md`](./POLLINATE_STRATEGY.md) — positioning, audience, business model. See the Sage addendum at the top for decisions ratified 2026-08-13 (architecture = existing Expo/RN+Supabase repo evolving, not a rebuild; iOS-only for now; rebrand confirmed; self-custody claim needs rewriting pending MDK custody-model confirmation; pricing leaning freemium+transaction-fee over hard paywall; no native Nostr identity).
-- [`POLLINATE_PRD.md`](./POLLINATE_PRD.md) — product requirements.
-- [`POLLINATE_DELIVERY_SLICES.md`](./POLLINATE_DELIVERY_SLICES.md) — MVP1 project breakdown and critical path; the source for current work assignments.
-- [`POLLINATE_LEDGER_DESIGN.md`](./POLLINATE_LEDGER_DESIGN.md) — double-entry ledger design for the payments layer. Payments/ledger work is currently paused per Colin's 2026-08-13 direction; the schema itself lives on `bumble/nectar-ledger-schema` (not merged, `rails_mode=simulated`, no live-money risk).
+- [`Pollinate_The_Ruling.md`](./Pollinate_The_Ruling.md) — **read this first.** Colin's answer to the scope/alignment memo: the journal is the foundation (not legacy), the tab bar is `Today | Hive | Wallet | Garden`, private hives live in Today, Wrapped moves to Garden, money is deferred to Slice 2, and the two P0 engineering fixes (run the migrations; move journal storage to Supabase).
+- [`Pollinate_Strategy.md`](./Pollinate_Strategy.md) — positioning ("a journal that becomes social"), audience, cold-start via private hives, business model, moats.
+- [`Pollinate_PRD.md`](./Pollinate_PRD.md) — product requirements. §5.1 Private Hives is the hero feature; §7 is the data-architecture rule (if losing the phone destroys it, it belongs in Supabase).
+- [`Pollinate_Delivery_Slices.md`](./Pollinate_Delivery_Slices.md) — the source for work assignments. Slice 1 is Projects 1, 2, 6, 7, 8, **8b (new — Private Hives)**, 9, 10, 11. Projects 3/4/5 (wallet, funding, onramp) are deferred past Slice 2.
+- [`POLLINATE_LEDGER_DESIGN.md`](./POLLINATE_LEDGER_DESIGN.md) — double-entry ledger design. Retained for reference only; money is Slice 2+ and the schema itself lives unmerged on `bumble/nectar-ledger-schema` (`rails_mode=simulated`, no live-money risk).
 
-These are living docs — expect edits as the pivot continues. `README.md` and `PROJECT_STRUCTURE.md` at repo root still describe the pre-pivot app; see `pixel/pollinate-rebrand-inventory` for the pending rewrite of those.
+`README.md` and `PROJECT_STRUCTURE.md` at repo root still describe the pre-pivot app; see `pixel/pollinate-rebrand-inventory` for the pending rewrite of those.
