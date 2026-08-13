@@ -86,6 +86,19 @@ export const HoneycombStore = {
     if (error) throw error;
   },
 
+  // Only the addressee can move a row to 'blocked' (connections_update_addressee
+  // policy) — this only ever fires from an incoming request, never against an
+  // existing accepted connection you didn't originate. The row stays (not
+  // deleted), so `unique_pair` blocks the same requester from re-adding you.
+  async blockRequest(connectionId) {
+    const client = requireSupabase();
+    const { error } = await client
+      .from('honeycomb_connections')
+      .update({ status: 'blocked', responded_at: new Date().toISOString() })
+      .eq('id', connectionId);
+    if (error) throw error;
+  },
+
   async listIncomingRequests() {
     const client = requireSupabase();
     const {

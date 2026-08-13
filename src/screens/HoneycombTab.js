@@ -1,5 +1,5 @@
 import React, { useCallback, useRef, useState } from 'react';
-import { StyleSheet, View, Text, TextInput, ScrollView, ActivityIndicator } from 'react-native';
+import { StyleSheet, View, Text, TextInput, ScrollView, ActivityIndicator, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { theme } from '../constants/theme';
@@ -139,19 +139,34 @@ const WeekView = ({ sections, truncated, onLikeToggled }) => {
   );
 };
 
-const RequestRow = ({ request, onRespond }) => (
-  <View style={styles.requestRow}>
-    <Text style={styles.requestName}>{request.requester?.display_name ?? 'Someone'} wants to add you to their hive.</Text>
-    <View style={styles.requestActions}>
-      <PressableScale onPress={() => onRespond(request.id, false)} style={styles.declineButton}>
-        <Text style={styles.declineText}>Not now</Text>
-      </PressableScale>
-      <PressableScale onPress={() => onRespond(request.id, true)} style={styles.acceptButton}>
-        <Text style={styles.acceptText}>Accept</Text>
-      </PressableScale>
+const RequestRow = ({ request, onRespond, onBlock }) => {
+  const name = request.requester?.display_name ?? 'Someone';
+  const confirmBlock = () => {
+    Alert.alert(`Block ${name}?`, "They won't be able to send you another request.", [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Block', style: 'destructive', onPress: () => onBlock(request.id) },
+    ]);
+  };
+
+  return (
+    <View style={styles.requestRow}>
+      <View style={styles.requestTextCol}>
+        <Text style={styles.requestName}>{name} wants to add you to their hive.</Text>
+        <PressableScale onPress={confirmBlock} haptic={null}>
+          <Text style={styles.blockText}>Block</Text>
+        </PressableScale>
+      </View>
+      <View style={styles.requestActions}>
+        <PressableScale onPress={() => onRespond(request.id, false)} style={styles.declineButton}>
+          <Text style={styles.declineText}>Not now</Text>
+        </PressableScale>
+        <PressableScale onPress={() => onRespond(request.id, true)} style={styles.acceptButton}>
+          <Text style={styles.acceptText}>Accept</Text>
+        </PressableScale>
+      </View>
     </View>
-  </View>
-);
+  );
+};
 
 const HoneycombFeed = () => {
   const navigation = useNavigation();
@@ -255,6 +270,15 @@ const HoneycombFeed = () => {
     }
   };
 
+  const handleBlock = async (id) => {
+    try {
+      await HoneycombStore.blockRequest(id);
+      await loadAll();
+    } catch (err) {
+      console.warn('Failed to block request', err);
+    }
+  };
+
   const handleShareToday = async () => {
     if (!todayEntry || sharing) return;
     setSharing(true);
@@ -324,7 +348,7 @@ const HoneycombFeed = () => {
         />
       ) : (
       <>
-      <HoneycombGrid members={todayMembers} />
+      <HoneycombGrid members={todayMembers} onInvitePress={() => setAddOpen(true)} />
 
       <View style={styles.addCard}>
         <PressableScale onPress={() => setAddOpen((open) => !open)} style={styles.addToggle} haptic={null}>
@@ -367,7 +391,7 @@ const HoneycombFeed = () => {
         <View style={styles.requestsCard}>
           <Text style={styles.sectionLabel}>REQUESTS</Text>
           {incomingRequests.map((request) => (
-            <RequestRow key={request.id} request={request} onRespond={handleRespond} />
+            <RequestRow key={request.id} request={request} onRespond={handleRespond} onBlock={handleBlock} />
           ))}
         </View>
       )}
@@ -609,11 +633,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 8,
   },
+  requestTextCol: {
+    flex: 1,
+    marginRight: 10,
+    gap: 4,
+  },
   requestName: {
     ...theme.type.bodySm,
     color: theme.colors.textPrimary,
-    flex: 1,
-    marginRight: 10,
+  },
+  blockText: {
+    ...theme.type.bodySm,
+    color: theme.colors.danger,
   },
   requestActions: {
     flexDirection: 'row',
