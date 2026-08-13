@@ -145,13 +145,24 @@ export const nextMilestone = (streak) => {
   return target ? { target, remaining: target - streak } : null;
 };
 
-// entries must be sorted ascending by ISO date string
 export const longestStreak = (entries) => {
+  // Multiple entries can share a date (private-hive writes alongside the
+  // personal journal) — dedupe before counting or a same-day second entry
+  // reads as a gap and resets the run instead of being a no-op.
+  //
+  // The `.sort()` is not just Set housekeeping — it's what makes this
+  // function honor its own ascending-order contract instead of merely
+  // depending on it, the way EntryStore.js's caller still does. Dropping
+  // it re-opens the descending-query failure (Sage/Pixel, thread 19e90cf8,
+  // 2026-08-13: 30-day streak reads as 1 under `entry_date desc`) — caught
+  // by check-streaks.mjs's order-independence assertion if it's ever cut
+  // out as a "just tidying" pass.
+  const sortedDates = [...new Set(entries.map((entry) => entry.date))].sort();
   let longest = 0;
   let current = 0;
   let prevDate = null;
-  for (const entry of entries) {
-    const d = new Date(entry.date);
+  for (const date of sortedDates) {
+    const d = new Date(date);
     if (prevDate) {
       const diffDays = Math.round((d - prevDate) / 86400000);
       current = diffDays === 1 ? current + 1 : 1;

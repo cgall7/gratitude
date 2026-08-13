@@ -53,7 +53,7 @@ export const AccountScreen = ({ navigation }) => {
   const email = session?.user?.email;
 
   const handleSignOut = () => {
-    Alert.alert('Sign out?', "Your entries stay on this device. You'll need to sign in again to see your hive.", [
+    Alert.alert('Sign out?', "You'll need to sign in again to see your entries and your hive.", [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Sign out',
