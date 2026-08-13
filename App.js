@@ -14,6 +14,7 @@ import { AccountScreen } from './src/screens/Account';
 import { NotesInbox } from './src/screens/NotesInbox';
 import { ComposeNote } from './src/screens/ComposeNote';
 import { PlantSeed } from './src/screens/PlantSeed';
+import { SeedsInbox } from './src/screens/SeedsInbox';
 import { MainTabs } from './src/navigation/MainTabs';
 import { AuthProvider } from './src/contexts/AuthContext';
 import { OnboardingState } from './src/services/onboardingState';
@@ -179,11 +180,14 @@ export default function App() {
           <Stack.Screen name="Notes" component={NotesInbox} options={{ presentation: 'modal' }} />
           <Stack.Screen name="ComposeNote" component={ComposeNote} options={{ presentation: 'modal' }} />
 
-          {/* Project 8 (Seeds). Compose only so far — 8.4's seed list and 8.8's
-              bloom reveal aren't built, so a seed is currently plantable and
-              then invisible until they are. Modal for the same reason Compose
-              is: where Seeds finally lives in the IA is Project 10's call. */}
+          {/* Project 8 (Seeds). 8.2 plants, 8.4 lists — a planted seed is no
+              longer invisible. 8.8's reveal choreography is still @Pixel's:
+              the sealed -> bloomed transition happens on SeedsInbox today
+              (§22.2's refetch), it just does not yet have a beat. Modal for
+              the same reason Compose is: where Seeds finally lives in the IA
+              is Project 10's call. */}
           <Stack.Screen name="PlantSeed" component={PlantSeed} options={{ presentation: 'modal' }} />
+          <Stack.Screen name="Seeds" component={SeedsInbox} options={{ presentation: 'modal' }} />
 
           <Stack.Screen name="Evening">
             {(props) => (

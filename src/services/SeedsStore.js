@@ -44,10 +44,14 @@ const shapeSeed = (row) => {
   return { ...seed, content: held?.content ?? null };
 };
 
-/** True once a seed's bloom date has passed. Derived, never stored — see the
- *  seeds migration for why there is no `status` column to read instead. */
-export const hasBloomed = (seed, at = Date.now()) =>
-  !!seed?.bloom_at && new Date(seed.bloom_at).getTime() <= at;
+// `hasBloomed` moved to `utils/seedView.js` and is re-exported here so every
+// existing importer is unchanged. It left because it is pure derivation and
+// this module is not: importing SeedsStore drags in `./supabase` and therefore
+// React Native, so the one rule that decides whether a seal opens could only
+// be gated through a resolve-time stub. `utils/seedView.js` has no imports at
+// all, and `check-seed-view.mjs` executes it. Same move, same reason, as
+// `resolveListView` in §23.
+export { hasBloomed, SEED_VIEWS, resolveSeedView, nextWakeDelay } from '../utils/seedView';
 
 export const SeedsStore = {
   async plantSeed(recipientId, content, bloomAt) {

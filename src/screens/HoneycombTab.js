@@ -376,11 +376,18 @@ const HoneycombFeed = () => {
           // already has this shape. @Pixel/@Deezine — moving it is this block
           // and nothing else, and the tab bar rebuild (Project 10) may well
           // take both icons anyway.
+          //
+          // The leaf now opens the LIST, not the compose screen. When 8.2 was
+          // the only Seeds surface, a door straight to compose was the only
+          // door there was. Now it matches Notes exactly — icon opens the
+          // inbox, `+` inside it composes — and the two entry points beside
+          // each other behaving differently would have been a thing to learn
+          // for no reason.
           <View style={styles.headerActions}>
             <PressableScale
-              onPress={() => navigation.getParent()?.navigate('PlantSeed')}
+              onPress={() => navigation.getParent()?.navigate('Seeds')}
               haptic={null}
-              accessibilityLabel="Plant a seed"
+              accessibilityLabel="Seeds"
             >
               <Ionicons name="leaf-outline" size={22} color={theme.colors.ink} />
             </PressableScale>
