@@ -164,21 +164,18 @@ export const HoneycombStore = {
     if (shareError) throw shareError;
   },
 
+  // Was `.from('entries').select('id, shares(id)').eq('entry_date', date)
+  // .limit(1)` with no `.order()` — correct only while one entry per day
+  // was guaranteed. P0-2 (entries_hive_visibility migration) lifts that
+  // guarantee, so `.limit(1)` can return an arbitrary entry for the date
+  // and "did I share today?" becomes a coin flip (Sage, thread 19e90cf8,
+  // 2026-08-13). has_shared_date checks existence directly instead of
+  // reading one row's shares embed.
   async hasSharedDate(date) {
     const client = requireSupabase();
-    const {
-      data: { user },
-    } = await client.auth.getUser();
-    const { data, error } = await client
-      .from('entries')
-      .select('id, shares(id)')
-      .eq('user_id', user.id)
-      .eq('entry_date', date)
-      .limit(1);
+    const { data, error } = await client.rpc('has_shared_date', { p_date: date });
     if (error) throw error;
-    // shares(id) is a to-one embed (unique entry_id) — PostgREST returns an
-    // object, not an array, so `.length` is always undefined here.
-    return Boolean(data?.[0]?.shares?.id);
+    return Boolean(data);
   },
 
   // --- Feed ---------------------------------------------------------------
