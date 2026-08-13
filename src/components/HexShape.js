@@ -68,9 +68,17 @@ export const hexEdgeMarks = (size, inset, edgeFraction) => {
 // member was both blooming and seeded, and the ring silently read as five
 // marks instead of six. `hexEdgeMarks` occupies the six EDGE directions, so
 // the six VERTEX directions are free by construction. Moved to the 60°
-// vertex ray at 0.682 × the circumradius (verified: ±17.1° seal clearance
-// inside the ±18.7° gap between the 30°/90° marks; 12.12pt to each
-// adjacent edge against an 8.80pt seal radius). Seal radius unchanged.
+// vertex ray at 0.682 × the circumradius. Seal radius unchanged.
+//
+// R61 correction (Pixel): angular clearance is the wrong instrument here —
+// it's a 1D projection only valid when both marks sit at the same radius,
+// and they don't (seal centre 30.01, mark centre 33.61). The real,
+// 2D-measured clearance from the seal's boundary to the mark's ink is
+// 2.216pt (6.65px @3x) — and that figure is CONSTANT for any seal distance
+// ≥ 0.64 × circumradius, because the seal's flat face runs parallel to the
+// mark, so sliding along the vertex ray doesn't change the gap. What binds
+// at 0.682 is the cell edge, at 4.50pt clearance — so 0.682 sits mid-
+// interval, not on a knife-edge.
 export const hexSealPath = (size) => {
   const angle = (Math.PI / 180) * 60; // lower-right vertex
   const dist = size * 0.682;

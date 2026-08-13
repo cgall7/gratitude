@@ -120,7 +120,20 @@ const BLOOM_MARK_EDGE_FRACTION = 0.3;
 // still lists honeycomb breathing loops as unextracted §14.1 follow-up), so
 // this reuses GlowOrb's ratified 2400ms half-cycle rather than inventing a
 // new number — same anchor the rest of the app's "breathe" treatments use.
+//
+// §12.5.1b (R61, Pixel's catch): the anchor only covers CADENCE. The floor
+// (below) is a separate number and was NOT borrowed from GlowOrb — its
+// 25% swing is not this ring's 55%. Citing the anchor for the whole
+// animation is what let an invented depth pass as ratified. The floor is
+// now measured against the contrast bar it has to clear, not against
+// GlowOrb's.
 const BLOOM_BREATHE_MS = 2400;
+// Ring floor. inkSoft on a wash is ink-on-ground, so this is a luminance
+// question (WCAG 1.4.11 non-text, 3:1) — 0.45 measured 1.93:1/1.94:1 on
+// the two real-member grounds (washSky/washYellow), 47% of every cycle
+// below the bar. 0.75 clears both at 3.30:1/3.34:1 with margin; the
+// crossing point is 0.700. Peak (1.0) and cadence are untouched.
+const BLOOM_FLOOR_OPACITY = 0.75;
 
 // The blooming state: a segmented ring, not a wash, because fill is spent
 // on identity (`hexTintFor`) and its range is capped by whichever tint a
@@ -141,7 +154,7 @@ const BloomRing = ({ size, reduced }) => {
     }
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(pulse, { toValue: 0.45, duration: BLOOM_BREATHE_MS, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: BLOOM_FLOOR_OPACITY, duration: BLOOM_BREATHE_MS, useNativeDriver: true }),
         Animated.timing(pulse, { toValue: 1, duration: BLOOM_BREATHE_MS, useNativeDriver: true }),
       ])
     );
