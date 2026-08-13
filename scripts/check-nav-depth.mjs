@@ -171,13 +171,19 @@ for (const file of files) {
       navigators.push({ line: node.loc.start.line, name: node.callee.name });
     }
 
-    // `<Foo.Screen name="X" component={Y} />`
-    if (node.type === 'JSXOpeningElement' && node.name.type === 'JSXMemberExpression') {
-      const { object, property } = node.name;
+    // `<Foo.Screen name="X" component={Y} />` and the render-prop form,
+    // `<Foo.Screen name="X">{(props) => <Y {...props} />}</Foo.Screen>`.
+    // Five of App.js's thirteen root routes use the second shape. Reading
+    // only the first would leave those five unmodelled as *owners*, so a
+    // getParent() call inside a file they render could be attributed to a
+    // tab screen that also imports it and pass — while the root-screen path
+    // has no parent navigator at all.
+    if (node.type === 'JSXElement' && node.openingElement.name.type === 'JSXMemberExpression') {
+      const { object, property } = node.openingElement.name;
       if (object.type !== 'JSXIdentifier' || property.name !== 'Screen') return;
       let routeName = null;
       let componentLocal = null;
-      for (const attr of node.attributes) {
+      for (const attr of node.openingElement.attributes) {
         if (attr.type !== 'JSXAttribute') continue;
         if (attr.name.name === 'name' && attr.value?.type === 'StringLiteral') {
           routeName = attr.value.value;
@@ -189,6 +195,21 @@ for (const file of files) {
         ) {
           componentLocal = attr.value.expression.name;
         }
+      }
+      if (!componentLocal) {
+        // First capitalised element rendered by the render prop. `{...props}`
+        // spreads and text nodes are not elements, so this lands on the screen
+        // component itself.
+        walk(node.children, (child) => {
+          if (
+            !componentLocal &&
+            child.type === 'JSXOpeningElement' &&
+            child.name.type === 'JSXIdentifier' &&
+            /^[A-Z]/.test(child.name.name)
+          ) {
+            componentLocal = child.name.name;
+          }
+        });
       }
       screens.push({
         navigator: object.name,
