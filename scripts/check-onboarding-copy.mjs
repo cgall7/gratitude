@@ -4,7 +4,7 @@
 //
 // Onboarding copy is the only copy in the app that is frozen by a human
 // ruling rather than by taste (GUIDES/GRATITUDE_ONBOARDING_GIVEN_COPY.md,
-// R15 + R53). Those rulings were written into a comment above BELIEF_SCREENS,
+// R15 + R56). Those rulings were written into a comment above BELIEF_SCREENS,
 // and a comment cannot fail. This asserts them.
 //
 // Predecessor: .scratch/onboarding-gate.js, which was never tracked — it
@@ -18,7 +18,7 @@
 //      a rule can be *described* in a comment and *enforced* here using the
 //      same words, with no risk of the description tripping the enforcement.
 //   2. BELIEF COUNT IS READ, NOT ASSUMED. The old version hardcoded 3 belief
-//      screens. Adding a fourth in R53 would have left it asserting a step
+//      screens. Adding a fourth in R56 would have left it asserting a step
 //      walkthrough that no longer matched the app while still printing "ok".
 //   3. FLOW C IS DETECTED, NOT ASSUMED. Its fate is Colin's call as of
 //      2026-08-13. The gate asserts Flow C's step math only if LockDemoStep
@@ -198,7 +198,7 @@ check(
   ''
 );
 
-// --- 3. Copy gate: no unshippable promises (R53) ---------------------------
+// --- 3. Copy gate: no unshippable promises (R56) ---------------------------
 
 // The rule: the onboarding pitch may not describe a feature the app does not
 // have. Onboarding is the one screen set where this is expensive — a Slice 1
@@ -252,7 +252,7 @@ if (!SEEDS_SHIPPED) {
 
 // --- 4. The thesis has to actually be on screen ---------------------------
 
-// R53: given -> from someone -> tell them. Beats 1 and 2 are the belief,
+// R56: given -> from someone -> tell them. Beats 1 and 2 are the belief,
 // beat 3 is the product. Assert both halves are present, so nobody can
 // quietly delete the product half and leave a journal pitch behind (which is
 // exactly the state this branch found).

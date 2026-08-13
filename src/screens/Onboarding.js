@@ -46,7 +46,7 @@ const HIT_SLOP = { top: 12, bottom: 12, left: 12, right: 12 };
 // didn't arrange. A secular reader hears humility and wonder; a Christian
 // reader hears grace. We never name a giver — the user fills that in.
 //
-// R53 (2026-08-13, Pollinate pivot): the thesis above is unchanged. What
+// R56 (2026-08-13, Pollinate pivot): the thesis above is unchanged. What
 // changed is that it used to dead-end. In a solo journal you notice you were
 // given something and then type it into a box; nothing happens. Pollinate
 // supplies the second half — whoever gave it to you is a person you can now
@@ -66,7 +66,7 @@ const HIT_SLOP = { top: 12, bottom: 12, left: 12, right: 12 };
 // sin — and, per Colin 2026-08-11, hallelujah. That one stays a guiding
 // principle for the register, not a word on screen.
 //
-// Second gate, new with R53: NO BEAT MAY PITCH A FEATURE THAT ISN'T BUILT.
+// Second gate, new with R56: NO BEAT MAY PITCH A FEATURE THAT ISN'T BUILT.
 // Two are currently parked and both are enforced by the gate script rather
 // than by anyone remembering this comment:
 //
@@ -312,7 +312,7 @@ const WelcomeStep = ({ step, onNext, flow, onChangeFlow, onSkipDemo, splashHidde
           )}
         </View>
         {/*
-          R53: the old subhead was "One line a day. That's the whole thing."
+          R56: the old subhead was "One line a day. That's the whole thing."
           True of a journal, false of Pollinate, and it was the first promise
           a new user read.
 
@@ -509,7 +509,7 @@ const LockDemoStep = ({ onNext }) => {
 // --- Celebration — always the first-ever-save treatment (the entry step's
 // --- save IS the first-ever save), never the bare badge. ---
 //
-// R53 moved the mental-health claim here from its own belief screen. Colin's
+// R56 moved the mental-health claim here from its own belief screen. Colin's
 // R15 brief asked for better mental health as part of the draw, and the
 // hedged form ("that's real, and it's not the point") is still the honest
 // way to say it per §9.3 — but as a beat it was a promise made to someone
