@@ -15,6 +15,7 @@ import { NotesInbox } from './src/screens/NotesInbox';
 import { ComposeNote } from './src/screens/ComposeNote';
 import { PlantSeed } from './src/screens/PlantSeed';
 import { SeedsInbox } from './src/screens/SeedsInbox';
+import { PollinateWrapped } from './src/screens/PollinateWrapped';
 import { MainTabs } from './src/navigation/MainTabs';
 import { AuthProvider } from './src/contexts/AuthContext';
 import { OnboardingState } from './src/services/onboardingState';
@@ -197,6 +198,22 @@ export default function App() {
               is Project 10's call. */}
           <Stack.Screen name="PlantSeed" component={PlantSeed} options={{ presentation: 'modal' }} />
           <Stack.Screen name="Seeds" component={SeedsInbox} options={{ presentation: 'modal' }} />
+
+          {/* Project 10: Wrapped is no longer a tab (Colin's ruling — it
+              lives in the Garden). It has to be registered somewhere or the
+              screen ships unreachable, and a root-stack modal is the same
+              treatment Notes/Seeds/Compose get for the same reason.
+
+              `onComplete` is what makes it a screen rather than a trap: with
+              the prop undefined, `PollinateWrapped.js:147` sends the last
+              slide back to slide 0 forever — survivable when a tab bar sat
+              underneath it, not now that a modal covers the bar. Tapping past
+              the last beat returns you to the Garden. */}
+          <Stack.Screen name="Wrapped" options={{ presentation: 'modal' }}>
+            {(props) => (
+              <PollinateWrapped {...props} onComplete={() => props.navigation.goBack()} />
+            )}
+          </Stack.Screen>
 
           <Stack.Screen name="Evening">
             {(props) => (
