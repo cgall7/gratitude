@@ -10,11 +10,12 @@ import { toISODate } from '../utils/dateRanges';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { PressableScale } from '../components/PressableScale';
 import { FeedCard } from '../components/FeedCard';
-import { HoneycombGrid } from '../components/HoneycombGrid';
+import { HoneycombGrid, HIVE_SLOTS } from '../components/HoneycombGrid';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { BeeTransition } from '../components/BeeTransition';
 import { FlyingBee } from '../components/FlyingBee';
-import { DEMO_HIVE_MEMBERS } from '../constants/demoHive';
+import { demoHiveShares } from '../constants/demoHive';
+import { TAB_CLEARANCE } from '../navigation/tabBarLayout';
 
 // Share carry (Sunbeam §11.2): the bee lifts the just-shared entry off the
 // button and carries it up toward the grid it just joined.
@@ -33,24 +34,27 @@ const FEED_ARRIVAL_PATH = {
 };
 
 // Real shares go first (center of the spiral, full opacity) so they read as
-// the actual hive; demo members fill the outer rings behind them so the
-// honeycomb always looks alive even with 0-2 real connections. Capped so
-// the grid stays a tidy cluster instead of sprawling off-screen.
-const MAX_HIVE_CELLS = 12;
+// the actual hive; demo members fill the ring behind them so the honeycomb
+// always looks alive even with 0-2 real connections. The seat count lives in
+// HoneycombGrid — a hex ring only closes at 7, so the cap is the geometry's
+// to state, not this screen's.
 
+// ONE mapper, for every member the grid draws (§18.1). Demo members are
+// authored in share shape, so they come through here too rather than being
+// handed to the grid raw — that is what `isDemo` has to be read rather than
+// assumed false.
 const toGridMember = (share) => ({
   id: share.id,
   name: share.isOwn ? 'You' : share.author?.display_name ?? 'Someone',
   gratitude: share.content,
   avatarUrl: share.author?.avatar_url,
   isOwn: share.isOwn,
-  isDemo: false,
+  isDemo: share.isDemo ?? false,
 });
 
 const buildHiveMembers = (feed) => {
   const real = feed.map(toGridMember);
-  const combined = real.concat(DEMO_HIVE_MEMBERS);
-  return combined.slice(0, MAX_HIVE_CELLS);
+  return real.concat(demoHiveShares().map(toGridMember)).slice(0, HIVE_SLOTS);
 };
 
 const RequestRow = ({ request, onRespond }) => (
@@ -344,7 +348,7 @@ const styles = StyleSheet.create({
   content: {
     padding: 24,
     paddingTop: 60,
-    paddingBottom: 140,
+    paddingBottom: TAB_CLEARANCE,
   },
   loadingContainer: {
     flex: 1,
