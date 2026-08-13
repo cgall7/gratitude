@@ -40,8 +40,11 @@ The design system is **Sunbeam v1** — `GUIDES/GRATITUDE_DESIGN_SYSTEM_V1.md` i
 the spec and `src/constants/theme.js` is the only place the values live. The
 list below is a summary; if the two ever disagree, `theme.js` wins.
 
-- **Name:** Pollinate. Casing of the on-screen wordmark is being ruled (§19.3);
-  the two sites that draw it must match once it is.
+- **Name:** Pollinate. The on-screen wordmark is **"Pollinate", title-case, in
+  Dancing Script** (`theme.type.logo`) — ruled §19.3, 2026-08-13. All three
+  sites that draw it (`Onboarding.js:236`, `CoreRitual.js:57` and `:126`) use
+  that one casing. Earlier revisions of this file specified all-lowercase; that
+  is superseded.
 - **The word "gratitude" is still the product noun** — a "gratitude note" is
   what users write. Only the *app's name* changed (§19.1). Do not sweep it.
 - **Colors:** Sunlit Honey `#FFF7CC` (identity screens), Sunlit Cream `#FFFBEB`
