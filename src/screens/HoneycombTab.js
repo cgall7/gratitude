@@ -154,6 +154,7 @@ const RequestRow = ({ request, onRespond }) => (
 );
 
 const HoneycombFeed = () => {
+  const navigation = useNavigation();
   const [loading, setLoading] = useState(true);
   const [feed, setFeed] = useState([]);
   // 'today' | 'week' — the §18 pager's resting position. State lives here
@@ -304,6 +305,13 @@ const HoneycombFeed = () => {
             : 'YOUR HIVE'
         }
         title="Honeycomb"
+        right={
+          // Project 7 entry point — modal route lives on the root stack,
+          // not this tab's own navigator, hence getParent().
+          <PressableScale onPress={() => navigation.getParent()?.navigate('Notes')} haptic={null}>
+            <Ionicons name="mail-outline" size={22} color={theme.colors.ink} />
+          </PressableScale>
+        }
       />
 
       <HiveViewToggle view={hiveView} onChange={setHiveView} />
