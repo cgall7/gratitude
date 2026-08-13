@@ -147,18 +147,30 @@ export const HoneycombStore = {
   },
 
   // --- Entries & sharing -----------------------------------------------
-  async shareEntry({ date, text, theme }) {
+  // Takes the id of an existing entries row (EntryStore.saveEntry already
+  // wrote it) and marks it shared, rather than inserting a second row for
+  // the same day. Used to insert a fresh entries row from the passed-in
+  // text/theme — every share doubled that day's entry (one private, one
+  // shared-but-mislabeled-private), which inflated getAllEntries()' count
+  // for streak/Recap/Wrapped and left two cards for the same gratitude
+  // once a real 'entries.theme' column existed to tell them apart (thread
+  // 19e90cf8, Sage/Bumble, 2026-08-13). visibility: 'shared' also mirrors
+  // what the shares row already means, per the entries_hive_visibility
+  // migration comment.
+  async shareEntry({ entryId }) {
     const client = requireSupabase();
     const {
       data: { user },
     } = await client.auth.getUser();
 
-    const { data: entry, error: entryError } = await client
+    const { data: entry, error: updateError } = await client
       .from('entries')
-      .insert({ user_id: user.id, content: text, entry_date: date })
+      .update({ visibility: 'shared' })
+      .eq('id', entryId)
+      .eq('user_id', user.id)
       .select()
       .single();
-    if (entryError) throw entryError;
+    if (updateError) throw updateError;
 
     const { error: shareError } = await client.from('shares').insert({ entry_id: entry.id, user_id: user.id });
     if (shareError) throw shareError;
