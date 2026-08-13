@@ -35,7 +35,12 @@ const describeTheme = (insight, periodLabel) => {
 // per month: `EntryStore.getEntriesBetween` reloads and re-sorts the whole
 // store on every call, so twelve months would have meant twelve full reads
 // of the same blob.
-const buildMonths = (allEntries) => {
+// Exported so check-streaks.mjs (Sage, thread 19e90cf8) can assert against
+// it directly — otherwise `allEntries.reduce(...)` below reads exactly like
+// a needless complication of `allEntries[0]?.date` to anyone who doesn't
+// know EntryStore's ascending sort isn't guaranteed, and nothing stops it
+// being "simplified" back.
+export const buildMonths = (allEntries) => {
   // Earliest date computed directly rather than read off allEntries[0]:
   // that assumed ascending order, which is EntryStore's contract today but
   // not a guarantee `recentMonths` can enforce on its caller (Sage, thread

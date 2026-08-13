@@ -167,10 +167,12 @@ export const HoneycombStore = {
   // Was `.from('entries').select('id, shares(id)').eq('entry_date', date)
   // .limit(1)` with no `.order()` — correct only while one entry per day
   // was guaranteed. P0-2 (entries_hive_visibility migration) lifts that
-  // guarantee, so `.limit(1)` can return an arbitrary entry for the date
-  // and "did I share today?" becomes a coin flip (Sage, thread 19e90cf8,
-  // 2026-08-13). has_shared_date checks existence directly instead of
-  // reading one row's shares embed.
+  // guarantee, so `.limit(1)` reads an unordered index and returns
+  // whichever row Postgres happens to store first — not random, reliably
+  // wrong: with no journal-then-share write order, that's consistently
+  // the day's first-inserted row, not the shared one (Sage measured 12/12
+  // runs, thread 19e90cf8, 2026-08-13). has_shared_date checks existence
+  // directly instead of reading one row's shares embed.
   async hasSharedDate(date) {
     const client = requireSupabase();
     const { data, error } = await client.rpc('has_shared_date', { p_date: date });

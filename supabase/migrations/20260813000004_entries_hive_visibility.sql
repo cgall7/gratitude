@@ -63,10 +63,10 @@ create trigger shares_mark_entry_shared
 -- `.eq('entry_date', date).limit(1)` with no `.order()`, flagged by Sage
 -- (thread 19e90cf8, 2026-08-13): once an entry_date can hold more than one
 -- row (true since 20260808000001; guaranteed to happen once hive entries
--- share a day with a journal entry), that query returns an arbitrary row
--- instead of the shared one, and "did I share today?" becomes a coin
--- flip. This checks existence directly instead of reading an arbitrary
--- row's shares embed.
+-- share a day with a journal entry), that query reads unordered heap order
+-- and reliably returns the day's first-inserted row instead of the shared
+-- one — measured 12/12, not a coin flip. This checks existence directly
+-- instead of reading an arbitrary row's shares embed.
 create or replace function public.has_shared_date(p_date date)
 returns boolean
 language sql
