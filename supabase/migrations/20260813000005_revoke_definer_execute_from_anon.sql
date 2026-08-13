@@ -3,14 +3,50 @@
 -- the property across the whole catalog rather than one function at a time
 -- (thread 19e90cf8, 2026-08-13).
 --
--- Two of the three already carry `revoke all ... from public`. That is the
--- bug: PUBLIC does not reach `anon`. Supabase runs
---   alter default privileges in schema public grant all on functions
---     to anon, authenticated, service_role;
--- so anon holds its own grant, by name, on every function created after
--- that — and a named grant survives a revoke from PUBLIC. The fix is the
--- pattern 20260813000003 already uses for list_hive_state(): revoke from
--- anon explicitly. These three simply predate that lesson.
+-- Two of the three already carry `revoke all ... from public` and are still
+-- reachable, because a new function in this schema is granted to anon TWICE,
+-- by two independent mechanisms, and revoking either one leaves the other.
+-- The ACL of a freshly created function, read off pg_proc rather than
+-- reasoned about:
+--
+--   {=X/postgres, postgres=X/postgres, anon=X/postgres,
+--    authenticated=X/postgres, service_role=X/postgres}
+--
+--   =X       Postgres's own built-in default: EXECUTE to PUBLIC on every
+--            function. anon reaches it as a member of PUBLIC.
+--   anon=X   Supabase's `alter default privileges in schema public grant all
+--            on functions to anon, authenticated, service_role`, which names
+--            anon and therefore survives any revoke from PUBLIC.
+--
+-- Executed: revoke PUBLIC only -> anon still true. Revoke anon only -> anon
+-- still true (it keeps =X). Revoke both -> false. So both lines are needed on
+-- every function, which is what 20260813000003 does for list_hive_state();
+-- these three predate that. The earlier framing in this repo — "PUBLIC does
+-- not reach anon, which holds its own named grant" — is the second half only,
+-- and it is why `revoke all from public` on its own looked sufficient here.
+--
+-- THIS FILE IS A CLEANUP, NOT A GUARD, AND THE DIFFERENCE IS TESTED
+--
+--   create or replace  -> the revoke SURVIVES (proacl is preserved)
+--   drop + create      -> the revoke is LOST, silently; the new function is
+--                         born with both grants again
+--
+-- A signature change forces the second one. Worse, `drop function
+-- public.owns_entry(uuid) cascade` also takes a policy with it — measured:
+-- `shares` goes from 3 policies to 2, no warning — so that edit re-opens anon
+-- AND deletes an RLS rule in the same statement.
+--
+-- I tried to close the class at the source instead and could not. On PG 18.4,
+-- as `postgres`, `alter default privileges in schema public revoke execute on
+-- functions from public` is accepted and records NOTHING — pg_default_acl
+-- stays empty, the next function is still born with =X — with or without
+-- `for role postgres`. The control passes in the same run: an ADP *grant* to
+-- a test role does register. So there is no default-privilege switch to flip;
+-- every future function starts open to anon, and the only durable guard is
+-- the catalog assertion in scripts/check-share-visibility.mjs, which is why
+-- that gate should land before, not after, the next migration that adds one.
+-- Verified it does catch both cases above: the drop/create signature change
+-- fails it on 3 assertions, exit 1.
 --
 -- WHAT WAS ACTUALLY EXPOSED, measured rather than assumed. Every call below
 -- was executed as `anon` against all 11 migrations on a real Postgres:
