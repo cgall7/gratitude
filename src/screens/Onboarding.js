@@ -924,11 +924,21 @@ const styles = StyleSheet.create({
   bodyLgWrap: {
     position: 'relative',
   },
-  // Centered over the paragraph's own box rather than a fixed offset —
-  // `bodyLg` at 3 lines (18px/27 lineHeight) runs ~81pt tall, which is
-  // within a point of the watermark's own 87pt height at size=16, so
-  // centering lands the comb behind the copy without either edge poking
-  // out past a typical wrap.
+  // Centered over the paragraph's own box, not a fixed offset — and the
+  // number that defends it is the comb's INK height, not its box height.
+  // `hexPoints` at size=16 leaves 2.14pt of empty box above and below the
+  // polygon, so the 87.43pt watermark box carries only 83.14pt of visible
+  // comb (Pixel, 2026-08-13 — box vs. ink is the same distinction R52 and
+  // §12.5.1 already carry, this is just its third costume).
+  //
+  // The real defence isn't that 83.14 happens to be close to one line
+  // count's paragraph height — it's that centering degrades gracefully
+  // across all of them, because line count is device-dependent and this
+  // isn't tuned to one: `bodyLg` at 2 lines (54pt) overflows the ink
+  // 14.57pt/side, at 3 lines (81pt, the mock's line count) it's 1.07pt/side,
+  // and at 4 lines (108pt) the ink fits inside the text with 12.43pt to
+  // spare. Centered is right at every one of those, not just the one this
+  // screen happened to wrap to when it was built.
   bodyLgWatermark: {
     position: 'absolute',
     top: 12,

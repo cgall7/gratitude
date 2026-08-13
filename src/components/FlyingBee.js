@@ -324,9 +324,12 @@ const styles = StyleSheet.create({
   // circle, so a chain of them reads as scattered dust) around a small hot
   // core (accentBurst, the same "motion only, never a static fill" token
   // the old flat dot used). Concentric inside one rotated/scaled Animated
-  // wrapper, so the two-layer look costs one extra plain View per pooled
-  // particle and nothing else — the fade curve, cadence and cap above are
-  // all untouched.
+  // wrapper — the old trailDot WAS that wrapper (a single self-rendering
+  // node); the pollen version is wrapper + halo + core, three nodes where
+  // there was one, so it's two extra plain Views per pooled particle
+  // (Pixel, 2026-08-13 — the earlier "one extra" undercounted the wrapper
+  // itself), +24 across the 12-slot pool. Still bounded and pool-scoped:
+  // the fade curve, cadence and cap above are all untouched.
   trailWrap: {
     position: 'absolute',
     width: 9,
