@@ -5,7 +5,7 @@ import { BottomTabBar, createBottomTabNavigator } from '@react-navigation/bottom
 import { theme } from '../constants/theme';
 import { TodayTab } from '../screens/TodayTab';
 import { RecapTab } from '../screens/RecapTab';
-import { GratitudeWrapped } from '../screens/GratitudeWrapped';
+import { PollinateWrapped } from '../screens/PollinateWrapped';
 import { HoneycombTab } from '../screens/HoneycombTab';
 import { TabBarButton } from './TabBarButton';
 import { AccountDoor, DOOR_SIZE, useHasAccountDoor } from './AccountDoor';
@@ -97,7 +97,7 @@ export const MainTabs = () => {
       <Tab.Screen name="Today" component={TodayTab} />
       <Tab.Screen name="Honeycomb" component={HoneycombTab} />
       <Tab.Screen name="Recap" component={RecapTab} />
-      <Tab.Screen name="Wrapped" component={GratitudeWrapped} />
+      <Tab.Screen name="Wrapped" component={PollinateWrapped} />
     </Tab.Navigator>
   );
 };

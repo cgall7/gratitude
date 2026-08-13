@@ -6,7 +6,7 @@ import { StripedBee } from './StripedBee';
 // §14.4 Beat 6 "The Year Card" — the static shareable keepsake the burst
 // resolves into. Deliberately motionless: "motion sells the ceremony;
 // stillness sells the share." This is the layout primitive only — the
-// share-sheet capture and the wiring into GratitudeWrapped.js come with
+// share-sheet capture and the wiring into PollinateWrapped.js come with
 // the beat build after the design-pass replay (§12.5 build-order gate).
 //
 // Crop-safe zone (§14.4): the card renders at 4:5 portrait. A 1:1 feed

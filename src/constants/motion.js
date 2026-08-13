@@ -99,7 +99,7 @@ export const MAX_TRAIL_PARTICLES = 12;
 // React bails out and skips the re-render for the (large majority)
 // Reduce-Motion-off case, meaning every `[reduced]`-dep effect across the
 // 7 existing consumers (FlyingBee, GlowOrb, HoneycombGrid, StaggeredItem,
-// StreakBadge, EveningMirror, GratitudeWrapped) runs exactly once. Seeding
+// StreakBadge, EveningMirror, PollinateWrapped) runs exactly once. Seeding
 // `null` breaks that bail-out for everyone, not just Reduce-Motion users —
 // `null -> false` is a real state change, so it was a universal double-run
 // regression traded for fixing a race in three new components. Don't

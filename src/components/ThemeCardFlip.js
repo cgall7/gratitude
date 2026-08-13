@@ -13,7 +13,7 @@ import { StripedBee } from './StripedBee';
 //
 // Built pre-replay on purpose (Pixel's merge-window call, 2026-08-11):
 // this file is new and its only deps (theme, motion, Bee) are outside
-// design-pass's 14-file diffstat. Wiring into GratitudeWrapped.js waits
+// design-pass's 14-file diffstat. Wiring into PollinateWrapped.js waits
 // for the settled tree per §12.5's build-order gate.
 const FLIP_PERSPECTIVE = 800;
 
