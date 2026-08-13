@@ -213,7 +213,12 @@ const HoneycombFeed = () => {
       HoneycombStore.listConnections(),
       HoneycombStore.listIncomingRequests(),
       EntryStore.getEntry(new Date()),
-      HoneycombStore.listHiveState(),
+      // A blooming decoration failing must not take down the membership
+      // list, the feed, or friend requests — five things that exist in prod
+      // today riding on one that doesn't yet (Sage, thread e10d0fed:
+      // list_hive_state 404s until its migration is applied). Holds after
+      // the migration lands too, for the RPC that times out or errors.
+      HoneycombStore.listHiveState().catch(() => []),
     ]);
 
     // Join hive-state facts onto real shares only, before the demo set gets
