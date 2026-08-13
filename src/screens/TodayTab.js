@@ -112,11 +112,11 @@ export const TodayTab = ({ navigation }) => {
         <ScreenHeader
           eyebrow={longDate(now)}
           title={greeting(now)}
-          right={<StreakBadge streak={streak} />}
+          right={error ? null : <StreakBadge streak={streak} />}
         />
 
         <StaggeredItem index={0}>
-          <View style={styles.streakCard}>
+          <View style={[styles.streakCard, error && { backgroundColor: theme.colors.surface }]}>
             {error ? (
               // No numeral, no caption — both are assertions about a user
               // we failed to read, not one who wrote nothing (Pixel, thread
