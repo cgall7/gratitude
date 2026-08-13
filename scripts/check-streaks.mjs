@@ -142,9 +142,25 @@ invariant('gapped real-world history', gapped);
 // of the one call site that must stay all-time instead of the absence of
 // a pattern anywhere in the file; a year-windowed fetch elsewhere in
 // TodayTab is correct and must not trip this.
+//
+// CONJUNCTION, NOT JUST THE CALL-SITE SHAPE (Sage, same thread, catching
+// her own prior table): the call-site regex only checks that the argument
+// is *named* `allEntries` — it says nothing about what that name holds.
+// Rename the year-windowed fetch's destructured binding to `allEntries`
+// and leave `setStreak(currentStreak(allEntries, now))` untouched, and the
+// shape check alone goes green on exactly the January-1st bug this block
+// exists to hold shut, with an `ok` message that asserts the false thing
+// ("not a year-windowed set"). `getAllEntries()` actually being present in
+// the file is the other half — carried from the very first version of this
+// check and dropped when it was rewritten to be positive-only. Both halves
+// have to hold: the call site must be shaped right, and the source that
+// shape claims to read from has to actually be in the file.
 {
   const todaySource = await readFile(path.join(ROOT, 'src/screens/TodayTab.js'), 'utf8');
-  if (/setStreak\(\s*currentStreak\(\s*allEntries\b/.test(todaySource)) {
+  if (
+    /setStreak\(\s*currentStreak\(\s*allEntries\b/.test(todaySource) &&
+    /EntryStore\.getAllEntries\(\)/.test(todaySource)
+  ) {
     ok('TodayTab static check: streak call site reads allEntries, not a year-windowed set');
   } else {
     bad(
