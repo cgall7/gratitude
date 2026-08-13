@@ -377,6 +377,14 @@ const HoneycombFeed = () => {
 
       <HiveViewToggle view={hiveView} onChange={setHiveView} />
 
+      {/* §18/R-Sage(thread e10d0fed, §4): the toggle names two views of the
+          comb — today's grid vs. the last 7 days — and switches only that
+          content region. Add-a-friend, requests, the share CTA, and the
+          feed belong to the screen, not to either arm: they used to live
+          inside the "today" branch only, which meant a pending friend
+          request or the add-friend control was invisible for as long as
+          someone left the toggle on "Last 7 days." No failure required —
+          that's the toggle's normal, undocumented state. */}
       {hiveView === 'week' ? (
         <WeekView
           sections={weekSections}
@@ -384,8 +392,8 @@ const HoneycombFeed = () => {
           onLikeToggled={handleLikeToggled}
         />
       ) : (
-      <>
-      <HoneycombGrid members={todayMembers} onInvitePress={() => setAddOpen(true)} />
+        <HoneycombGrid members={todayMembers} onInvitePress={() => setAddOpen(true)} />
+      )}
 
       <View style={styles.addCard}>
         <PressableScale onPress={() => setAddOpen((open) => !open)} style={styles.addToggle} haptic={null}>
@@ -464,8 +472,6 @@ const HoneycombFeed = () => {
             <FeedCard key={share.id} share={share} onLikeToggled={handleLikeToggled} />
           ))}
         </View>
-      )}
-      </>
       )}
       </ScrollView>
     </View>
