@@ -113,6 +113,13 @@ const MonthRail = ({ count, activeIndex }) => (
 // Below the month pager rather than above it: the months are what you came
 // for, and a year-in-review teaser at the top spoils the reveal the same way
 // Recap's old always-on insight card did (§17.5).
+//
+// This line put Garden in the do-not-nest set. `getParent()` is the root
+// stack only while Garden is a direct <Tab.Screen>; put a navigator between
+// them and this becomes a dead button — no crash, no red screen, correct in
+// a screenshot. Sage cleared Garden to nest at 9771f9d and I repeated it in
+// the commit that added this call, which is the moment it stopped being
+// true. `npm run check:nav-depth` is the reader that sentence needed.
 const WrappedCard = () => {
   const navigation = useNavigation();
 

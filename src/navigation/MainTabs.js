@@ -108,6 +108,12 @@ export const MainTabs = () => {
         tabBarIcon: ({ focused }) => <TabIcon routeName={route.name} focused={focused} />,
       })}
     >
+      {/* All four are direct children on purpose. Every screen below holds
+          at least one `getParent()?.navigate(...)`, which resolves to the
+          root stack only from this depth — Today→Lock, Hive→Seeds/Notes/
+          Onboarding, Garden→Wrapped (and DevVersionTag's replay reset).
+          Insert a navigator and those calls find no route and do nothing,
+          silently. Enforced, not documented: `npm run check:nav-depth`. */}
       <Tab.Screen name="Today" component={TodayTab} />
       <Tab.Screen name="Hive" component={HoneycombTab} />
       <Tab.Screen name="Wallet" component={WalletTab} />
