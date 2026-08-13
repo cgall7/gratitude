@@ -79,7 +79,11 @@
 // predicate it derives through. (Caught by Sage.)
 const FILL = {
   LEGAL_ENTITY: {
-    value: null, // 'Gratitude', or the registered company name
+    // Still null on purpose after the Pollinate rebrand (§19.4): "Pollinate"
+    // is a product name, not a registered entity, and filling this with the
+    // app's name is exactly the false-fill the publish gate below exists to
+    // prevent. Wants the registered company name.
+    value: null,
     // Has to read as a noun phrase in two different sentences: "published by X"
     // in the policy and "an agreement between you and X" in the terms.
     placeholder: '[our legal name — to be named before launch]',

@@ -1,5 +1,5 @@
 /**
- * NATIVE MODULE INTERFACE: GratitudeLock
+ * NATIVE MODULE INTERFACE: PollinateLock
  * 
  * This file defines the bridge between React Native (JS) and 
  * the Native System APIs (Swift/Kotlin).
@@ -8,7 +8,7 @@
  * Android implementation should use: AccessibilityService, UsageStatsManager
  */
 
-export const GratitudeLockInterface = {
+export const PollinateLockInterface = {
   /**
    * Requests the necessary system permissions from the user.
    * For iOS: Triggers FamilyControls authorization.
@@ -16,7 +16,7 @@ export const GratitudeLockInterface = {
    * @returns {Promise<boolean>} True if permission granted.
    */
   requestPermissions: async (): Promise<boolean> => {
-    // Native call: NativeModules.GratitudeLock.requestPermissions()
+    // Native call: NativeModules.PollinateLock.requestPermissions()
   },
 
   /**
@@ -25,7 +25,7 @@ export const GratitudeLockInterface = {
    * @returns {Promise<void>}
    */
   setBlockedApps: async (appIds: string[]): Promise<void> => {
-    // Native call: NativeModules.GratitudeLock.setBlockedApps(appIds)
+    // Native call: NativeModules.PollinateLock.setBlockedApps(appIds)
   },
 
   /**
@@ -35,7 +35,7 @@ export const GratitudeLockInterface = {
    * @returns {Promise<void>}
    */
   activateLock: async (): Promise<void> => {
-    // Native call: NativeModules.GratitudeLock.activateLock()
+    // Native call: NativeModules.PollinateLock.activateLock()
   },
 
   /**
@@ -45,7 +45,7 @@ export const GratitudeLockInterface = {
    * @returns {Promise<void>}
    */
   deactivateLock: async (): Promise<void> => {
-    // Native call: NativeModules.GratitudeLock.deactivateLock()
+    // Native call: NativeModules.PollinateLock.deactivateLock()
   },
 
   /**
@@ -54,6 +54,6 @@ export const GratitudeLockInterface = {
    * @returns {Promise<void>}
    */
   scheduleDailyLock: async (time: string): Promise<void> => {
-    // Native call: NativeModules.GratitudeLock.scheduleDailyLock(time)
+    // Native call: NativeModules.PollinateLock.scheduleDailyLock(time)
   },
 };

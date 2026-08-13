@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "gratitude",
-    "slug": "gratitude-app",
+    "name": "Pollinate",
+    "slug": "pollinate",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
@@ -9,7 +9,7 @@
     "ios": {
       "supportsTablet": true,
       "icon": "./assets/icon.png",
-      "bundleIdentifier": "com.anonymous.gratitude-app"
+      "bundleIdentifier": "xyz.pollinateapp.ios"
     },
     "android": {
       "adaptiveIcon": {
