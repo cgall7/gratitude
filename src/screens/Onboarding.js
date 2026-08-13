@@ -233,7 +233,7 @@ const WelcomeStep = ({ step, onNext, flow, onChangeFlow, onSkipDemo, splashHidde
     <StepShell step={step} stage="welcome" wash={theme.colors.washYellow}>
       <View style={styles.centerFill}>
         <View style={styles.wordmarkArcAnchor}>
-          <Text style={styles.wordmark}>Gratitude</Text>
+          <Text style={styles.wordmark}>Pollinate</Text>
           {showArc && (
             <FlyingBee
               preset="loginArc"

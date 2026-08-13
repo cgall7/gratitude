@@ -91,7 +91,7 @@ const buildSlidesFromEntries = (entries, year) => {
   ];
 };
 
-export const GratitudeWrapped = ({ onComplete }) => {
+export const PollinateWrapped = ({ onComplete }) => {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [slides, setSlides] = useState(null);
   const reduced = useReducedMotion();
