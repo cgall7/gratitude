@@ -1,0 +1,10 @@
+{
+  "name": "pollinate-ledger-verify",
+  "private": true,
+  "description": "Executes POLLINATE_LEDGER_SCHEMA.sql against a real Postgres and asserts its invariants.",
+  "scripts": {
+    "test": "node test.js",
+    "mutate": "for m in overdraft balanced fundmatch immutable modeguard; do MUT=$m node mutate.js && MUT=$m node test.mut.js | grep -E \"^[0-9]+ passed\"; done"
+  },
+  "dependencies": { "embedded-postgres": "^18.4.0-beta.17", "pg": "^8.11.0" }
+}
