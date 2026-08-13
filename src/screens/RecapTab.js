@@ -43,18 +43,24 @@ const buildMonths = (allEntries) =>
 
 // The three numbers worth chasing, up top where they're the first thing you
 // see — Recap used to open on a theme card with no score of any kind.
+// Pixel's ruling (2026-08-13, thread e10d0fed §2): three bare numbers will
+// carry two different units (days, days, entries) once hive entries join
+// `total`, with nothing stating either one — Today's card had one DAY to
+// borrow from, this one has none. Same fix: line 1 states the unit, line 2
+// states the scope.
 const StatsCard = ({ streak, best, total }) => (
   <View style={styles.statsCard}>
     {[
-      { value: streak, label: 'CURRENT' },
-      { value: best, label: 'BEST EVER' },
-      { value: total, label: 'THIS YEAR' },
+      { value: streak, unit: 'DAYS', scope: 'IN A ROW' },
+      { value: best, unit: 'DAYS', scope: 'BEST EVER' },
+      { value: total, unit: 'ENTRIES', scope: 'THIS YEAR' },
     ].map((stat, index) => (
-      <React.Fragment key={stat.label}>
+      <React.Fragment key={stat.scope}>
         {index > 0 && <View style={styles.statSeparator} />}
         <View style={styles.stat}>
           <Text style={styles.statValue}>{stat.value}</Text>
-          <Text style={styles.statLabel}>{stat.label}</Text>
+          <Text style={styles.statLabel}>{stat.unit}</Text>
+          <Text style={styles.statLabelSub}>{stat.scope}</Text>
         </View>
       </React.Fragment>
     ))}
@@ -246,6 +252,12 @@ const styles = StyleSheet.create({
     letterSpacing: 1.4,
     color: theme.colors.inkSoft,
     marginTop: 2,
+  },
+  statLabelSub: {
+    ...theme.type.label,
+    fontSize: 10,
+    letterSpacing: 1.4,
+    color: theme.colors.inkSoft,
   },
   loadingContainer: {
     flex: 1,
