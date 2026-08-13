@@ -57,8 +57,10 @@
 // they are the two that actually happened: a handler dropped into
 // `setTimeout`, and a promise-returning call used as a bare statement.
 //
-// SCOPE OF THE CLAIM. This models one indirection: a function passed as a
-// JSX attribute to a statically-imported component. It does not model a
+// SCOPE OF THE CLAIM. This models two indirections: a function passed as a
+// JSX attribute to a statically-imported component, and a function assigned
+// to a local name (through at most one `useCallback`/`useMemo` wrapper) and
+// invoked by that name elsewhere in the same module. It does not model a
 // handler stored in state, put on a context, or routed through a registry —
 // none exist on this path today, and any of them would land red here rather
 // than silently unchecked.
@@ -69,26 +71,31 @@ import { parse } from '@babel/parser';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-// The methods under gate. Reads reject for exactly the same reasons now that
-// they run through `requireUserId` and the network, and adding them here is a
-// one-line change — but not yet, for two measured reasons. Run at 5f94440
-// with the reads added, this gate reports three reds:
+// The methods under gate. Reads reject for exactly the same reasons writes
+// do now that they run through `requireUserId` and the network. Widened from
+// `['saveEntry']` (2026-08-13, thread ba3783a7, Sage's board) once the named-
+// local-function indirection below existed to carry it — run at 5f94440 with
+// the reads added but that indirection missing, this gate reported three
+// reds, only two of them real:
 //
 //   PollinateWrapped.js:107  real — the async IIFE's return is discarded and
 //                            `setSlides` only runs on success, so `slides`
-//                            stays null and :132 spins forever. Pixel's §26.5.
-//   RecapTab.js:126          real, and the same shape one screen over: no
-//                            handler, and `setLoading(false)` is on the happy
-//                            path only, so Garden's landing tab hangs.
-//   HoneycombTab.js:223      FALSE POSITIVE. `loadAll` is handled at all five
-//                            of its call sites (:267, :304, :313, :325, :334);
-//                            the gate simply cannot follow a named local
-//                            function, so it fails closed on correct code.
-//
-// So widening this list needs the escape-walk taught one more indirection
-// first — a rejection leaving a named `const handler = async () => …` — or it
-// would flag working code alongside the two genuine hangs.
-const GATED_METHODS = ['saveEntry'];
+//                            stays null and :132 spins forever. Pixel's §26.5,
+//                            still open — this gate is the tripwire, not the
+//                            fix.
+//   RecapTab.js:126          was real; closed by the §23.1 LoadState wiring
+//                            (thread ba3783a7) — the read now sits in its own
+//                            try/catch, so `classify` resolves it locally and
+//                            never needs the indirection at all.
+//   HoneycombTab.js:223      FALSE POSITIVE at 5f94440. `loadAll` is handled
+//                            at all five of its call sites (:267, :310, :319,
+//                            :331, :340), but none of them sit inside
+//                            `loadAll` itself — the gate could not follow a
+//                            named local function, so it failed closed on
+//                            correct code. `namedLocalFunction` below is that
+//                            indirection, mirroring `followJsxProp` for a
+//                            name instead of a prop.
+const GATED_METHODS = ['saveEntry', 'getAllEntries', 'getEntry', 'getEntriesBetween'];
 const STORE = 'EntryStore';
 
 let pass = 0;
@@ -332,6 +339,45 @@ const followJsxProp = (fn, file, mod) => {
   return { propName: attr.name.name, componentName: element.name.name };
 };
 
+// Resolve one named-local-function indirection: the escaping function is
+// assigned to a local name — `const loadAll = async () => {...}` or the same
+// wrapped in one `useCallback`/`useMemo` — rather than passed as a JSX prop.
+// The consumer is that name's own call sites elsewhere in the module, each
+// handling (or not) the rejection independently, same as a prop's call sites
+// inside its component.
+const namedLocalFunction = (fn, mod) => {
+  let declarator = mod.parents.get(fn);
+  if (declarator && (declarator.type === 'CallExpression' || declarator.type === 'OptionalCallExpression')) {
+    // One `useCallback(fn, deps)` / `useMemo(fn, deps)` wrapper — unwrap it
+    // to reach the name the *result* is bound to, which is what callers use.
+    declarator = mod.parents.get(declarator);
+  }
+  if (declarator && declarator.type === 'VariableDeclarator' && declarator.id.type === 'Identifier') {
+    return declarator.id.name;
+  }
+  if (fn.type === 'FunctionDeclaration' && fn.id) return fn.id.name;
+  return null;
+};
+
+// Calls to `name(...)` anywhere in the module. Matched by name only, same
+// simplification `calleeName`/`GATED_METHODS` already make elsewhere in this
+// file — there is one scope worth resolving here (the module) and adding
+// real scope tracking for a name collision that hasn't happened yet is not
+// where this gate's coverage is thin.
+const namedFunctionCallSites = (name, mod) => {
+  const found = [];
+  walk(mod.ast.program, (n) => {
+    if (
+      (n.type === 'CallExpression' || n.type === 'OptionalCallExpression') &&
+      n.callee.type === 'Identifier' &&
+      n.callee.name === name
+    ) {
+      found.push(n);
+    }
+  });
+  return found;
+};
+
 // Calls to `propName` inside the component named `componentName`.
 const propCallSites = (componentName, propName, targetFile) => {
   const mod = modules.get(targetFile);
@@ -387,7 +433,53 @@ for (const site of sites) {
   }
 
   const prop = followJsxProp(local.fn, site.file, site.mod);
-  if (!prop) {
+  // `how`/`targetFile`/`calls` describe whichever indirection resolved (JSX
+  // prop or named local function), so the two shapes share one
+  // handled-at-every-call-site check and one pair of messages below.
+  let how = null;
+  let targetFile = null;
+  let calls = null;
+
+  if (prop) {
+    targetFile = site.mod.imports.get(prop.componentName);
+    if (!targetFile) {
+      bad(
+        label,
+        `escapes into prop '${prop.propName}' of <${prop.componentName}>, which is not statically imported by ` +
+          `${rel(site.file)} — the gate cannot find the consumer, so it cannot vouch for this call`,
+      );
+      continue;
+    }
+    const consumer = propCallSites(prop.componentName, prop.propName, targetFile);
+    if (!consumer) {
+      bad(
+        label,
+        `escapes into prop '${prop.propName}' of <${prop.componentName}>, but ${rel(targetFile)} has no ` +
+          `component '${prop.componentName}' destructuring '${prop.propName}' — cannot place the consumer`,
+      );
+      continue;
+    }
+    if (!consumer.calls.length) {
+      bad(
+        label,
+        `escapes into prop '${prop.propName}' of <${prop.componentName}>, and ${rel(targetFile)} never calls ` +
+          `'${prop.propName}' — the write is unreachable, or it is invoked in a way this gate cannot see`,
+      );
+      continue;
+    }
+    calls = consumer.calls;
+    how = `escapes via prop '${prop.propName}' of <${prop.componentName}>`;
+  } else {
+    const name = namedLocalFunction(local.fn, site.mod);
+    const nameCalls = name ? namedFunctionCallSites(name, site.mod) : [];
+    if (name && nameCalls.length) {
+      targetFile = site.file;
+      calls = nameCalls;
+      how = `escapes via its own call sites ('${name}(...)' elsewhere in the module)`;
+    }
+  }
+
+  if (!calls) {
     // The two shapes that actually shipped get named, so the red line
     // diagnoses the defect instead of the gate's own uncertainty.
     const outer = site.mod.parents.get(local.fn);
@@ -402,43 +494,16 @@ for (const site of sites) {
       bad(
         label,
         `the rejection leaves the function at ${rel(site.file)}:${local.fn.loc.start.line} and this gate ` +
-          'cannot find a consumer that handles it — that function is not an inline JSX prop it can follow. ' +
-          'Handle the rejection where it escapes, or teach the gate this indirection',
+          'cannot find a consumer that handles it — that function is not an inline JSX prop it can follow, ' +
+          'nor a name called elsewhere in its module. Handle the rejection where it escapes, or teach the ' +
+          'gate this indirection',
       );
     }
     continue;
   }
 
-  const targetFile = site.mod.imports.get(prop.componentName);
-  if (!targetFile) {
-    bad(
-      label,
-      `escapes into prop '${prop.propName}' of <${prop.componentName}>, which is not statically imported by ` +
-        `${rel(site.file)} — the gate cannot find the consumer, so it cannot vouch for this call`,
-    );
-    continue;
-  }
-
-  const consumer = propCallSites(prop.componentName, prop.propName, targetFile);
-  if (!consumer) {
-    bad(
-      label,
-      `escapes into prop '${prop.propName}' of <${prop.componentName}>, but ${rel(targetFile)} has no ` +
-        `component '${prop.componentName}' destructuring '${prop.propName}' — cannot place the consumer`,
-    );
-    continue;
-  }
-  if (!consumer.calls.length) {
-    bad(
-      label,
-      `escapes into prop '${prop.propName}' of <${prop.componentName}>, and ${rel(targetFile)} never calls ` +
-        `'${prop.propName}' — the write is unreachable, or it is invoked in a way this gate cannot see`,
-    );
-    continue;
-  }
-
   const unhandled = [];
-  for (const call of consumer.calls) {
+  for (const call of calls) {
     const outcome = classify(call, modules.get(targetFile).parents);
     if (outcome.handled) continue;
 
@@ -457,16 +522,9 @@ for (const site of sites) {
   }
 
   if (unhandled.length) {
-    bad(
-      label,
-      `no local handler, so the rejection travels out through prop '${prop.propName}' of ` +
-        `<${prop.componentName}> to ${rel(targetFile)}, where it is dropped: ${unhandled.join('; ')}`,
-    );
+    bad(label, `no local handler, so the rejection travels out ${how} to ${rel(targetFile)}, where it is dropped: ${unhandled.join('; ')}`);
   } else {
-    ok(
-      `${label} — escapes via prop '${prop.propName}' of <${prop.componentName}>, handled at ` +
-        consumer.calls.map((c) => `${rel(targetFile)}:${c.loc.start.line}`).join(', '),
-    );
+    ok(`${label} — ${how}, handled at ` + calls.map((c) => `${rel(targetFile)}:${c.loc.start.line}`).join(', '));
   }
 }
 

@@ -20,6 +20,7 @@ import { DevVersionTag } from '../components/DevVersionTag';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { StreakBadge } from '../components/StreakBadge';
 import { StaggeredItem } from '../components/StaggeredItem';
+import { LoadState, LOAD_STATES, resolveListView } from '../components/LoadState';
 import { PressableScale } from '../components/PressableScale';
 import { TAB_CLEARANCE } from '../navigation/tabBarLayout';
 
@@ -143,7 +144,15 @@ const WrappedCard = () => {
 };
 
 export const RecapTab = () => {
-  const [loading, setLoading] = useState(true);
+  // §23.1 — the screen tracks how the last read ENDED, and never picks the view
+  // at the call site. `resolveListView` turns (readState x rows-in-hand) into
+  // the state to render, which is what keeps a failed read from being able to
+  // draw a zero. Before this it was a `loading` boolean seeded `true`, cleared
+  // only on the happy path — so a rejection left the takeover spinner up
+  // forever (Bumble, thread 3b8744e8; Pixel confirmed at 3f412ec). Pre-P0-2
+  // this read AsyncStorage and could not fail; it now needs a session and the
+  // network, so a cold open on a blip is enough.
+  const [readState, setReadState] = useState(LOAD_STATES.LOADING);
   const [allEntries, setAllEntries] = useState([]);
   // Tracked by month key, not index, so a reload that adds a page (or rolls
   // over into a new month) doesn't silently move you somewhere else.
@@ -158,20 +167,39 @@ export const RecapTab = () => {
   const { width } = useWindowDimensions();
   const pageWidth = width - 48;
 
+  // A ref rather than the closure's `let`, because the retry button calls this
+  // outside any focus cycle and there is no cleanup to pair with it there.
+  const cancelledRef = useRef(false);
+  const load = useCallback(async () => {
+    setReadState(LOAD_STATES.LOADING);
+    try {
+      // One read of the store, sliced twelve ways below.
+      const all = await EntryStore.getAllEntries();
+      if (cancelledRef.current) return;
+      setAllEntries(all);
+      setReadState(LOAD_STATES.READY);
+    } catch (err) {
+      if (cancelledRef.current) return;
+      // §23.1a — `allEntries` is deliberately NOT cleared. Rows already in hand
+      // are real, and blanking them is the exact defect `resolveListView`
+      // returns STALE for: a failure over kept content is a line above it, not
+      // a takeover of it. Recap stays mounted across tab switches, so this is
+      // the ordinary case, not the exotic one.
+      setReadState(LOAD_STATES.UNKNOWN);
+      console.warn('Failed to load entries for Recap', err);
+    }
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
-      let cancelled = false;
-      (async () => {
-        // One read of the store, sliced twelve ways below.
-        const all = await EntryStore.getAllEntries();
-        if (cancelled) return;
-        setAllEntries(all);
-        setLoading(false);
-      })();
+      cancelledRef.current = false;
+      // Never rejects — the catch above is inside `load`, so there is no
+      // discarded promise here for a rejection to escape through.
+      load();
       return () => {
-        cancelled = true;
+        cancelledRef.current = true;
       };
-    }, [])
+    }, [load])
   );
 
   const months = useMemo(() => buildMonths(allEntries), [allEntries]);
@@ -187,7 +215,16 @@ export const RecapTab = () => {
   const thisYear = allEntries.filter((entry) => entry.date.startsWith(currentYear));
   const streak = currentStreak(allEntries);
 
-  if (loading) {
+  const listView = resolveListView(readState, allEntries.length);
+  // EMPTY is not branched on, and that is a decision rather than an omission:
+  // Recap's zero-entry rendering IS its content — an unfilled comb and a
+  // truthful `0`, reachable only from a read that returned, which is the whole
+  // guarantee `resolveListView` provides. Nothing to substitute.
+  const unknown = listView === LOAD_STATES.UNKNOWN;
+
+  // Only the load that has nothing behind it takes the screen over; a re-read
+  // over kept rows resolves to READY/STALE and never reaches here (§23.1a).
+  if (listView === LOAD_STATES.LOADING) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator color={theme.colors.accent} size="large" />
@@ -205,58 +242,99 @@ export const RecapTab = () => {
       <ScreenHeader
         eyebrow="YOUR PROGRESS"
         title="Garden"
-        right={<StreakBadge streak={streak} />}
+        // §23.1 — the badge is an assertion about the user's practice, and on a
+        // read that did not return there is nothing to make it from. Omit the
+        // slot rather than draw `StreakBadge streak={0}`, which is not absence:
+        // it is a hollow hexagon with a `0` in it, telling a forty-day user
+        // they have no streak. Pixel caught the identical line surviving the
+        // identical fix on TodayTab an hour ago (`TodayTab.js:115`) — the
+        // header sits four lines above the block everything else lives in, and
+        // proximity beat the list. STALE keeps the badge: those rows are real,
+        // and the stale line says they may be old.
+        right={unknown ? null : <StreakBadge streak={streak} />}
       />
 
-      <StaggeredItem index={0}>
-        <StatsCard streak={streak} best={longestStreak(allEntries)} total={thisYear.length} />
-      </StaggeredItem>
+      {/* §23.7 — the stale line comes BEFORE the content it qualifies, so a
+          screen reader reaches the caveat on the way to the numbers rather
+          than after believing them. */}
+      {listView === LOAD_STATES.STALE && (
+        <LoadState
+          state={LOAD_STATES.STALE}
+          onRetry={load}
+          staleLabel="This may be out of date."
+          staleActionLabel="Refresh"
+          retryAccessibilityLabel="Refresh your journal"
+          style={styles.stale}
+        />
+      )}
 
-      {months.length > 1 && <MonthRail count={months.length} activeIndex={activeIndex} />}
+      {unknown ? (
+        // Copy is placeholder in the same sense SeedsInbox's is — the register
+        // is borrowed from its shipped sibling, and the words are Deezine's to
+        // overrule. Deliberately names the journal rather than the surface:
+        // this screen is "Recap" on main and "Garden" under the tab shell, and
+        // a failure message should not be the thing that has to know which.
+        <LoadState
+          state={LOAD_STATES.UNKNOWN}
+          onRetry={load}
+          title="Couldn't reach your journal"
+          body="Something went wrong on the way to the hive."
+          actionLabel="Try again"
+          retryAccessibilityLabel="Try loading your journal again"
+        />
+      ) : (
+        <>
+          <StaggeredItem index={0}>
+            <StatsCard streak={streak} best={longestStreak(allEntries)} total={thisYear.length} />
+          </StaggeredItem>
 
-      {/* §17.5: one month per page, current month first. The vertical scroll
-          owns the screen and this owns the horizontal axis — RN nests the
-          two cleanly because they never compete for the same gesture. */}
-      <ScrollView
-        ref={pagerRef}
-        horizontal
-        pagingEnabled
-        showsHorizontalScrollIndicator={false}
-        style={{ width: pageWidth }}
-        onMomentumScrollEnd={(event) => {
-          const index = Math.round(event.nativeEvent.contentOffset.x / pageWidth);
-          const month = months[index];
-          if (month && month.key !== months[activeIndex]?.key) setActiveKey(month.key);
-        }}
-        onContentSizeChange={(contentWidth) => {
-          // Land on the current month once the pages have real width. Guarded
-          // on the ref rather than on mount, because content size fires
-          // again on rotation and re-landing would yank you off June.
-          // The +1 is slack, not superstition: a content width reported a
-          // hair under the exact product would latch this guard shut and
-          // strand the pager on the oldest month forever.
-          if (landedRef.current || contentWidth + 1 < pageWidth * months.length) return;
-          landedRef.current = true;
-          pagerRef.current?.scrollTo({ x: pageWidth * (months.length - 1), animated: false });
-        }}
-      >
-        {months.map((month, index) => {
-          const insight = dominantTheme(month.entries);
-          return (
-            <View key={month.key} style={{ width: pageWidth }}>
-              <MonthlyRecap
-                monthName={month.label}
-                title={month.title}
-                entries={month.entries}
-                daysInMonth={month.daysInMonth}
-                insightTheme={insight ? insight.theme : null}
-                insightDescription={insight ? describeTheme(insight, 'days this month') : null}
-                active={index === activeIndex}
-              />
-            </View>
-          );
-        })}
-      </ScrollView>
+          {months.length > 1 && <MonthRail count={months.length} activeIndex={activeIndex} />}
+
+          {/* §17.5: one month per page, current month first. The vertical scroll
+              owns the screen and this owns the horizontal axis — RN nests the
+              two cleanly because they never compete for the same gesture. */}
+          <ScrollView
+            ref={pagerRef}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            style={{ width: pageWidth }}
+            onMomentumScrollEnd={(event) => {
+              const index = Math.round(event.nativeEvent.contentOffset.x / pageWidth);
+              const month = months[index];
+              if (month && month.key !== months[activeIndex]?.key) setActiveKey(month.key);
+            }}
+            onContentSizeChange={(contentWidth) => {
+              // Land on the current month once the pages have real width. Guarded
+              // on the ref rather than on mount, because content size fires
+              // again on rotation and re-landing would yank you off June.
+              // The +1 is slack, not superstition: a content width reported a
+              // hair under the exact product would latch this guard shut and
+              // strand the pager on the oldest month forever.
+              if (landedRef.current || contentWidth + 1 < pageWidth * months.length) return;
+              landedRef.current = true;
+              pagerRef.current?.scrollTo({ x: pageWidth * (months.length - 1), animated: false });
+            }}
+          >
+            {months.map((month, index) => {
+              const insight = dominantTheme(month.entries);
+              return (
+                <View key={month.key} style={{ width: pageWidth }}>
+                  <MonthlyRecap
+                    monthName={month.label}
+                    title={month.title}
+                    entries={month.entries}
+                    daysInMonth={month.daysInMonth}
+                    insightTheme={insight ? insight.theme : null}
+                    insightDescription={insight ? describeTheme(insight, 'days this month') : null}
+                    active={index === activeIndex}
+                  />
+                </View>
+              );
+            })}
+          </ScrollView>
+        </>
+      )}
 
       <WrappedCard />
 
@@ -280,6 +358,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 7,
     marginBottom: 18,
+  },
+  stale: {
+    marginBottom: 12,
   },
   // `containerStyle` carries the layout (the outer Pressable is the flex
   // child of the ScrollView), `wrappedCard` carries the paint — that split is
