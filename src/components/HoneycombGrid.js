@@ -1,11 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, Animated, StyleSheet, Pressable, Easing } from 'react-native';
-import Svg, { Polygon, Defs, ClipPath, Image as SvgImage } from 'react-native-svg';
+import Svg, { Polygon, Path, Line, G, Defs, ClipPath, Image as SvgImage } from 'react-native-svg';
 import { theme } from '../constants/theme';
 import { hexTintFor } from './Avatar';
-import { hexPoints } from './HexShape';
+import { hexPoints, hexEdgeMarks, hexSealPath } from './HexShape';
 import { useSvgId } from '../utils/svgId';
 import { DURATIONS, STAGGER_MS, useReducedMotion } from '../constants/motion';
+
+const AnimatedG = Animated.createAnimatedComponent(G);
 
 // Cube-direction walk around a hex ring, center-out — gives us the classic
 // "spiral" fill order (1, 6, 12, 18…) that a honeycomb actually grows in,
@@ -97,11 +99,78 @@ const initialsFor = (name) => {
 // Demo members sit a register back from real ones — present enough that the
 // comb reads as populated, quiet enough that they never pass for someone you
 // actually know.
+// Was 0.45 dimming the initials glyph too, at 2.84:1 — but that's the
+// large-text bar (18pt/14pt-bold; RN `fontSize` is dp not pt, so the real
+// thresholds are 24px/18.66px) and this glyph is 18.48px regular, which
+// needs 4.5:1. Bumping opacity to clear that bar lands at register 0.605 —
+// no longer "a register back," most of the way to a real member (Sage,
+// msg 3182e438). Fix instead: initials no longer ride `register` at all
+// (see the Text below) — the glyph is legible at full opacity regardless
+// of demo/real, and 0.45 is restored as R55's device-measured fill value.
 const DEMO_OPACITY = 0.45;
 
-const FilledCell = ({ member, size, selected }) => {
+// §21/6.4 (Pixel-ruled 2026-08-13, mock 2dcdce11): the blooming ring's two
+// load-bearing numbers, measured against selection's solid 2.5pt stroke so
+// the two states differ in form (dashed vs. continuous) rather than only in
+// weight, which read as the same mark at a glance.
+const BLOOM_RING_INSET = 4.5;
+const BLOOM_MARK_EDGE_FRACTION = 0.3;
+
+// Breathing cadence: no `DURATIONS.breathe` constant exists yet (motion.js
+// still lists honeycomb breathing loops as unextracted §14.1 follow-up), so
+// this reuses GlowOrb's ratified 2400ms half-cycle rather than inventing a
+// new number — same anchor the rest of the app's "breathe" treatments use.
+const BLOOM_BREATHE_MS = 2400;
+
+// The blooming state: a segmented ring, not a wash, because fill is spent
+// on identity (`hexTintFor`) and its range is capped by whichever tint a
+// member's name hashed to — a washSky member's full fill range measured at
+// less than half of washYellow's, so state can't live there without some
+// friends permanently reading quieter than others. Marks are tint-
+// independent and stack with `seeded` for free (a cell can be both).
+// Static under Reduce Motion — the ring itself never disappears (R46); only
+// the breathe does.
+const BloomRing = ({ size, reduced }) => {
+  const pulse = useRef(new Animated.Value(1)).current;
+  const marks = useMemo(() => hexEdgeMarks(size, BLOOM_RING_INSET, BLOOM_MARK_EDGE_FRACTION), [size]);
+
+  useEffect(() => {
+    if (reduced) {
+      pulse.setValue(1);
+      return undefined;
+    }
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 0.45, duration: BLOOM_BREATHE_MS, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 1, duration: BLOOM_BREATHE_MS, useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [reduced, pulse]);
+
+  return (
+    <AnimatedG opacity={pulse}>
+      {marks.map(([x1, y1, x2, y2], i) => (
+        <Line
+          key={i}
+          x1={x1}
+          y1={y1}
+          x2={x2}
+          y2={y2}
+          stroke={theme.colors.inkSoft}
+          strokeWidth={2.5}
+          strokeLinecap="round"
+        />
+      ))}
+    </AnimatedG>
+  );
+};
+
+const FilledCell = ({ member, size, selected, reduced }) => {
   const clipId = useSvgId('hivecell');
   const points = useMemo(() => hexPoints(size), [size]);
+  const sealPath = useMemo(() => hexSealPath(size), [size]);
   const tint = hexTintFor(member.name);
   const register = member.isDemo && !selected ? DEMO_OPACITY : 1;
 
@@ -137,6 +206,11 @@ const FilledCell = ({ member, size, selected }) => {
         ) : (
           <Polygon points={points} fill={tint} fillOpacity={register} />
         )}
+        {/* Seeded: knocked out to whatever's already painted above (the
+            avatar/tint), not a second colour — R51's register rule. Drawn
+            in this same Svg so the hole shows that fill, not a blank gap. */}
+        {member.seeded && <Path d={sealPath} fill={theme.colors.ink} fillRule="evenodd" />}
+        {member.blooming && <BloomRing size={size} reduced={reduced} />}
         <Polygon
           points={points}
           fill="none"
@@ -146,7 +220,7 @@ const FilledCell = ({ member, size, selected }) => {
       </Svg>
       {!member.avatarUrl && (
         <View style={styles.cellOverlay} pointerEvents="none">
-          <Text style={[styles.initials, { fontSize: size * 0.42, opacity: register }]}>
+          <Text style={[styles.initials, { fontSize: size * 0.42 }]}>
             {member.isOwn ? 'You' : initialsFor(member.name)}
           </Text>
         </View>
@@ -209,7 +283,11 @@ const HexCell = ({ member, size, x, y, delay, selected, reduced }) => {
         },
       ]}
     >
-      {member ? <FilledCell member={member} size={size} selected={selected} /> : <EmptyCell size={size} />}
+      {member ? (
+        <FilledCell member={member} size={size} selected={selected} reduced={reduced} />
+      ) : (
+        <EmptyCell size={size} />
+      )}
     </Animated.View>
   );
 };
