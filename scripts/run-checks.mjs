@@ -31,10 +31,21 @@
 //      Postgres-backed gates into no-ops that exit 0; folded into a pass
 //      count that reads as "everything green" while three security gates did
 //      not run. Skips are counted, named, and flagged separately below.
+//   3. A gate that exits 0 having asserted NOTHING is red, not green. Exit 0
+//      over an empty universe is the failure shape this suite's own gates
+//      keep finding in each other (an RLS check that enumerated zero tables,
+//      a scope check that resolved zero call sites) — and the runner is the
+//      one place it can be caught for all of them at once. It also closes
+//      the skip-detection hole below it: skip is recognised by the word
+//      SKIPPED in a gate's output, so a gate that grows a NEW quiet
+//      bail-out path would read as PASS — but it reaches here with zero
+//      assertions, and lands as red rather than as silent coverage.
+//      The contract this asserts: every gate prints `N passed, M failed`,
+//      and a run of it that asserts nothing is a broken gate.
 //
-// Exit code is 1 if any gate failed, 0 otherwise. Skips do not fail the run
-// — the opt-out is deliberate and documented — but they are impossible to
-// miss in the summary.
+// Exit code is 1 if any gate failed, 0 otherwise. Declared skips do not fail
+// the run — the opt-out is deliberate and documented — but they are
+// impossible to miss in the summary.
 
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
@@ -134,12 +145,21 @@ for (const gate of gates) {
   // outcome, and where they disagree the outcome wins.
   const counts = [...out.matchAll(/(\d+) passed, (\d+) failed/g)].pop();
   const skipped = /:\s*SKIPPED\b/.test(out);
+  const passed = counts ? Number(counts[1]) : 0;
+  const failed = counts ? Number(counts[2]) : 0;
+
+  // Exit 0 while asserting nothing is not a pass. Either the gate found an
+  // empty universe (the hole), or it bailed out down a path that does not
+  // announce itself as a skip (also the hole). Declared skips are exempt —
+  // they said so.
+  const empty = code === 0 && !skipped && passed + failed === 0;
 
   results.push({
     name,
-    verdict: code !== 0 ? FAIL : skipped ? SKIP : PASS,
-    passed: counts ? Number(counts[1]) : 0,
-    failed: counts ? Number(counts[2]) : 0,
+    verdict: code !== 0 || empty ? FAIL : skipped ? SKIP : PASS,
+    empty,
+    passed,
+    failed,
   });
 }
 
@@ -150,7 +170,11 @@ const skips = results.filter((r) => r.verdict === SKIP);
 
 console.log(`\n${rule('summary')}`);
 for (const r of results) {
-  const tally = r.verdict === SKIP ? 'did not run' : `${r.passed} passed, ${r.failed} failed`;
+  const tally = r.verdict === SKIP
+    ? 'did not run'
+    : r.empty
+      ? 'exited 0 but asserted nothing — a gate over an empty universe'
+      : `${r.passed} passed, ${r.failed} failed`;
   console.log(`  ${r.verdict.padEnd(5)} ${r.name.padEnd(width)}  ${tally}`);
 }
 
