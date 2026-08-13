@@ -10,6 +10,44 @@ import { PressableScale } from '../components/PressableScale';
 import { Avatar } from '../components/Avatar';
 import { ScreenHeader } from '../components/ScreenHeader';
 
+// No UI on this screen can make a note sendable in the same session — a
+// connection only reaches 'accepted' when the other person taps accept
+// (HoneycombStore.respondToRequest) — so the zero-connections state hands
+// off to the one action that IS available today (sending the request,
+// reusing Honeycomb's own add-card via a route param) rather than offering
+// a body with nowhere for the note to go. Pixel's #14 ruling: when there
+// are zero connections this replaces TO/NOTE/counter/Send entirely, not
+// just the TO slot — and it branches on outgoing requests so a user who's
+// already asked isn't shown the same prompt to ask again.
+const EmptyConnectionsState = ({ outgoingRequests, onAddPress }) => {
+  if (outgoingRequests.length > 0) {
+    const title =
+      outgoingRequests.length === 1
+        ? `Waiting on ${outgoingRequests[0].addressee?.display_name ?? 'them'}.`
+        : `Waiting on ${outgoingRequests.length} people.`;
+    return (
+      <View style={styles.emptyCard}>
+        <Text style={styles.emptyTitle}>{title}</Text>
+        <Text style={styles.emptyBody}>Your request is with them. The moment they accept, they'll show up here.</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.emptyCard}>
+      <Text style={styles.emptyTitle}>No one in your hive yet.</Text>
+      <Text style={styles.emptyBody}>
+        A note goes to one person, so this needs someone on the other end. Add them by email — they get a request,
+        and once they accept you can write to them.
+      </Text>
+      <PressableScale onPress={onAddPress} style={styles.emptyCardButton} haptic={null}>
+        <Ionicons name="person-add-outline" size={16} color={theme.colors.inkSoft} />
+        <Text style={styles.emptyCardButtonText}>Add someone to your hive</Text>
+      </PressableScale>
+    </View>
+  );
+};
+
 // 7.1/7.4 (no-tip variant): text-only note to one connection. Tip (7.3) and
 // image attachment (7.7) aren't built — see the notes migration's header
 // comment for why. Recipients come from the same `listConnections` the
@@ -17,6 +55,7 @@ import { ScreenHeader } from '../components/ScreenHeader';
 // hive?".
 export const ComposeNote = ({ navigation }) => {
   const [connections, setConnections] = useState([]);
+  const [outgoingRequests, setOutgoingRequests] = useState([]);
   const [loadingConnections, setLoadingConnections] = useState(true);
   const [recipientId, setRecipientId] = useState(null);
   const [content, setContent] = useState('');
@@ -27,9 +66,12 @@ export const ComposeNote = ({ navigation }) => {
     useCallback(() => {
       let cancelled = false;
       setLoadingConnections(true);
-      HoneycombStore.listConnections()
-        .then((list) => {
-          if (!cancelled) setConnections(list);
+      Promise.all([HoneycombStore.listConnections(), HoneycombStore.listOutgoingRequests()])
+        .then(([connectionsList, outgoingList]) => {
+          if (!cancelled) {
+            setConnections(connectionsList);
+            setOutgoingRequests(outgoingList);
+          }
         })
         .catch((err) => console.warn('Failed to load connections', err))
         .finally(() => {
@@ -69,48 +111,55 @@ export const ComposeNote = ({ navigation }) => {
           }
         />
 
-        <Text style={styles.sectionLabel}>TO</Text>
         {loadingConnections ? (
           <ActivityIndicator color={theme.colors.accent} style={styles.loader} />
         ) : connections.length === 0 ? (
-          <Text style={styles.emptyBody}>Add someone to your hive first — then you can send them a note.</Text>
+          <EmptyConnectionsState
+            outgoingRequests={outgoingRequests}
+            onAddPress={() =>
+              navigation.navigate('Main', { screen: 'Honeycomb', params: { openAddConnection: true } })
+            }
+          />
         ) : (
-          <View style={styles.recipientRow}>
-            {connections.map((person) => (
-              <PressableScale
-                key={person.id}
-                onPress={() => setRecipientId(person.id)}
-                style={[styles.recipientChip, recipientId === person.id && styles.recipientChipSelected]}
-              >
-                <Avatar name={person.display_name} avatarUrl={person.avatar_url} size={40} />
-                <Text style={styles.recipientName} numberOfLines={1}>
-                  {person.display_name}
-                </Text>
-              </PressableScale>
-            ))}
-          </View>
+          <>
+            <Text style={styles.sectionLabel}>TO</Text>
+            <View style={styles.recipientRow}>
+              {connections.map((person) => (
+                <PressableScale
+                  key={person.id}
+                  onPress={() => setRecipientId(person.id)}
+                  style={[styles.recipientChip, recipientId === person.id && styles.recipientChipSelected]}
+                >
+                  <Avatar name={person.display_name} avatarUrl={person.avatar_url} size={40} />
+                  <Text style={styles.recipientName} numberOfLines={1}>
+                    {person.display_name}
+                  </Text>
+                </PressableScale>
+              ))}
+            </View>
+
+            <Text style={styles.sectionLabel}>NOTE</Text>
+            <TextInput
+              style={styles.textInput}
+              placeholder="I am grateful for..."
+              placeholderTextColor={theme.colors.textSecondary}
+              value={content}
+              onChangeText={setContent}
+              multiline
+              maxLength={NOTE_CONTENT_MAX}
+              editable={!sending}
+            />
+            <Text style={styles.charCount}>
+              {content.length}/{NOTE_CONTENT_MAX}
+            </Text>
+
+            {error && <Text style={styles.error}>{error}</Text>}
+
+            <PrimaryButton onPress={handleSend} disabled={!recipientId || !content.trim() || sending}>
+              {sending ? 'Sending…' : 'Send'}
+            </PrimaryButton>
+          </>
         )}
-
-        <Text style={styles.sectionLabel}>NOTE</Text>
-        <TextInput
-          style={styles.textInput}
-          placeholder="I am grateful for..."
-          placeholderTextColor={theme.colors.textSecondary}
-          value={content}
-          onChangeText={setContent}
-          multiline
-          maxLength={NOTE_CONTENT_MAX}
-          editable={!sending}
-        />
-        <Text style={styles.charCount}>
-          {content.length}/{NOTE_CONTENT_MAX}
-        </Text>
-
-        {error && <Text style={styles.error}>{error}</Text>}
-
-        <PrimaryButton onPress={handleSend} disabled={!recipientId || !content.trim() || sending}>
-          {sending ? 'Sending…' : 'Send'}
-        </PrimaryButton>
       </ScrollView>
     </View>
   );
@@ -137,10 +186,33 @@ const styles = StyleSheet.create({
   loader: {
     marginBottom: 16,
   },
+  emptyCard: {
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: theme.colors.surfaceBorder,
+    borderRadius: theme.borderRadius.large,
+    padding: 16,
+    marginBottom: 16,
+  },
+  emptyTitle: {
+    ...theme.type.h3,
+    color: theme.colors.textPrimary,
+    marginBottom: 8,
+  },
   emptyBody: {
     ...theme.type.bodySm,
     color: theme.colors.textSecondary,
-    marginBottom: 16,
+  },
+  emptyCardButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 12,
+  },
+  emptyCardButtonText: {
+    ...theme.type.bodySm,
+    fontFamily: theme.fonts.bodySemiBold,
+    color: theme.colors.inkSoft,
   },
   recipientRow: {
     flexDirection: 'row',

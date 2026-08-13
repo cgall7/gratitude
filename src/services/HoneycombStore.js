@@ -101,6 +101,25 @@ export const HoneycombStore = {
     return data ?? [];
   },
 
+  // Mirror of listIncomingRequests with the join flipped to addressee: a
+  // pending row is the only trace a sent request leaves (Pixel's #14 read —
+  // React state elsewhere gets wiped on the next focus reload), and without
+  // this query the app forgets you ever sent it.
+  async listOutgoingRequests() {
+    const client = requireSupabase();
+    const {
+      data: { user },
+    } = await client.auth.getUser();
+    const { data, error } = await client
+      .from('honeycomb_connections')
+      .select('id, created_at, addressee:profiles!honeycomb_connections_addressee_id_fkey(id, display_name)')
+      .eq('requester_id', user.id)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return data ?? [];
+  },
+
   async listConnections() {
     const client = requireSupabase();
     const {

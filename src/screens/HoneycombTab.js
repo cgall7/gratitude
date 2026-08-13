@@ -1,7 +1,7 @@
 import React, { useCallback, useRef, useState } from 'react';
 import { StyleSheet, View, Text, TextInput, ScrollView, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { theme } from '../constants/theme';
 import { useAuth } from '../contexts/AuthContext';
 import { HoneycombStore, WEEK_FEED_LIMIT } from '../services/HoneycombStore';
@@ -155,6 +155,7 @@ const RequestRow = ({ request, onRespond }) => (
 
 const HoneycombFeed = () => {
   const navigation = useNavigation();
+  const route = useRoute();
   const [loading, setLoading] = useState(true);
   const [feed, setFeed] = useState([]);
   // 'today' | 'week' — the §18 pager's resting position. State lives here
@@ -219,6 +220,19 @@ const HoneycombFeed = () => {
         cancelled = true;
       };
     }, [loadAll])
+  );
+
+  // ComposeNote's empty-connections state hands off here instead of
+  // duplicating this form (Sage's routing, #14): `openAddConnection` opens
+  // the card pre-expanded, then clears itself so a later tab switch back to
+  // Honeycomb doesn't reopen it.
+  useFocusEffect(
+    useCallback(() => {
+      if (route.params?.openAddConnection) {
+        setAddOpen(true);
+        navigation.setParams({ openAddConnection: undefined });
+      }
+    }, [route.params?.openAddConnection, navigation])
   );
 
   const handleAddConnection = async () => {
