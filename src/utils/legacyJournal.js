@@ -27,3 +27,31 @@ export const legacyEntriesToMigrate = (legacy, existingDates) =>
       text: entry.text,
       theme: entry.theme,
     }));
+
+// One-sided safety check on the claiming account, using a field the blob
+// already carries: `savedAt`. Can only ever REFUSE a claim, never approve
+// one — entries older than the account is proof the account didn't write
+// them (the account didn't exist yet); entries newer is no evidence of
+// anything, since a legitimate owner keeps journaling on their own account
+// after creating it too. That asymmetry is why this is safe to add without
+// inventing an attribution the blob was never given (Sage, thread ba3783a7:
+// "a key with no owner can only be given away once" — this is what keeps it
+// from being given away to someone it provably wasn't written by).
+export const legacyPredatesAccount = (legacy, accountCreatedAt) => {
+  if (!accountCreatedAt) return false;
+  const accountCreatedMs = new Date(accountCreatedAt).getTime();
+  if (Number.isNaN(accountCreatedMs)) return false;
+
+  let newestSavedAtMs = null;
+  for (const entry of Object.values(legacy)) {
+    if (!entry?.savedAt) continue;
+    const ms = new Date(entry.savedAt).getTime();
+    if (Number.isNaN(ms)) continue;
+    if (newestSavedAtMs === null || ms > newestSavedAtMs) newestSavedAtMs = ms;
+  }
+  // No usable savedAt anywhere in the blob: no evidence either way, and this
+  // check only ever acts on evidence, so it does not refuse.
+  if (newestSavedAtMs === null) return false;
+
+  return newestSavedAtMs < accountCreatedMs;
+};

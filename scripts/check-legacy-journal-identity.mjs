@@ -81,6 +81,13 @@ const bad = (label, detail) => {
 const eq = (label, got, want) =>
   got === want ? ok(label) : bad(label, `got ${JSON.stringify(got)}, want ${JSON.stringify(want)}`);
 
+// Fixtures below have no `savedAt` field unless a test is specifically about
+// legacyPredatesAccount, so any value here is safe — legacyPredatesAccount
+// never refuses when it has no savedAt evidence to act on (check-legacy-journal.mjs
+// gates that directly). One shared constant so ordinary calls below don't
+// have to explain a value that isn't the point of the test they're in.
+const ACCOUNT_CREATED_AT = '2026-06-01T00:00:00.000Z';
+
 // One AsyncStorage-shaped backing store, shared across every "session" in a
 // test the same way a real device's AsyncStorage is shared across every
 // account that ever signs in on it.
@@ -165,7 +172,7 @@ console.log(
     return realSave(...args);
   };
 
-  const resultA = await migrateLegacyJournal('user-A', { storage, entryStore });
+  const resultA = await migrateLegacyJournal('user-A', ACCOUNT_CREATED_AT, { storage, entryStore });
   eq('A: nothing migrated (every write failed)', resultA.migrated, 0);
   eq(
     'MIGRATED_KEY is still unset — this scenario proves nothing via "already done"',
@@ -175,7 +182,7 @@ console.log(
   eq('but the claim was already taken by A', await storage.getItem('gratitude_entries_v1_claimed_by'), 'user-A');
 
   entryStore.asUser('user-B');
-  const resultB = await migrateLegacyJournal('user-B', { storage, entryStore });
+  const resultB = await migrateLegacyJournal('user-B', ACCOUNT_CREATED_AT, { storage, entryStore });
   eq("B: nothing migrated — locked out by A's claim, not by completion", resultB.migrated, 0);
   eq("B's account gets none of A's rows", entryStore.rowsFor('user-B').length, 0);
 }
@@ -193,14 +200,14 @@ console.log("\n  §1 — Sage's exact scenario: sign out, sign in as someone els
 
   // Person A signs in first and the recovery runs under their identity.
   entryStore.asUser('user-A');
-  const resultA = await migrateLegacyJournal('user-A', { storage, entryStore });
+  const resultA = await migrateLegacyJournal('user-A', ACCOUNT_CREATED_AT, { storage, entryStore });
   eq('A: one entry migrated', resultA.migrated, 1);
   eq('A now owns exactly one row', entryStore.rowsFor('user-A').length, 1);
 
   // A signs out (no local storage is ever cleared — verified against the
   // real app). Person B signs in on the SAME device.
   entryStore.asUser('user-B');
-  const resultB = await migrateLegacyJournal('user-B', { storage, entryStore });
+  const resultB = await migrateLegacyJournal('user-B', ACCOUNT_CREATED_AT, { storage, entryStore });
   eq('B: nothing migrated — the claim already belongs to A', resultB.migrated, 0);
   eq(
     "B's account gets none of A's rows — this is the exact defect Sage found",
@@ -233,11 +240,11 @@ console.log('\n  §2 — the claiming identity can still retry after a failure')
     return realSave(...args);
   };
 
-  const first = await migrateLegacyJournal('user-A', { storage, entryStore });
+  const first = await migrateLegacyJournal('user-A', ACCOUNT_CREATED_AT, { storage, entryStore });
   eq('first attempt: nothing migrated (write failed)', first.migrated, 0);
   eq('first attempt: not treated as fully migrated', first.skipped, 0);
 
-  const second = await migrateLegacyJournal('user-A', { storage, entryStore });
+  const second = await migrateLegacyJournal('user-A', ACCOUNT_CREATED_AT, { storage, entryStore });
   eq('retry by the SAME identity succeeds', second.migrated, 1);
   eq('the entry landed under A after the retry', entryStore.rowsFor('user-A').length, 1);
 }
@@ -251,7 +258,7 @@ console.log('\n  §3 — a corrupt legacy blob does not spend the one recovery a
   await storage.setItem('gratitude_entries_v1', '{not valid json');
   entryStore.asUser('user-A');
 
-  await migrateLegacyJournal('user-A', { storage, entryStore });
+  await migrateLegacyJournal('user-A', ACCOUNT_CREATED_AT, { storage, entryStore });
   eq(
     'the migrated marker is NOT set on a parse failure',
     await storage.getItem('gratitude_entries_v1_migrated'),
@@ -276,12 +283,58 @@ console.log('\n  §4 — concurrent calls for the same identity do not double-ru
   // and onAuthStateChange within the same tick — two calls kicked off before
   // either has resolved.
   const [r1, r2] = await Promise.all([
-    migrateLegacyJournal('user-A', { storage, entryStore }),
-    migrateLegacyJournal('user-A', { storage, entryStore }),
+    migrateLegacyJournal('user-A', ACCOUNT_CREATED_AT, { storage, entryStore }),
+    migrateLegacyJournal('user-A', ACCOUNT_CREATED_AT, { storage, entryStore }),
   ]);
   eq('both callers observe the one run that actually happened', r1.migrated, 1);
   eq('both callers share the exact same result object (memoised, not just equal)', r1 === r2, true);
   eq('saveEntry was only ever called once', entryStore.saveCallCount, 1);
+}
+
+// ---------------------------------------------------------------------------
+console.log(
+  '\n  §5 — Sage\'s follow-up: a fresh demo account is refused, not handed the claim ' +
+    '(thread ba3783a7, 21:55Z)',
+);
+
+{
+  // Exactly the case flagged to Colin: sign out, create a fresh account to
+  // demo the app, and the device still has real entries from before. Every
+  // legacy entry predates the new account, so the account cannot have
+  // written any of them.
+  const storage = makeFakeStorage();
+  const entryStore = makeFakeEntryStore();
+  await storage.setItem(
+    'gratitude_entries_v1',
+    JSON.stringify({
+      '2026-01-05': { text: "the real owner's private entry", theme: 'gratitude', savedAt: '2026-01-05T12:00:00.000Z' },
+    }),
+  );
+  entryStore.asUser('demo-account');
+  const freshAccountCreatedAt = '2026-08-13T00:00:00.000Z'; // created long after the entry above
+
+  const result = await migrateLegacyJournal('demo-account', freshAccountCreatedAt, { storage, entryStore });
+  eq('the demo account migrates nothing', result.migrated, 0);
+  eq('refused, not silently skipped', result.refused, true);
+  eq('the demo account gets none of the real entries', entryStore.rowsFor('demo-account').length, 0);
+  eq(
+    'the claim was NOT spent on the demo account',
+    await storage.getItem('gratitude_entries_v1_claimed_by'),
+    null,
+  );
+  eq(
+    'the migrated marker was NOT set either — this key is still fully available',
+    await storage.getItem('gratitude_entries_v1_migrated'),
+    null,
+  );
+
+  // The real owner signs in later. The key is still open for them —
+  // refusing the demo account did not burn the one claim.
+  entryStore.asUser('real-owner');
+  const realOwnerCreatedAt = '2025-01-01T00:00:00.000Z'; // existed before the entry
+  const ownerResult = await migrateLegacyJournal('real-owner', realOwnerCreatedAt, { storage, entryStore });
+  eq('the real owner, arriving after the refusal, still gets their entry', ownerResult.migrated, 1);
+  eq('the claim now belongs to the real owner', await storage.getItem('gratitude_entries_v1_claimed_by'), 'real-owner');
 }
 
 console.log(`\ncheck-legacy-journal-identity: ${pass} passed, ${failures.length} failed`);
