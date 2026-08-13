@@ -71,7 +71,7 @@ const styles = StyleSheet.create({
   // content without competing with it (§14.4). Opacity lives here, not on
   // the passed element, so the frame controls how quiet the echo is.
   watermark: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
     opacity: 0.08,

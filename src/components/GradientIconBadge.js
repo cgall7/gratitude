@@ -20,7 +20,7 @@ export const GradientIconBadge = ({
 
   return (
     <View style={[styles.badge, { width: size, height: size }, style]}>
-      <Svg width={size} height={size} style={StyleSheet.absoluteFillObject}>
+      <Svg width={size} height={size} style={StyleSheet.absoluteFill}>
         <Defs>
           <LinearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="100%">
             {colors.map((color, i) => (

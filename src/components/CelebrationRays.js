@@ -112,7 +112,7 @@ const styles = StyleSheet.create({
   // (48, 48) offset this replaces was only correct inside a 96pt box, a
   // contract SealCrack violated within a day of it existing (R17 §1).
   stage: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
   },

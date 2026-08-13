@@ -81,7 +81,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   countOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
   },

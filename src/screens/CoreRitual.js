@@ -222,7 +222,7 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
   },
   unlockOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: theme.colors.washYellow,
     justifyContent: 'center',
     alignItems: 'center',

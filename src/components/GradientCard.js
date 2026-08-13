@@ -23,7 +23,7 @@ export const GradientCard = ({ colors, style, contentStyle, children }) => {
             and leaves `bbWidth`/`bbHeight` unset. The `<Rect>` below is
             percentage-sized and has nothing to resolve against without
             them. */}
-        <Svg style={StyleSheet.absoluteFillObject} width="100%" height="100%" pointerEvents="none">
+        <Svg style={StyleSheet.absoluteFill} width="100%" height="100%" pointerEvents="none">
           <Defs>
             <LinearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="100%">
               {colors.map((color, i) => (

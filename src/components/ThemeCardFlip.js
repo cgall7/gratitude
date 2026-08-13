@@ -82,7 +82,7 @@ export const ThemeCardFlip = ({ themeWord, snippet, caption, delay = 0, onReveal
         style={[
           styles.card,
           styles.back,
-          StyleSheet.absoluteFillObject,
+          StyleSheet.absoluteFill,
           { transform: [{ perspective: FLIP_PERSPECTIVE }, { rotateY: backRotate }] },
         ]}
       >
