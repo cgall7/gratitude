@@ -19,6 +19,7 @@
     "check:share-visibility": "node scripts/check-share-visibility.mjs",
     "check:nav-depth": "node scripts/check-nav-depth.mjs",
     "check:entry-writes": "node scripts/check-entry-writes.mjs",
+    "check:legacy-journal": "node scripts/check-legacy-journal.mjs",
     "test": "node scripts/run-checks.mjs",
     "deploy:migrations": "bash scripts/deploy-migrations.sh"
   },
