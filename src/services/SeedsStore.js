@@ -11,10 +11,22 @@ const requireSupabase = () => {
 // NOTE_CONTENT_MAX: a seed is a note that arrives late, not a longer one.
 export const SEED_CONTENT_MAX = 500;
 
-// A seed's contents come back from Postgres only once it has bloomed — the
-// select policy on seed_contents is what enforces that, not this file. So a
-// received seed's `content` being null is the sealed state itself, not a
-// loading state or a missing join.
+// `content` is **what you may read right now** — not whether the seed is
+// sealed. Use `hasBloomed(seed)` for that; see §22.1.
+//
+// I originally wrote that a null `content` *was* the sealed state. It isn't,
+// and three paths on this file disprove it: a seed you SENT returns its text
+// while still sealed (the select policy names `sender_id` with no bloom
+// condition), `plantSeed` used to return null for a seed the caller had just
+// typed, and a broken or renamed embed also lands on null. An absence carries
+// the union of every reason it could be absent, so it cannot identify one of
+// them. `bloom_at` is a positive fact, present on every row either list
+// returns, and it is the thing to branch on.
+//
+// Corollary worth knowing before you write a view: `hasBloomed(seed) &&
+// content == null` has no legitimate meaning. It is a clock disagreement or a
+// broken embed — render sealed and refetch, never an error, never an opened
+// seal over nothing.
 const SEED_SELECT =
   'id, bloom_at, created_at, opened_at, sender_id, recipient_id, ' +
   'sender:profiles!seeds_sender_id_fkey(id, display_name, avatar_url), ' +
@@ -56,7 +68,14 @@ export const SeedsStore = {
       p_bloom_at: bloom.toISOString(),
     });
     if (error) throw error;
-    return shapeSeed(data);
+    // `plant_seed` is declared `returns public.seeds`, and that table has no
+    // `seed_contents` column — so no shape PostgREST can produce from it
+    // carries the embed, and shaping `data` alone would hand back
+    // `content: null` for text the caller typed a millisecond ago. That value
+    // would then disagree with `listSent()`, which returns the same row's text
+    // on the very next read. Splice in what we already hold; it isn't a
+    // fabrication, it's the string we just sent.
+    return shapeSeed({ ...data, seed_contents: { content: trimmed } });
   },
 
   async listReceived() {
