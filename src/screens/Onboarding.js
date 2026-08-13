@@ -520,6 +520,18 @@ const LockDemoStep = ({ onNext }) => {
 // The closing line turns outward. It used to end on "a record of everything
 // you were given" — an archive, the one thing a notebook already does — and
 // it was the last thing a new user read before the account ask.
+//
+// It turns outward in THEME ONLY, and that is deliberate — do not "finish"
+// it into a send CTA. At this screen the user has zero connections, and the
+// only path to a first one is HoneycombTab's exact-email lookup
+// (`findProfileByEmail` -> `sendConnectionRequest`), which requires that the
+// other person ALREADY has an account and then ACCEPTS. None of that is
+// completable inside the onboarding session, and ComposeNote's zero-state is
+// a dead end ("Add someone to your hive first"). A "now send it to them"
+// closer would therefore write the same cheque the app can't cash that got
+// beat 4 (Seeds) cut one screen earlier — one screen later instead.
+// This becomes a real CTA when the invite system (project 2.6) ships, as a
+// timed insert, same pattern as the money beat.
 const CelebrationStep = ({ step, onNext }) => (
   <StepShell step={step} stage="done" wash={theme.colors.washYellow}>
     <View style={styles.centerFill}>
