@@ -8,8 +8,8 @@
    Every merge to `main` that adds a file here needs this step run again —
    a migration living in the repo does not mean it's live. Two ways:
    - `SUPABASE_PROJECT_REF=<ref> SUPABASE_ACCESS_TOKEN=<token> npm run deploy:migrations`
-     (wraps `supabase link` + `supabase db push`, and shows `supabase migration list`
-     before pushing so you can check local/remote agree first — see the warning below).
+     (wraps `supabase link` + `supabase db push`, and before pushing shows both
+     `supabase migration list` and a `db push --dry-run` — see the two warnings below).
    - Or paste each file into the dashboard's SQL Editor, in filename order.
 
    **Before the first run**, confirm the project's migration history actually
@@ -27,6 +27,18 @@
    is missing from that list, tell the CLI it's already applied instead of
    trying to re-run it: `supabase migration repair --status applied <version>`,
    once per missing version, oldest first — then push.
+
+   **Deploy once per merge batch, not between merges.** `db push` applies
+   migrations *newer* than the newest version in the remote history table.
+   So if two branches merge in an order that isn't their timestamp order —
+   or if a deploy runs after the first of them lands and before the second —
+   the older file ends up behind an already-applied version and push skips
+   it, permanently and silently: `main` says the schema has it, the database
+   doesn't. That is why `deploy-migrations.sh` now runs `db push --dry-run`
+   before the real push. The dry run prints the exact list push will apply;
+   anything shown as local-only by `migration list` but absent from the dry
+   run is being skipped. The fix is `supabase db push --include-all` once
+   you've checked why, not a second plain push.
 3. **Auth:** email + password (Supabase Auth → Providers → Email). Phone-OTP
    was the original plan but needs a paid SMS provider, so connections are
    discovered by exact email match via the `find_connectable_profile` RPC

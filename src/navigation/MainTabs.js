@@ -5,7 +5,7 @@ import { BottomTabBar, createBottomTabNavigator } from '@react-navigation/bottom
 import { theme } from '../constants/theme';
 import { TodayTab } from '../screens/TodayTab';
 import { RecapTab } from '../screens/RecapTab';
-import { PollinateWrapped } from '../screens/PollinateWrapped';
+import { WalletTab } from '../screens/WalletTab';
 import { HoneycombTab } from '../screens/HoneycombTab';
 import { TabBarButton } from './TabBarButton';
 import { AccountDoor, DOOR_SIZE, useHasAccountDoor } from './AccountDoor';
@@ -15,11 +15,25 @@ import { SIDE_INSET, DOOR_GAP, BAR_HEIGHT, BAR_BOTTOM } from './tabBarLayout';
 const Tab = createBottomTabNavigator();
 
 
+// Project 10 (Colin's ruling, 2026-08-13): the bar is Today | Hive | Wallet |
+// Garden. Still four tabs, so the capsule geometry in `tabBarLayout` is
+// untouched — what changed is which four.
+//
+//   Honeycomb -> Hive    same screen, the ruling's name for it.
+//   Recap     -> Garden  Garden is "where you reflect"; Recap is what it
+//                        opens on, and Wrapped moved inside it (below).
+//   Wrapped   -> Wallet  Wrapped is no longer a top-level tab per the
+//                        ruling. It is NOT gone: App.js registers it as a
+//                        root-stack route and RecapTab opens it.
+//
+// Every glyph name below was checked against the installed glyphmaps
+// (@expo/vector-icons .../glyphmaps/{Ionicons,MaterialCommunityIcons}.json)
+// rather than recalled — a missing name renders a blank square, not an error.
 const TAB_ICONS = {
   Today: { active: 'sunny', inactive: 'sunny-outline' },
-  Honeycomb: { active: 'hexagon-multiple', inactive: 'hexagon-multiple-outline', set: MaterialCommunityIcons },
-  Recap: { active: 'book', inactive: 'book-outline' },
-  Wrapped: { active: 'gift', inactive: 'gift-outline' },
+  Hive: { active: 'hexagon-multiple', inactive: 'hexagon-multiple-outline', set: MaterialCommunityIcons },
+  Wallet: { active: 'wallet', inactive: 'wallet-outline' },
+  Garden: { active: 'flower', inactive: 'flower-outline' },
 };
 
 // The active marker is a soft tonal field one step off the bar, not a
@@ -94,10 +108,21 @@ export const MainTabs = () => {
         tabBarIcon: ({ focused }) => <TabIcon routeName={route.name} focused={focused} />,
       })}
     >
+      {/* All four are direct children on purpose. Every screen below holds
+          at least one `getParent()?.navigate(...)`, which resolves to the
+          root stack only from this depth — Today→Lock, Hive→Seeds/Notes/
+          Onboarding, Garden→Wrapped (and DevVersionTag's replay reset).
+          Insert a navigator and those calls find no route and do nothing,
+          silently. Enforced, not documented: `npm run check:nav-depth`. */}
       <Tab.Screen name="Today" component={TodayTab} />
-      <Tab.Screen name="Honeycomb" component={HoneycombTab} />
-      <Tab.Screen name="Recap" component={RecapTab} />
-      <Tab.Screen name="Wrapped" component={PollinateWrapped} />
+      <Tab.Screen name="Hive" component={HoneycombTab} />
+      <Tab.Screen name="Wallet" component={WalletTab} />
+      {/* Garden's landing content is Recap — the ruling's solo-user
+          description of this tab ("your entries, streak, monthly recap") is
+          RecapTab's contents line for line. The file keeps its name because
+          `scripts/check-streaks.mjs:197` reads `src/screens/RecapTab.js` by
+          path; renaming it here would only move the mismatch into a gate. */}
+      <Tab.Screen name="Garden" component={RecapTab} />
     </Tab.Navigator>
   );
 };
