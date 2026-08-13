@@ -164,8 +164,14 @@ function run(file) {
       out += d;
       process.stderr.write(d);
     });
-    child.on('error', (e) => resolve({ code: 1, out: `${out}\nfailed to spawn: ${e.message}` }));
-    child.on('close', (code) => resolve({ code: code ?? 1, out }));
+    child.on('error', (e) => resolve({ code: 1, signal: null, out: `${out}\nfailed to spawn: ${e.message}` }));
+    // `code` is null when the child died on a SIGNAL. Coercing to 1 is right
+    // for the VERDICT — a killed gate must be red — but it is a fabricated
+    // number, so the signal is carried alongside it and the summary says
+    // which of the two actually happened. Reporting "exited 1" for a gate
+    // that never exited is the same defect this file's died-vs-failed row
+    // was written to fix, one level down.
+    child.on('close', (code, signal) => resolve({ code: code ?? 1, signal, out }));
   });
 }
 
@@ -174,7 +180,7 @@ const results = [];
 for (const gate of gates) {
   const name = gate.replace(/\.mjs$/, '');
   console.log(`\n${rule(name)}`);
-  const { code, out } = await run(gate);
+  const { code, signal, out } = await run(gate);
 
   // Counts are read from the gate's own tail line for the totals only; the
   // exit code decides the verdict. A gate that prints "0 failed" and exits
@@ -254,6 +260,7 @@ for (const gate of gates) {
     name,
     verdict: code !== 0 || empty ? FAIL : skipped ? SKIP : PASS,
     code,
+    signal,
     died,
     empty,
     // Only used to explain an unauthorised skip; a plain dark gate has none.
@@ -296,7 +303,8 @@ for (const r of results) {
       : r.empty
         ? 'exited 0 but asserted nothing — a gate over an empty universe'
         : r.died
-          ? `exited ${r.code} without reporting a failed assertion — the gate itself failed to run` +
+          ? `${r.signal ? `was killed by ${r.signal}` : `exited ${r.code}`} without reporting a ` +
+            'failed assertion — the gate itself failed to run' +
             (r.passed ? ` (${r.passed} assertion(s) had passed before it died)` : '')
           : `${r.passed} passed, ${r.failed} failed`;
   console.log(`  ${r.verdict.padEnd(5)} ${r.name.padEnd(width)}  ${tally}`);
