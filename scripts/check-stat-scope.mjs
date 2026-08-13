@@ -390,23 +390,77 @@ const resolveArg = (rel, call) => {
 // renames the callee, and a completeness check that matches only the canonical
 // name has precisely the hole it exists to close. Sage found this in their own
 // first draft; the probe at 2c98af0 is the aliased shape.
+//
+// KEY OFF THE NAME IMPORTED, NEVER THE PATH IT CAME FROM.
+//
+// The first version of this gated the whole thing on `/dateRanges$/` against the
+// import source — and `'../utils/dateRanges.js'` does not end in `dateRanges`.
+// Every import in the repo is extensionless today, so it was green; write the
+// same aliased fifth consumer with the extension on and the gate reported 4 call
+// sites and 22 passed over it. A spelling of a path standing in for "is this the
+// streak function", which is the substitution this whole gate exists to refuse.
+//
+// So the source is not consulted. `longestStreak` imported under any name from
+// any module IS the streak function — there is one of each in this repo, and
+// §0's re-export assertion below is what keeps that true. A second module
+// exporting the name would produce a false row, which fails loudly and is
+// fixable; the path check produced a silent miss, which is neither.
 const aliasesIn = (rel) => {
   const { ast } = load(rel);
   const local = new Map(); // local name -> canonical name
   if (!ast) return local;
   walk(ast.program, (n) => {
-    if (n.type === 'ImportDeclaration' && /dateRanges$/.test(n.source.value)) {
-      for (const sp of n.specifiers) {
-        if (sp.type === 'ImportSpecifier' && STREAK_FNS.has(sp.imported.name)) {
-          local.set(sp.local.name, sp.imported.name);
-        }
-        // `import * as D from './dateRanges'` — the member spelling survives, so
-        // `D.currentStreak(...)` is still matched below by property name.
+    if (n.type !== 'ImportDeclaration') return;
+    for (const sp of n.specifiers) {
+      if (sp.type === 'ImportSpecifier' && STREAK_FNS.has(sp.imported.name)) {
+        local.set(sp.local.name, sp.imported.name);
       }
+      // `import * as D from './dateRanges'` — the member spelling survives, so
+      // `D.currentStreak(...)` is still matched below by property name.
     }
   });
   return local;
 };
+
+// The one route an alias can take that the import scan above cannot model: a
+// name that arrives already renamed, from a module that is not where the
+// function lives. `export { longestStreak as best } from '../utils/dateRanges'`
+// in `src/utils/index.js`, then `import { best } from '../utils'`, and the local
+// name matches nothing — the specifier says `best`, not `longestStreak`.
+//
+// This is not hypothetical tidiness: `LoadState.js:38` and `SeedsStore.js:54`
+// both re-export utils this way today, so it is an established habit in the
+// repo, one module over.
+//
+// The gate cannot follow the chain, so it asserts the precondition instead: no
+// module re-exports a streak function, and nothing does `export *` at all (an
+// `export *` re-exports names that cannot be enumerated statically, so it is
+// opaque to the alias scan by construction). Both are zero on this tree. The
+// day either stops being zero, this goes red and someone teaches the gate the
+// route rather than discovering it in January.
+// Two arms, two assertions, because they fail for different reasons and a
+// conjunction reported under one headline names the wrong half half the time.
+// This thread has produced that exact defect three times in one 40-line block.
+const namedReexports = [];
+const starExports = [];
+for (const abs of scanSet()) {
+  const rel = path.relative(ROOT, abs);
+  if (rel === DEFS) continue;
+  const { code, ast } = load(rel);
+  if (!ast) continue;
+  walk(ast.program, (n) => {
+    if (n.type === 'ExportAllDeclaration') {
+      starExports.push(`${rel}:${lineOf(code, n)} — \`export * from '${n.source.value}'\``);
+    }
+    if (n.type === 'ExportNamedDeclaration' && n.source) {
+      for (const sp of n.specifiers) {
+        if (sp.type === 'ExportSpecifier' && STREAK_FNS.has(sp.local.name)) {
+          namedReexports.push(`${rel}:${lineOf(code, n)} — re-exports ${sp.local.name} as \`${sp.exported.name}\``);
+        }
+      }
+    }
+  });
+}
 
 const found = [];
 for (const abs of scanSet()) {
@@ -463,6 +517,22 @@ else bad('§0 every scanned file parsed', `${parseFailures.length} did not, so �
 // every alias lookup below silently stops matching and coverage goes quiet.
 if (fs.existsSync(path.join(ROOT, DEFS))) ok(`§0 ${DEFS} is where the streak functions are declared to live`);
 else bad(`§0 ${DEFS} exists`, 'the streak definitions moved; alias detection keys off this path and is now blind');
+
+if (namedReexports.length === 0) ok('§0 no module re-exports a streak function under another name');
+else
+  bad(
+    '§0 no module re-exports a streak function under another name',
+    'a consumer importing the re-exported name is invisible to the alias scan — the specifier says the new name, not the streak function\'s:\n         ' +
+      namedReexports.join('\n         ')
+  );
+
+if (starExports.length === 0) ok('§0 nothing in the scan set does `export *`');
+else
+  bad(
+    '§0 nothing in the scan set does `export *`',
+    '`export *` re-exports names that cannot be enumerated statically, so any streak function travelling through one is opaque to the alias scan:\n         ' +
+      starExports.join('\n         ')
+  );
 
 if (found.length === 0) bad('§0 at least one streak call site exists', 'found none — a gate over an empty set passes by asserting nothing');
 else ok(`§0 ${found.length} streak call site(s) found to check`);
