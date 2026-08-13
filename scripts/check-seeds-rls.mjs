@@ -22,10 +22,23 @@
 //      so "did I get a row back" is the wrong question and an earlier version
 //      of this file reported two false failures by asking it.
 //
-// Requires `embedded-postgres` and `pg` (devDependencies). Both are heavy and
-// only this gate needs them, so a missing install SKIPS rather than fails —
-// `npm test` on a machine that never installed them should not go red for a
-// reason that has nothing to do with the code under test.
+// Requires `embedded-postgres` and `pg` (devDependencies). A missing install
+// is a HARD FAILURE, deliberately.
+//
+// This gate first shipped skipping with exit 0 when the deps were absent, on
+// the reasoning that a fresh checkout shouldn't go red for a missing install.
+// That was wrong, and it made `npm test` a liar: the one suite proving a
+// sealed seed cannot be read early was also the only one able to decline to
+// run and still report success. Wired to CI that way, it's a permanently
+// green light over an untested seal — and a fresh checkout, which is exactly
+// where the deps are missing, is exactly where nobody would notice.
+//
+// So the default is inverted. Skipping is opt-in and has to be typed:
+//
+//   SKIP_PG_GATES=1 npm test
+//
+// for the one person who genuinely cannot run a cluster. That way the skip is
+// a decision someone made, not a silence the harness produced on its own.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -35,13 +48,23 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const MIGRATIONS = path.join(ROOT, 'supabase/migrations');
 const require = createRequire(import.meta.url);
 
+if (process.env.SKIP_PG_GATES === '1') {
+  console.log('check-seeds-rls: SKIPPED — SKIP_PG_GATES=1 was set. The seal is UNTESTED in this run.');
+  process.exit(0);
+}
+
 let EmbeddedPostgres;
 try {
   EmbeddedPostgres = require('embedded-postgres').default;
   require('pg');
-} catch {
-  console.log('check-seeds-rls: SKIPPED — embedded-postgres/pg not installed (npm i -D embedded-postgres pg)');
-  process.exit(0);
+} catch (e) {
+  console.error(
+    `check-seeds-rls: FAILED — cannot load embedded-postgres/pg (${e.message.split('\n')[0]}).\n` +
+      '  These are devDependencies of this repo; run `npm install`.\n' +
+      '  This gate proves a sealed seed cannot be read before it blooms, so it\n' +
+      '  fails rather than skipping. To bypass deliberately: SKIP_PG_GATES=1 npm test'
+  );
+  process.exit(1);
 }
 
 // The migrations this gate needs: the core schema seeds depends on (profiles),
