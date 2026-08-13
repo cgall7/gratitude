@@ -145,13 +145,16 @@ export const nextMilestone = (streak) => {
   return target ? { target, remaining: target - streak } : null;
 };
 
-// entries must be sorted ascending by ISO date string
 export const longestStreak = (entries) => {
+  // Multiple entries can share a date (private-hive writes alongside the
+  // personal journal) — dedupe before counting or a same-day second entry
+  // reads as a gap and resets the run instead of being a no-op.
+  const sortedDates = [...new Set(entries.map((entry) => entry.date))].sort();
   let longest = 0;
   let current = 0;
   let prevDate = null;
-  for (const entry of entries) {
-    const d = new Date(entry.date);
+  for (const date of sortedDates) {
+    const d = new Date(date);
     if (prevDate) {
       const diffDays = Math.round((d - prevDate) / 86400000);
       current = diffDays === 1 ? current + 1 : 1;
