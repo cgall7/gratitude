@@ -281,11 +281,13 @@ const HoneycombFeed = () => {
     try {
       const profile = await HoneycombStore.findProfileByEmail(email);
       if (!profile) {
-        // "Pollinate", not "Honeycomb" — an account belongs to the product,
-        // not to one of its tabs, so this does not become "No Hive account".
-        // Rebrand leftover found by grepping for the old tab name; no gate
-        // asserts this string.
-        setAddMessage({ tone: 'error', text: "No Pollinate account with that email yet." });
+        // No brand name at all (Deezine's ruling, 2026-08-13). This was "No
+        // Honeycomb account"; an account isn't scoped to a tab, so "No Hive
+        // account" was never the repair — but naming the product wasn't
+        // either. Its two siblings at `:296`/`:298` are terse and brand-free,
+        // and this is a functional error line, not the wordmark. Saying
+        // nothing is the fix that doesn't start a pattern.
+        setAddMessage({ tone: 'error', text: 'No account with that email yet.' });
         return;
       }
       await HoneycombStore.sendConnectionRequest(profile.id);
@@ -370,13 +372,12 @@ const HoneycombFeed = () => {
             : 'YOUR HIVE'
         }
         // "Hive", not "Honeycomb": Project 10 renamed the tab per the ruling,
-        // and this header was the last place the old word was still on
-        // screen — one of two. Grepping `src/` + `App.js` for the old name
-        // also turned up live copy at `:284` (fixed to "Pollinate" there, and
-        // an account belongs to the product rather than to a tab). Everything
-        // else is an identifier or a comment, except `supabase.js:16`, which
-        // is a `console.warn` — developer-visible, rebrand debt, not mine to
-        // sweep from inside a navigation change.
+        // and one of two places the old word was still on screen. Grepping
+        // `src/` + `App.js` for the old name turned up the other: live error
+        // copy at `:288`, now brand-free per Deezine. Everything else is an
+        // identifier or a comment, except `supabase.js:16`, which is a
+        // `console.warn` — developer-visible, rebrand debt, not mine to sweep
+        // from inside a navigation change.
         //
         // The files keep their names. `check-demo-hive.mjs:74` reads
         // `src/components/HoneycombGrid.js` by path and unwraps its regex
