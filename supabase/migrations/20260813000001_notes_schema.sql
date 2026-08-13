@@ -35,5 +35,32 @@ create policy "notes_update_recipient_read"
   using (auth.uid() = recipient_id)
   with check (auth.uid() = recipient_id);
 
+-- RLS policies gate which ROWS an update can touch, not which COLUMNS —
+-- `notes_update_recipient_read` alone would let a recipient rewrite
+-- `content` on a note addressed to them by calling Supabase directly
+-- (nothing in this app's UI does that, but RLS has to hold against anyone
+-- hitting the table, not just this client). This trigger is the column-level
+-- half: any update that changes anything but `read_at` is rejected outright.
+create function public.notes_recipient_read_only()
+returns trigger
+language plpgsql
+as $$
+begin
+  if new.id <> old.id
+    or new.sender_id <> old.sender_id
+    or new.recipient_id <> old.recipient_id
+    or new.content <> old.content
+    or new.created_at <> old.created_at
+  then
+    raise exception 'notes: recipients may only set read_at';
+  end if;
+  return new;
+end;
+$$;
+
+create trigger notes_recipient_read_only_trigger
+  before update on public.notes
+  for each row execute function public.notes_recipient_read_only();
+
 create index notes_recipient_created_idx on public.notes (recipient_id, created_at desc);
 create index notes_sender_created_idx on public.notes (sender_id, created_at desc);
