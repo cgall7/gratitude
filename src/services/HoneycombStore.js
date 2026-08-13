@@ -16,6 +16,7 @@ export const WEEK_FEED_LIMIT = 200;
 const toFeedShare = (share, userId) => ({
   id: share.id,
   createdAt: share.created_at,
+  authorId: share.user_id,
   isOwn: share.user_id === userId,
   author: share.author,
   content: share.entries?.content,

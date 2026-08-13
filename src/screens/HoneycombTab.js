@@ -16,6 +16,7 @@ import { BeeTransition } from '../components/BeeTransition';
 import { FlyingBee } from '../components/FlyingBee';
 import { demoHiveShares } from '../constants/demoHive';
 import { TAB_CLEARANCE } from '../navigation/tabBarLayout';
+import { isBlooming } from '../utils/hiveState';
 
 // Share carry (Sunbeam §11.2): the bee lifts the just-shared entry off the
 // button and carries it up toward the grid it just joined.
@@ -205,14 +206,26 @@ const HoneycombFeed = () => {
 
   const loadAll = useCallback(async ({ suppressArrival = false } = {}) => {
     const today = toISODate(new Date());
-    const [feedResult, weekFeedResult, connectionsResult, requestsResult, entry] = await Promise.all([
+    const [feedResult, weekFeedRaw, connectionsResult, requestsResult, entry, hiveState] = await Promise.all([
       HoneycombStore.listFeed(),
       // Window floor: today minus six days, inclusive — 7 day-buckets total.
       HoneycombStore.listFeedSince(daysAgoISO(HIVE_WEEK_DAYS - 1)),
       HoneycombStore.listConnections(),
       HoneycombStore.listIncomingRequests(),
       EntryStore.getEntry(new Date()),
+      HoneycombStore.listHiveState(),
     ]);
+
+    // Join hive-state facts onto real shares only, before the demo set gets
+    // concatenated in (HoneycombTab.js `partitionHive`) — demo shares carry
+    // no `authorId` a fact row could match against, so joining after that
+    // point silently overwrites Maya/Theo/Jonah's authored states with
+    // `false` (R61, thread e10d0fed, Pixel). `!share.isDemo` is belt-and-
+    // braces: real shares never carry the flag, so this is always true here.
+    const bloomingByMember = new Map(hiveState.map((row) => [row.member_id, row.last_note_received_at]));
+    const weekFeedResult = weekFeedRaw.map((share) =>
+      share.isDemo ? share : { ...share, blooming: isBlooming(bloomingByMember.get(share.authorId)) }
+    );
 
     // Feed arrival: fire only when a share we haven't seen yet lands at the
     // top on a refresh — not on first load (so the bee never greets an
