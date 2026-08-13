@@ -17,7 +17,8 @@
     "check:hive-state-rls": "node scripts/check-hive-state-rls.mjs",
     "check:streaks": "node scripts/check-streaks.mjs",
     "check:share-visibility": "node scripts/check-share-visibility.mjs",
-    "test": "npm run check:demo-hive && npm run check:seeds-contract && npm run check:plant-seed && npm run check:load-state && npm run check:seed-view && npm run check:seeds-rls && npm run check:hive-state-rls && npm run check:streaks && npm run check:share-visibility",
+    "check:entry-writes": "node scripts/check-entry-writes.mjs",
+    "test": "npm run check:demo-hive && npm run check:seeds-contract && npm run check:plant-seed && npm run check:load-state && npm run check:seed-view && npm run check:seeds-rls && npm run check:hive-state-rls && npm run check:streaks && npm run check:share-visibility && npm run check:entry-writes",
     "deploy:migrations": "bash scripts/deploy-migrations.sh"
   },
   "dependencies": {
