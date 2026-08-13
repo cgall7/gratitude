@@ -8,6 +8,7 @@ import { PrimaryButton } from '../components/PrimaryButton';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { StreakBadge } from '../components/StreakBadge';
 import { StaggeredItem } from '../components/StaggeredItem';
+import { TargetPicker } from '../components/TargetPicker';
 import { currentStreak, nextMilestone, startOfYear, endOfYear } from '../utils/dateRanges';
 import { TAB_CLEARANCE } from '../navigation/tabBarLayout';
 
@@ -30,11 +31,20 @@ const streakCaption = (streak) => {
   return `${next.remaining} ${next.remaining === 1 ? 'day' : 'days'} to ${next.target}.`;
 };
 
-export const TodayTab = ({ navigation }) => {
+const ME_TARGET = { id: 'me', name: 'Me' };
+
+// §8b.1 target picker. `targets` defaults to Me-only, so a user with zero
+// Private Hives sees this screen render byte-identically to before the
+// picker existed — TargetPicker itself only mounts once there's something
+// to pick between. Wiring `activeTargetId` into per-target entry data is
+// P0-2's follow-on slice (blocked on Fizz's hive-scoped entries schema);
+// today the picker only tracks selection.
+export const TodayTab = ({ navigation, targets = [ME_TARGET] }) => {
   const [loading, setLoading] = useState(true);
   const [entry, setEntry] = useState(null);
   const [streak, setStreak] = useState(0);
   const [total, setTotal] = useState(0);
+  const [activeTargetId, setActiveTargetId] = useState(targets[0].id);
 
   useFocusEffect(
     useCallback(() => {
@@ -80,6 +90,12 @@ export const TodayTab = ({ navigation }) => {
           title={greeting(now)}
           right={<StreakBadge streak={streak} />}
         />
+
+        {targets.length > 1 && (
+          <View style={styles.targetPickerRow}>
+            <TargetPicker targets={targets} activeId={activeTargetId} onSelect={setActiveTargetId} />
+          </View>
+        )}
 
         <StaggeredItem index={0}>
           <View style={styles.streakCard}>
@@ -142,6 +158,9 @@ const styles = StyleSheet.create({
     padding: 24,
     paddingTop: 72,
     paddingBottom: TAB_CLEARANCE,
+  },
+  targetPickerRow: {
+    marginBottom: 16,
   },
   streakCard: {
     backgroundColor: theme.colors.washYellow,
