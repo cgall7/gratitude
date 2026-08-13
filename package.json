@@ -10,7 +10,8 @@
     "web": "expo start --web",
     "check:demo-hive": "node scripts/check-demo-hive.mjs",
     "check:seeds-rls": "node scripts/check-seeds-rls.mjs",
-    "test": "npm run check:demo-hive && npm run check:seeds-rls",
+    "check:hive-state-rls": "node scripts/check-hive-state-rls.mjs",
+    "test": "npm run check:demo-hive && npm run check:seeds-rls && npm run check:hive-state-rls",
     "deploy:migrations": "bash scripts/deploy-migrations.sh"
   },
   "dependencies": {
