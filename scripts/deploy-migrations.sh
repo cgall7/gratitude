@@ -40,7 +40,34 @@ echo "Local vs. remote migration history — check every pre-existing version be
 echo "shows applied on both sides before continuing:"
 echo
 npx --yes supabase migration list
+
+# `migration list` shows the local/remote *diff*. It does not show what push
+# would do with that diff, and the gap between those two is where this goes
+# wrong: `db push` without --include-all applies only migrations newer than
+# the newest version in the remote history table, so a migration that landed
+# on main *behind* an already-applied version is in the diff and is silently
+# not in the push. That happens whenever branches merge out of timestamp
+# order, which is normal, or whenever a deploy runs between two merges.
+#
+# --dry-run prints the exact list push would apply, against the real remote,
+# without applying it. It turns "is anything going to be skipped?" from
+# something you have to reason about into something you read. Same flags as
+# the real push below, so what it prints is what the next command does.
 echo
-read -r -p "Matches expectations? Press Enter to run 'supabase db push', or Ctrl-C to stop and repair history first. "
+echo "Dry run — exactly the migrations 'db push' would apply. Anything listed as"
+echo "local-only above but absent here is a migration push will skip; re-run with"
+echo "--include-all after checking why:"
+echo
+# Not allowed to abort the script under `set -e`. A dry run that errors is
+# information for the human at the prompt below, not a reason to refuse a
+# deploy — the real push is about to report the same problem with the same
+# words, and this step was added to show more, never to block more.
+if ! npx --yes supabase db push --dry-run; then
+  echo
+  echo "!! The dry run itself failed. Nothing has been applied. Read its error above" >&2
+  echo "!! before pressing Enter — 'db push' is about to hit the same thing." >&2
+fi
+echo
+read -r -p "Both lists match expectations? Press Enter to run 'supabase db push', or Ctrl-C to stop and repair history first. "
 
 npx --yes supabase db push
