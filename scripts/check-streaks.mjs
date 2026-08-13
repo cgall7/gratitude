@@ -122,6 +122,15 @@ invariant('gapped real-world history', gapped);
 // away — actually calls `currentStreak(yearEntries, now)`. Same fix as
 // buildMonths below: read the real source instead of asserting on a
 // fixture that can't reach the call site.
+//
+// PERMANENT, not a stopgap for Pixel/Sage's AST scope+words gates: Sage
+// proved (thread 19e90cf8 §4) a case where a screen is year-scoped *and*
+// its label honestly says so — computation and words agree, both AST gates
+// pass — and the streak still resets to 1 every January 1st. Agreement is
+// a property of a screen's internal consistency; whether a stat should be
+// all-time at all is a product decision, and no gate that only compares a
+// number to its own label can hold that opinion. This block is the one
+// that does. Do not delete it when the AST gates land in scripts/.
 {
   const todaySource = await readFile(path.join(ROOT, 'src/screens/TodayTab.js'), 'utf8');
   if (/EntryStore\.getEntriesBetween\(\s*startOfYear/.test(todaySource)) {
