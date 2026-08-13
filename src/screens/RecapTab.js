@@ -48,10 +48,15 @@ const buildMonths = (allEntries) =>
 // `total`, with nothing stating either one — Today's card had one DAY to
 // borrow from, this one has none. Same fix: line 1 states the unit, line 2
 // states the scope.
+// Left column reads "RIGHT NOW", not "IN A ROW" (Pixel, same thread, §1):
+// with BEST EVER beside it, "in a row" restates the unit instead of naming
+// a scope, and the reader infers "current" only from the neighbour that
+// says "ever". Today's card keeps "IN A ROW" — one streak on screen, present
+// tense is the only reading, nothing to disambiguate against.
 const StatsCard = ({ streak, best, total }) => (
   <View style={styles.statsCard}>
     {[
-      { value: streak, unit: 'DAYS', scope: 'IN A ROW' },
+      { value: streak, unit: 'DAYS', scope: 'RIGHT NOW' },
       { value: best, unit: 'DAYS', scope: 'BEST EVER' },
       { value: total, unit: 'ENTRIES', scope: 'THIS YEAR' },
     ].map((stat, index) => (
