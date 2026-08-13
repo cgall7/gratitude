@@ -636,18 +636,33 @@ export const OnboardingFlow = ({ onDone, initialFlow = 'B', startAt, navigation,
   const handleSaveEntry = (text) => {
     pendingEntryRef.current = { text, theme: tagEntry(text) };
   };
-  const flushPendingEntry = async () => {
+  // Pixel caught this (thread 19e90cf8, 2026-08-13): there are two flush
+  // sites — AccountStep's onBeforeFinish (after signUp/signIn resolves)
+  // and the session-effect auto-finish below (fires off onAuthStateChange,
+  // independently) — and both can be live for the same buffered entry.
+  // Nulling pendingEntryRef before the await made the loser of that race a
+  // no-op that resolved instantly, so finish() could run while the winner's
+  // write was still in flight — replace('Main') beating the save, same
+  // "Today's page is blank" lie one screen after "Keep it." this buffer
+  // exists to prevent. Memoising the in-flight promise instead means both
+  // sites await the *same* write, whichever calls first.
+  const flushPromiseRef = useRef(null);
+  const flushPendingEntry = () => {
+    if (flushPromiseRef.current) return flushPromiseRef.current;
     const entry = pendingEntryRef.current;
-    if (!entry) return;
+    if (!entry) return Promise.resolve();
     pendingEntryRef.current = null;
-    try {
-      await EntryStore.saveEntry(new Date(), entry.text, entry.theme);
-    } catch (err) {
-      // Best-effort: losing the buffered entry here is a real regression
-      // from the old AsyncStorage write, but surfacing it would block the
-      // finish beat on a screen that already told the user "That's one."
-      console.warn('Failed to save first entry after signup', err);
-    }
+    flushPromiseRef.current = (async () => {
+      try {
+        await EntryStore.saveEntry(new Date(), entry.text, entry.theme);
+      } catch (err) {
+        // Best-effort: losing the buffered entry here is a real regression
+        // from the old AsyncStorage write, but surfacing it would block the
+        // finish beat on a screen that already told the user "That's one."
+        console.warn('Failed to save first entry after signup', err);
+      }
+    })();
+    return flushPromiseRef.current;
   };
 
   // App.js's onDone is `navigation.replace('Main')`, which must not run

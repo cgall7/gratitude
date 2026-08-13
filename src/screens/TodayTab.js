@@ -32,6 +32,7 @@ const streakCaption = (streak) => {
 
 export const TodayTab = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [entry, setEntry] = useState(null);
   const [streak, setStreak] = useState(0);
   const [total, setTotal] = useState(0);
@@ -47,6 +48,7 @@ export const TodayTab = ({ navigation }) => {
             EntryStore.getAllEntries(),
           ]);
           if (cancelled) return;
+          setError(false);
           setEntry(today);
           // Streak reads every entry, not just this year's — Recap already
           // fixed this (RecapTab.js: "'BEST EVER' was measuring the calendar
@@ -64,8 +66,18 @@ export const TodayTab = ({ navigation }) => {
           // lands on Main with no auth. Without this catch, `loading` never
           // flips and the tab spins forever instead of showing empty state
           // (Sage/Pixel, thread 19e90cf8, 2026-08-13).
+          //
+          // `error` is what actually distinguishes this from a genuinely
+          // empty day (Pixel, thread 19e90cf8: setting entry/streak/total
+          // to their empty values here was asserting four specific false
+          // things — 0-day streak, 0 this year, "Write today to start your
+          // streak.", "Today's page is blank." — about a user we simply
+          // failed to read, not one who wrote nothing). §23 unknown state
+          // is Deezine's when it lands; this is the placeholder that keeps
+          // the read/write path honest until then.
           if (cancelled) return;
           console.warn('TodayTab: failed to load entries', err);
+          setError(true);
           setEntry(null);
           setStreak(0);
           setTotal(0);
@@ -105,18 +117,27 @@ export const TodayTab = ({ navigation }) => {
 
         <StaggeredItem index={0}>
           <View style={styles.streakCard}>
-            <Text style={styles.streakCaption}>{streakCaption(streak)}</Text>
-            <View style={styles.statDivider} />
-            <View style={styles.statRow}>
-              <View style={styles.stat}>
-                <Text style={styles.statValue}>{streak}</Text>
-                <Text style={styles.statLabel}>DAY STREAK</Text>
-              </View>
-              <View style={styles.stat}>
-                <Text style={styles.statValue}>{total}</Text>
-                <Text style={styles.statLabel}>THIS YEAR</Text>
-              </View>
-            </View>
+            {error ? (
+              // No numeral, no caption — both are assertions about a user
+              // we failed to read, not one who wrote nothing (Pixel, thread
+              // 19e90cf8). Placeholder copy; Deezine's when §23 lands.
+              <Text style={styles.streakCaption}>We couldn't reach your journal.</Text>
+            ) : (
+              <>
+                <Text style={styles.streakCaption}>{streakCaption(streak)}</Text>
+                <View style={styles.statDivider} />
+                <View style={styles.statRow}>
+                  <View style={styles.stat}>
+                    <Text style={styles.statValue}>{streak}</Text>
+                    <Text style={styles.statLabel}>DAY STREAK</Text>
+                  </View>
+                  <View style={styles.stat}>
+                    <Text style={styles.statValue}>{total}</Text>
+                    <Text style={styles.statLabel}>THIS YEAR</Text>
+                  </View>
+                </View>
+              </>
+            )}
           </View>
         </StaggeredItem>
 
@@ -125,6 +146,17 @@ export const TodayTab = ({ navigation }) => {
             <View style={styles.quoteCard}>
               <Text style={styles.themeBadge}>{entry.theme}</Text>
               <Text style={styles.gratitudeText}>"{entry.text}"</Text>
+            </View>
+          ) : error ? (
+            // No CTA: a failed read can't rule out today already having an
+            // entry, and the write button routes into saveEntry's update
+            // branch on a day that turns out to be shared — reopening the
+            // edit-after-share hazard Pixel's own enumeration had ruled
+            // latent (thread 19e90cf8). Placeholder copy; Deezine's when
+            // §23 lands.
+            <View style={styles.emptyCard}>
+              <Text style={styles.emptyTitle}>We couldn't reach your journal.</Text>
+              <Text style={styles.emptyBody}>Check your connection and try again.</Text>
             </View>
           ) : (
             <View style={styles.emptyCard}>
