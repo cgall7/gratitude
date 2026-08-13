@@ -119,8 +119,12 @@ export const HoneycombStore = {
 
   // Project 6.7 — facts, not derived states (see the migration comment for
   // why). Each row is { member_id, display_name, avatar_url, last_entry_date,
-  // last_note_received_at } for one accepted connection; callers derive
-  // active/blooming with src/utils/hiveState.js against their own clock.
+  // last_note_received_at } for one accepted connection. Callers derive
+  // `blooming` with src/utils/hiveState.js; `active` was struck from MVP1
+  // entirely (R59, thread e10d0fed) — the Today comb's own membership filter
+  // already is "posted today," so a treatment true of every cell it can draw
+  // is not a signal. last_entry_date still ships as a plain fact (e.g. "last
+  // shared N days ago"), just not as an Active-state input.
   async listHiveState() {
     const client = requireSupabase();
     const { data, error } = await client.rpc('list_hive_state');
