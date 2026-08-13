@@ -13,7 +13,6 @@ import {
 import { theme } from '../constants/theme';
 import { getDailyPrompt } from '../constants/prompts';
 import { EntryStore } from '../services/EntryStore';
-import { tagEntry } from '../utils/themeTagger';
 import * as Haptics from 'expo-haptics';
 import { SparkChips } from '../components/SparkChips';
 import { PrimaryButton } from '../components/PrimaryButton';
@@ -81,8 +80,11 @@ export const InputScreen = ({ onUnlock }) => {
 
   const handleSave = () => {
     if (!text.trim() || unlocking) return;
-    const themeTag = tagEntry(text);
-    EntryStore.saveEntry(new Date(), text, themeTag);
+    // Does not call EntryStore.saveEntry here — during onboarding (Flow C)
+    // there is no session yet and the write would throw 'Not signed in'
+    // (Sage, thread 19e90cf8: identical shape to Onboarding.js's own
+    // pre-auth entry step). onUnlock hands the raw text to the caller,
+    // which buffers it and saves once an account exists.
     setUnlocking(true);
 
     Animated.timing(formAnim, {

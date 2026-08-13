@@ -406,12 +406,19 @@ const FirstEntryStep = ({ step, name, onNext, onBack, onSave }) => {
 // --- lock/unlock screens verbatim, so this is an honest preview of the
 // --- actual daily loop, not a mockup of it (Colin, 2026-08-10). No
 // --- StepShell: the demo owns the frame the same way it does in the app.
-// --- InputScreen saves the entry itself, so the controller's onSave path
-// --- isn't wired here — its save IS the first-ever save.
-const LockDemoStep = ({ onNext }) => {
+// --- InputScreen no longer saves itself (no session exists yet here) — its
+// --- text is buffered through onSave, same as FirstEntryStep.
+const LockDemoStep = ({ onNext, onSave }) => {
   const [phase, setPhase] = useState('lock');
   if (phase === 'entry') {
-    return <InputScreen onUnlock={onNext} />;
+    return (
+      <InputScreen
+        onUnlock={(text) => {
+          onSave(text);
+          onNext();
+        }}
+      />
+    );
   }
   return <LockScreen onOpen={() => setPhase('entry')} />;
 };
@@ -437,8 +444,12 @@ const CelebrationStep = ({ step, onNext }) => (
 
 // --- Account — the ask, now after the payoff instead of in front of it.
 // --- Mirrors HoneycombAuth's create/sign-in toggle so returning testers on
-// --- the same device aren't stuck re-registering. "Not yet" is a real exit:
-// --- entries already live locally, so nobody is held hostage for them. ---
+// --- the same device aren't stuck re-registering. No skip: since P0-2
+// --- (thread 19e90cf8) every EntryStore read/write requires a session, so
+// --- exiting here used to cost one entry and now costs the whole app —
+// --- TodayTab has no catch around its awaits, so a signed-out Main spins
+// --- forever (Pixel, thread 19e90cf8). "Keep it" one screen back is the
+// --- persistence promise; this step has to be the one that makes it true. ---
 const AccountStep = ({
   step,
   name,
@@ -448,7 +459,7 @@ const AccountStep = ({
   onChangeEmail,
   onChangePassword,
   onNext,
-  onSkip,
+  onBeforeFinish,
   initialMode = 'signup',
   navigation,
 }) => {
@@ -461,6 +472,7 @@ const AccountStep = ({
 
   const attemptSignIn = async () => {
     await HoneycombStore.signIn(email.trim(), password);
+    await onBeforeFinish?.();
     onNext();
   };
 
@@ -472,6 +484,7 @@ const AccountStep = ({
       if (isSignUp) {
         const result = await HoneycombStore.signUp(email.trim(), password, name.trim());
         if (result.session) {
+          await onBeforeFinish?.();
           onNext();
         } else {
           setConfirmSent(true);
@@ -593,9 +606,6 @@ const AccountStep = ({
         <PrimaryButton onPress={handleSubmit} disabled={!canSubmit} style={styles.floatingButton}>
           {busy ? (isSignUp ? 'Creating account…' : 'Signing in…') : isSignUp ? 'Create account' : 'Sign in'}
         </PrimaryButton>
-        <PressableScale onPress={onSkip} style={styles.skipDemoLink} haptic={null}>
-          <Text style={styles.notYetText}>Not yet</Text>
-        </PressableScale>
       </KeyboardAvoidingView>
     </StepShell>
   );
@@ -614,6 +624,31 @@ export const OnboardingFlow = ({ onDone, initialFlow = 'B', startAt, navigation,
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [momentTime, setMomentTime] = useState(null);
+
+  // STEP_ENTRY happens before STEP_ACCOUNT — there is no session yet, and
+  // EntryStore.saveEntry now requires one (P0-2). A ref, not state: nothing
+  // needs to render off it, and it must survive without triggering an extra
+  // pass through the step effects below. Buffered here, flushed once
+  // AccountStep reaches a real session (Sage, thread 19e90cf8: unawaited/
+  // uncaught, the entry every fresh install writes was being silently
+  // discarded under the celebration screen).
+  const pendingEntryRef = useRef(null);
+  const handleSaveEntry = (text) => {
+    pendingEntryRef.current = { text, theme: tagEntry(text) };
+  };
+  const flushPendingEntry = async () => {
+    const entry = pendingEntryRef.current;
+    if (!entry) return;
+    pendingEntryRef.current = null;
+    try {
+      await EntryStore.saveEntry(new Date(), entry.text, entry.theme);
+    } catch (err) {
+      // Best-effort: losing the buffered entry here is a real regression
+      // from the old AsyncStorage write, but surfacing it would block the
+      // finish beat on a screen that already told the user "That's one."
+      console.warn('Failed to save first entry after signup', err);
+    }
+  };
 
   // App.js's onDone is `navigation.replace('Main')`, which must not run
   // twice — the account step can reach it both by its own onNext and by the
@@ -653,10 +688,6 @@ export const OnboardingFlow = ({ onDone, initialFlow = 'B', startAt, navigation,
     DevSettings.setOnboardingFlow(nextFlow);
   };
 
-  const handleSaveEntry = (text) => {
-    EntryStore.saveEntry(new Date(), text, tagEntry(text));
-  };
-
   const isBeliefStep = flow === 'B' && step >= BELIEF_START && step < BELIEF_START + BELIEF_SCREENS.length;
   // Bee leads transitions BETWEEN belief beats only (B1→B2→B3) — 2 flights,
   // never on the Welcome→B1 or B3→Name boundary (§4 scarcity).
@@ -667,9 +698,14 @@ export const OnboardingFlow = ({ onDone, initialFlow = 'B', startAt, navigation,
   // Demo mode resets to onboarding on every foreground resume — if this
   // device already has a real session (signed up on a previous pass), the
   // account step has nothing left to ask for. Straight into the app.
+  // Still routes through flushPendingEntry: a resume that revisits
+  // STEP_ENTRY with a session already present (e.g. signed up on an
+  // earlier pass, DEMO_MODE resets back to onboarding) buffers into the
+  // same ref, and this path skips AccountStep entirely — the only flush
+  // site it would otherwise have gone through.
   useEffect(() => {
     if (session && !isBeliefStep && sharedStep === STEP_ACCOUNT) {
-      finish();
+      flushPendingEntry().then(finish);
     }
   }, [session, isBeliefStep, sharedStep]);
 
@@ -716,7 +752,7 @@ export const OnboardingFlow = ({ onDone, initialFlow = 'B', startAt, navigation,
       case STEP_ENTRY:
         body =
           flow === 'C' ? (
-            <LockDemoStep onNext={next} />
+            <LockDemoStep onNext={next} onSave={handleSaveEntry} />
           ) : (
             <FirstEntryStep step={step} name={name} onNext={next} onBack={back} onSave={handleSaveEntry} />
           );
@@ -737,7 +773,7 @@ export const OnboardingFlow = ({ onDone, initialFlow = 'B', startAt, navigation,
             onChangeEmail={setEmail}
             onChangePassword={setPassword}
             onNext={finish}
-            onSkip={finish}
+            onBeforeFinish={flushPendingEntry}
             initialMode={startAt === 'signin' ? 'signin' : 'signup'}
             navigation={navigation}
           />
@@ -996,9 +1032,5 @@ const styles = StyleSheet.create({
     ...theme.type.bodySm,
     color: theme.colors.inkSoft,
     textDecorationLine: 'underline',
-  },
-  notYetText: {
-    ...theme.type.bodySm,
-    color: theme.colors.inkSoft,
   },
 });

@@ -41,23 +41,37 @@ export const TodayTab = ({ navigation }) => {
       let cancelled = false;
       (async () => {
         const now = new Date();
-        const [today, allEntries] = await Promise.all([
-          EntryStore.getEntry(now),
-          EntryStore.getAllEntries(),
-        ]);
-        if (cancelled) return;
-        setEntry(today);
-        // Streak reads every entry, not just this year's — Recap already
-        // fixed this (RecapTab.js: "'BEST EVER' was measuring the calendar
-        // year, so a record set in December vanished on New Year's Day").
-        // Today had the same bug one tab over: a year-scoped streak resets
-        // to 1 on January 1st mid-run, while the header's StreakBadge and
-        // Recap's badge disagree on the same day (Pixel, thread 19e90cf8,
-        // 2026-08-13). "THIS YEAR" stays year-scoped — it says so.
-        setStreak(currentStreak(allEntries, now));
-        const currentYear = String(now.getFullYear());
-        setTotal(allEntries.filter((e) => e.date.startsWith(currentYear)).length);
-        setLoading(false);
+        try {
+          const [today, allEntries] = await Promise.all([
+            EntryStore.getEntry(now),
+            EntryStore.getAllEntries(),
+          ]);
+          if (cancelled) return;
+          setEntry(today);
+          // Streak reads every entry, not just this year's — Recap already
+          // fixed this (RecapTab.js: "'BEST EVER' was measuring the calendar
+          // year, so a record set in December vanished on New Year's Day").
+          // Today had the same bug one tab over: a year-scoped streak resets
+          // to 1 on January 1st mid-run, while the header's StreakBadge and
+          // Recap's badge disagree on the same day (Pixel, thread 19e90cf8,
+          // 2026-08-13). "THIS YEAR" stays year-scoped — it says so.
+          setStreak(currentStreak(allEntries, now));
+          const currentYear = String(now.getFullYear());
+          setTotal(allEntries.filter((e) => e.date.startsWith(currentYear)).length);
+        } catch (err) {
+          // requireUserId (EntryStore.js) throws 'Not signed in' with no
+          // session — reachable via DEMO_MODE's Welcome skip link, which
+          // lands on Main with no auth. Without this catch, `loading` never
+          // flips and the tab spins forever instead of showing empty state
+          // (Sage/Pixel, thread 19e90cf8, 2026-08-13).
+          if (cancelled) return;
+          console.warn('TodayTab: failed to load entries', err);
+          setEntry(null);
+          setStreak(0);
+          setTotal(0);
+        } finally {
+          if (!cancelled) setLoading(false);
+        }
       })();
       return () => {
         cancelled = true;
