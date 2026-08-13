@@ -70,13 +70,24 @@ export const WAKE_HORIZON_MS = 60 * 60 * 1000;
 
 // Checked, and it does NOT apply here — recorded so nobody "fixes" it later:
 // in Node, `setTimeout(fn, 2**31)` fires after 1ms (TimeoutOverflowWarning,
-// reproduced). React Native does not share that clamp — `JSTimers` hands the
-// duration straight to native (`JSTimers.js:220`), and iOS takes it as an
-// `NSTimeInterval` double into `dateWithTimeIntervalSinceNow`
-// (`RCTTiming.mm:386-393`, RN 0.86.2 as installed). So the 24.8-day overflow
-// is a Node fact, not an app fact. The horizon above exists for the unmount
-// and background reasons, which are real on device — not for an overflow that
-// isn't.
+// reproduced). React Native does not share that clamp; the duration stays a
+// double the whole way down. RN 0.86.2 as installed, four hops:
+//
+//   JSTimers.js:220          `createTimer(id, duration || 0, …)` — no clamp
+//   RCTTiming.mm:357         bridge arg typed `(NSTimeInterval)jsDuration`
+//   RCTTiming.mm:386,391     `targetTime` computed, passed to `_RCTTimer`
+//   RCTTiming.mm:49          `[NSDate dateWithTimeIntervalSinceNow:targetTime]`
+//
+// `NSTimeInterval` is a `double` at every hop, so there is no 32-bit truncation
+// anywhere on the path. The 24.8-day overflow is a Node fact, not an app fact.
+// The horizon above exists for the unmount and background reasons, which are
+// real on device — not for an overflow that isn't.
+//
+// The first version of this comment cited `RCTTiming.mm:386-393` for
+// `dateWithTimeIntervalSinceNow`. That range is where `targetTime` is computed
+// and handed to the timer; the `NSDate` call is 340 lines earlier, in
+// `_RCTTimer`'s initialiser. Conclusion unchanged, citation was pointing at the
+// middle of the chain instead of its end.
 
 /** When the screen should next re-read, as a DELAY in ms, or null for "don't
  *  hold a timer."
