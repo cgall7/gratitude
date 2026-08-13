@@ -46,42 +46,110 @@ const HIT_SLOP = { top: 12, bottom: 12, left: 12, right: 12 };
 // didn't arrange. A secular reader hears humility and wonder; a Christian
 // reader hears grace. We never name a giver — the user fills that in.
 //
+// R53 (2026-08-13, Pollinate pivot): the thesis above is unchanged. What
+// changed is that it used to dead-end. In a solo journal you notice you were
+// given something and then type it into a box; nothing happens. Pollinate
+// supplies the second half — whoever gave it to you is a person you can now
+// reach — so the argument now runs given -> from someone -> tell them.
+// Beats 1 and 2 are the belief, beat 3 is the product. Beat 2 is the hinge
+// and carries the whole pivot.
+//
+// This also resolves the R15 constraint in our favour rather than against
+// it: the app names the HUMAN giver and leaves any larger one unnamed. A
+// secular reader hears "thank your friends"; the other reading stays
+// available to whoever wants it, unforced.
+//
 // Copy gate every line has to pass: could a devout Christian and a committed
 // atheist each read this and feel it was written for them? Words in play:
 // given, gift, arrived, receive, enough, light, notice, hold. Words never
 // used: God, Jesus, Lord, pray, scripture, church, faith, blessed, worship,
 // sin — and, per Colin 2026-08-11, hallelujah. That one stays a guiding
 // principle for the register, not a word on screen.
+//
+// Second gate, new with R53: NO BEAT MAY PITCH A FEATURE THAT ISN'T BUILT.
+// Two are currently parked and both are enforced by the gate script rather
+// than by anyone remembering this comment:
+//
+//   Money (Project 3) — blocked pending Colin's custody confirmation with
+//   MDK. A Slice 1 tester who reads "send real money" on screen two finds
+//   nothing in the app that does it.
+//
+//   Seeds (Project 8) — scheduled/sealed delivery. Grepping
+//   supabase/migrations/ and src/ for scheduled_for / opens_at / sealed
+//   returns nothing: the notes table has read_at and no delivery date at
+//   all. An earlier draft of this file pitched it in the present tense.
+//
+// The rule this encodes: an absent feature is a timed INSERT, never a
+// tease. The three beats below are a complete argument that ends correctly
+// on its own, so shipping Seeds or money means ADDING a beat after 3 — the
+// flow gets extended later rather than re-timed, and no shipped screen ever
+// has to be walked back. A roadmap line would be the weakest screen in the
+// flow anyway: it asks a brand-new user to be excited about something they
+// cannot have, on the screen immediately before we ask them to do the one
+// thing they can.
 const BELIEF_SCREENS = [
   {
     icon: 'sunny',
     label: 'TO BEGIN',
     h1: 'The morning showed up without you.',
     accent: 'without you',
+    // "people" moved from the first clause to the last so it lands in the
+    // emphatic position and hands off to beat 2. Colin's words, reordered.
     bodyLg:
-      'So did the people who know your name. So did a body that woke up working. You arranged none of it — it arrived anyway.',
+      'So did a body that woke up working. So did the people who know your name. You arranged none of it — it arrived anyway.',
     cta: 'Next',
   },
   {
-    icon: 'heart',
+    // The hinge. Everything before this is a feeling; everything after it is
+    // something to do. The last line is the hook — it should make someone
+    // want to open the app rather than merely agree with it.
+    //
+    // Deezine's correction, taken: a fact about THEM ("no idea they're on
+    // it") is weaker than a fact about the READER, because only the second
+    // one leaves a gap the reader wants to close — which is what makes beat
+    // 3 read as an answer rather than a suggestion. Their line was "You've
+    // never told any of them"; I kept the reader-side aim and dropped the
+    // absolute, because "never / any" is a claim about this particular
+    // reader that is simply false for anyone who has thanked someone, and it
+    // throws them out of the argument at the exact screen that has to land.
+    // "Most" survives that. "Heard you say it" also picks up the Welcome's
+    // "while they can hear it" and hands off to "So tell them" — one verb
+    // pair carrying three screens.
+    icon: 'people',
     label: 'THE TURN',
-    h1: 'Noticing is one thing. Saying thanks is another.',
-    accent: 'Saying thanks',
+    h1: 'Almost all of it came from someone.',
+    accent: 'from someone',
     bodyLg:
-      'Anyone can make a list. Gratitude is what happens when you let it land — when you receive the day instead of just reviewing it.',
+      "The list you'd make is mostly a list of people. Most of them have never heard you say it.",
     cta: 'Next',
   },
   {
-    // The mental-health promise, given honestly (§9.3: no invented stats) and
-    // in the order that makes the whole flow land — thanks first, peace as a
-    // byproduct. That ordering is the quietly Christian part, and nobody has
-    // to notice it for it to work.
-    icon: 'moon',
-    label: 'WHAT HAPPENS',
-    h1: "Peace tends to follow, but it's not the point.",
-    accent: "but it's not the point",
+    // Notes, live on main since 2026-08-13 (Project 7, no-tip variant).
+    // Both halves of this beat are factual claims, not mood, and both were
+    // checked against the shipped code rather than the roadmap:
+    //
+    //   "No feed to perform for" — the notes RLS is sender/recipient-only
+    //   (notes_select_participant), and no note ever enters the feed.
+    //   It's the sharpest line separating us from every social gratitude
+    //   app in the strategy doc's own competitive matrix.
+    //
+    //   "Not a conversation" — there is no reply affordance: NotesInbox
+    //   renders received/sent with an inline detail view, NotesStore exposes
+    //   send/list/markRead and nothing else, and the column trigger means a
+    //   recipient can only ever set read_at. A note lands and stops.
+    //
+    // This replaces "It takes ten seconds", which Deezine flagged as an
+    // ungated quantitative claim. It was: the number was doing the real
+    // persuasive work (the reason people don't say thanks is that it feels
+    // like a Big Conversation) but nothing in the repo can hold it true.
+    // "Not a conversation" removes the same objection by naming it, and it
+    // is checkable.
+    icon: 'paper-plane',
+    label: 'SO TELL THEM',
+    h1: "So tell them. It's one line, not a conversation.",
+    accent: 'not a conversation',
     bodyLg:
-      "People who name what they're thankful for sleep easier and carry less dread. That's real. It's just not why you'd do it — it's what happens when you do.",
+      'Write it, pick their name, send. It lands on their phone — no feed to perform for, just the person who earned it.',
     cta: "Let's begin",
   },
 ];
@@ -243,8 +311,30 @@ const WelcomeStep = ({ step, onNext, flow, onChangeFlow, onSkipDemo, splashHidde
             />
           )}
         </View>
-        <Text style={styles.h1Center}>Start with what you were given.</Text>
-        <Text style={styles.bodyLgCenter}>One line a day. That's the whole thing.</Text>
+        {/*
+          R53: the old subhead was "One line a day. That's the whole thing."
+          True of a journal, false of Pollinate, and it was the first promise
+          a new user read.
+
+          The replacement keeps its first two words on purpose. "One line" is
+          the best rhythm in the old flow and the objection-remover the new
+          pitch needs (this is small, it is not a Big Conversation); what
+          changes is where the line GOES. Same cadence, opposite product.
+
+          Two things came out of the first draft of this subhead. "Gratitude
+          that ACTUALLY arrives" — Deezine: "actually" is defending against
+          an app the tester has never used, and the headline above is already
+          carrying the surprise. And "on a day you choose" was Seeds, i.e.
+          exactly the unbuilt-feature claim Deezine caught one screen later
+          in the belief beats; my own draft comment named it as Seeds and I
+          still shipped it into the FIRST line of the app. So it goes here
+          too — the gate now catches both sites, not just the beat.
+
+          One clause today. Seeds adds the second and money the third, in
+          that order, whenever they exist.
+        */}
+        <Text style={styles.h1Center}>Say it while they can hear it.</Text>
+        <Text style={styles.bodyLgCenter}>One line, sent to the person it's about.</Text>
       </View>
       <FlowToggle flow={flow} onChange={onChangeFlow} />
       <PrimaryButton onPress={onNext}>Begin</PrimaryButton>
@@ -417,8 +507,19 @@ const LockDemoStep = ({ onNext }) => {
 };
 
 // --- Celebration — always the first-ever-save treatment (the entry step's
-// --- save IS the first-ever save), never the bare badge. "given" closes the
-// --- loop back to the Welcome line. ---
+// --- save IS the first-ever save), never the bare badge. ---
+//
+// R53 moved the mental-health claim here from its own belief screen. Colin's
+// R15 brief asked for better mental health as part of the draw, and the
+// hedged form ("that's real, and it's not the point") is still the honest
+// way to say it per §9.3 — but as a beat it was a promise made to someone
+// who hadn't done anything yet, which is marketing. Said HERE, thirty
+// seconds after their first entry, the same sentence describes what just
+// started. It also frees beat 3 for the product.
+//
+// The closing line turns outward. It used to end on "a record of everything
+// you were given" — an archive, the one thing a notebook already does — and
+// it was the last thing a new user read before the account ask.
 const CelebrationStep = ({ step, onNext }) => (
   <StepShell step={step} stage="done" wash={theme.colors.washYellow}>
     <View style={styles.centerFill}>
@@ -428,7 +529,8 @@ const CelebrationStep = ({ step, onNext }) => (
       </View>
       <Text style={styles.h1Center}>That's one.</Text>
       <Text style={styles.bodyLgCenter}>
-        Tomorrow it's two. Do that for a while and you'll have a record of everything you were given.
+        People who do this sleep easier and carry less dread. That's real — and it's still not the point. The point is
+        that someone is behind most of what you'll write here.
       </Text>
     </View>
     <PrimaryButton onPress={onNext}>Keep it</PrimaryButton>
