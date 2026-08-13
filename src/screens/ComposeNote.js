@@ -94,7 +94,7 @@ export const ComposeNote = ({ navigation }) => {
         <Text style={styles.sectionLabel}>NOTE</Text>
         <TextInput
           style={styles.textInput}
-          placeholder="What are you grateful for?"
+          placeholder="I am grateful for..."
           placeholderTextColor={theme.colors.textSecondary}
           value={content}
           onChangeText={setContent}
