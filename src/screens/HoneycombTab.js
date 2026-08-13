@@ -377,15 +377,18 @@ const HoneycombFeed = () => {
 
       <HiveViewToggle view={hiveView} onChange={setHiveView} />
 
-      {/* §18/§23.2 (thread e10d0fed, §4): does this arm's absence change what
-          the screen asserts, or only what the user can do? Add-a-friend,
-          requests, and the share CTA are controls — losing them cost an
-          action, so they render at screen level regardless of hiveView.
-          The feed is content, and weekFeed is a same-table subset of it
-          (HoneycombStore.listFeed vs .listFeedSince); rendering both at
-          once double-draws every share from the last 7 days. So the feed
-          stays paired with the comb inside the "today" arm — the toggle
-          switches comb+feed vs. week-list, chrome stays put either way. */}
+      {/* §18/§23.2/Sage(thread e10d0fed, §4 follow-up): three invariants at
+          once — the feed can't render alongside the week list (it's a
+          same-table subset: HoneycombStore.listFeed vs .listFeedSince,
+          double-draws the last 7 days), the controls must render in both
+          arms (§4 — a pending request can't be hidden by toggle position),
+          and the feed must stay below the controls ("share today's
+          gratitude" is the primary action and can't be buried under up to
+          50 cards). The today arm can't be one contiguous region, because
+          chrome that belongs to neither arm sits between the comb and the
+          feed. So: comb/week-list swap here, chrome at screen level below,
+          feed gated on the same condition at its original position after
+          the chrome — reunited with the comb by condition, not by nesting. */}
       {hiveView === 'week' ? (
         <WeekView
           sections={weekSections}
@@ -393,30 +396,7 @@ const HoneycombFeed = () => {
           onLikeToggled={handleLikeToggled}
         />
       ) : (
-        <>
-          <HoneycombGrid members={todayMembers} onInvitePress={() => setAddOpen(true)} />
-
-          {feed.length === 0 ? (
-            connections.length === 0 ? (
-              <View style={[styles.emptyState, styles.emptyStateYellow]}>
-                <Text style={styles.emptyTitle}>Your hive is quiet.</Text>
-                <Text style={styles.emptyBody}>Add a connection by email to get started.</Text>
-              </View>
-            ) : (
-              <View style={[styles.emptyState, styles.emptyStateSky]}>
-                <Text style={styles.emptyTitle}>Nothing in the hive yet.</Text>
-                <Text style={styles.emptyBody}>Be the first — share today's entry…</Text>
-              </View>
-            )
-          ) : (
-            <View style={styles.feedTopAnchor}>
-              <BeeTransition triggerKey={feedArrivalKey} path={FEED_ARRIVAL_PATH} anchorStyle={styles.feedArrivalBeeAnchor} size={16} />
-              {feed.map((share) => (
-                <FeedCard key={share.id} share={share} onLikeToggled={handleLikeToggled} />
-              ))}
-            </View>
-          )}
-        </>
+        <HoneycombGrid members={todayMembers} onInvitePress={() => setAddOpen(true)} />
       )}
 
       <View style={styles.addCard}>
@@ -475,6 +455,29 @@ const HoneycombFeed = () => {
       )}
       {todayEntry && alreadySharedToday && (
         <Text style={styles.sharedConfirmation}>Shared to your hive.</Text>
+      )}
+
+      {hiveView !== 'week' && (
+        feed.length === 0 ? (
+          connections.length === 0 ? (
+            <View style={[styles.emptyState, styles.emptyStateYellow]}>
+              <Text style={styles.emptyTitle}>Your hive is quiet.</Text>
+              <Text style={styles.emptyBody}>Add a connection by email to get started.</Text>
+            </View>
+          ) : (
+            <View style={[styles.emptyState, styles.emptyStateSky]}>
+              <Text style={styles.emptyTitle}>Nothing in the hive yet.</Text>
+              <Text style={styles.emptyBody}>Be the first — share today's entry…</Text>
+            </View>
+          )
+        ) : (
+          <View style={styles.feedTopAnchor}>
+            <BeeTransition triggerKey={feedArrivalKey} path={FEED_ARRIVAL_PATH} anchorStyle={styles.feedArrivalBeeAnchor} size={16} />
+            {feed.map((share) => (
+              <FeedCard key={share.id} share={share} onLikeToggled={handleLikeToggled} />
+            ))}
+          </View>
+        )
       )}
       </ScrollView>
     </View>
