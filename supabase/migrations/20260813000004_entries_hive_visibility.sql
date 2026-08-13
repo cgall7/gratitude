@@ -32,6 +32,33 @@ update public.entries e
 set visibility = 'shared'
 where exists (select 1 from public.shares s where s.entry_id = e.id);
 
+-- Sage's rig (thread 19e90cf8, 2026-08-13) caught this: the backfill above
+-- is a one-time photograph. `visibility` had no other writer anywhere in
+-- the repo (`git grep visibility -- src/ App.js` returns comments only),
+-- so the first share made *after* this migration deploys stays
+-- visibility='private' forever — shareEntry's insert takes the column
+-- default, and entries_select_respect_visibility below then hides it from
+-- the hive it was just published to. A column that gates reads needs its
+-- writer in the same migration that creates it; this is that writer, and
+-- it doubles as a repair for any row the backfill missed if shares land
+-- between backfill and trigger creation in the same transaction.
+create function public.entries_mark_shared()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  update public.entries set visibility = 'shared'
+    where id = new.entry_id and visibility = 'private';
+  return new;
+end;
+$$;
+
+create trigger shares_mark_entry_shared
+  after insert on public.shares
+  for each row execute function public.entries_mark_shared();
+
 -- has_shared_date RPC — replaces HoneycombStore.js's client-side
 -- `.eq('entry_date', date).limit(1)` with no `.order()`, flagged by Sage
 -- (thread 19e90cf8, 2026-08-13): once an entry_date can hold more than one
