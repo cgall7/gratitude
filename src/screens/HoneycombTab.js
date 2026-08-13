@@ -4,9 +4,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { theme } from '../constants/theme';
 import { useAuth } from '../contexts/AuthContext';
-import { HoneycombStore } from '../services/HoneycombStore';
+import { HoneycombStore, WEEK_FEED_LIMIT } from '../services/HoneycombStore';
 import { EntryStore } from '../services/EntryStore';
-import { toISODate } from '../utils/dateRanges';
+import { toISODate, daysAgoISO, groupSharesByDay, HIVE_WEEK_DAYS } from '../utils/dateRanges';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { PressableScale } from '../components/PressableScale';
 import { FeedCard } from '../components/FeedCard';
@@ -52,9 +52,91 @@ const toGridMember = (share) => ({
   isDemo: share.isDemo ?? false,
 });
 
-const buildHiveMembers = (feed) => {
-  const real = feed.map(toGridMember);
-  return real.concat(demoHiveShares().map(toGridMember)).slice(0, HIVE_SLOTS);
+// §18.1.1: ONE merged share list — real shares first, then the demo set —
+// is the source of truth for both views, and the merge happens BEFORE any
+// partition. The demo dates derive from the same `now` the today-test
+// compares against (demoHiveShares' contract), so the two sides can't
+// drift apart across midnight. Partition-then-map is forced: toGridMember
+// drops `entryDate`, so mapping first would bucket every share under
+// undefined. The list side never maps at all — FeedCard's vocabulary is
+// the raw share (one vocabulary per LAYER, not per feature).
+const partitionHive = (weekFeed, now = new Date()) => {
+  const merged = weekFeed.concat(demoHiveShares(now));
+  const todayISO = toISODate(now);
+  return {
+    todayMembers: merged
+      .filter((share) => share.entryDate === todayISO)
+      .map(toGridMember)
+      .slice(0, HIVE_SLOTS),
+    weekSections: groupSharesByDay(merged, now),
+  };
+};
+
+// The §18 knob's structural half: two labeled seats and one selected state,
+// driven by taps for now. Pixel's motion layer replaces the interaction with
+// the pager position (§18.2) — the accessibility contract here is the part
+// that stays (§18.5: role tab, selected state announced).
+const HiveViewToggle = ({ view, onChange }) => (
+  <View style={styles.viewToggle} accessibilityRole="tablist">
+    {[
+      { key: 'today', label: 'Today' },
+      { key: 'week', label: 'Last 7 days' },
+    ].map((option) => {
+      const selected = view === option.key;
+      return (
+        <PressableScale
+          key={option.key}
+          onPress={() => onChange(option.key)}
+          accessibilityRole="tab"
+          accessibilityState={{ selected }}
+          // R43: flex sizing must ride the outer Pressable (the row's real
+          // flex child); the visual seat rides the inner scaling view.
+          containerStyle={styles.viewToggleSeatContainer}
+          style={[styles.viewToggleSeat, selected && styles.viewToggleSeatActive]}
+        >
+          <Text style={[styles.viewToggleLabel, selected && styles.viewToggleLabelActive]}>
+            {option.label}
+          </Text>
+        </PressableScale>
+      );
+    })}
+  </View>
+);
+
+// The Venmo-style last-7-days body (§18.1): day sections newest-first, each
+// day's shares under one header. Demo rows arrive pre-merged (paler +
+// read-only via FeedCard's own §18.1.1 guard, so this stays a dumb list).
+const WeekView = ({ sections, truncated, onLikeToggled }) => {
+  if (sections.length === 0) {
+    return (
+      <View style={[styles.emptyState, styles.emptyStateSky]}>
+        <Text style={styles.emptyTitle}>A quiet week in the hive.</Text>
+        <Text style={styles.emptyBody}>Shares from the last 7 days will gather here.</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View>
+      {sections.map((section) => (
+        <View key={section.date} style={styles.weekSection}>
+          <Text style={styles.sectionLabel}>{section.label.toUpperCase()}</Text>
+          {section.shares.map((share) => (
+            <FeedCard key={share.id} share={share} onLikeToggled={onLikeToggled} />
+          ))}
+        </View>
+      ))}
+      {/* The 200-row cap is cut on created_at, not the entry_date the window
+          filters on — a full page means the week's older end may be missing
+          (Sage's truncation flag, §18.1.1 engineering notes). Say so rather
+          than render a silently incomplete week. */}
+      {truncated && (
+        <Text style={styles.weekTruncationNote}>
+          Your hive was busy — showing the most recent {WEEK_FEED_LIMIT} shares from this week.
+        </Text>
+      )}
+    </View>
+  );
 };
 
 const RequestRow = ({ request, onRespond }) => (
@@ -74,6 +156,10 @@ const RequestRow = ({ request, onRespond }) => (
 const HoneycombFeed = () => {
   const [loading, setLoading] = useState(true);
   const [feed, setFeed] = useState([]);
+  // 'today' | 'week' — the §18 pager's resting position. State lives here
+  // (not in the toggle) so Pixel's pager can drive it from swipe progress.
+  const [hiveView, setHiveView] = useState('today');
+  const [weekFeed, setWeekFeed] = useState([]);
   const [connections, setConnections] = useState([]);
   const [incomingRequests, setIncomingRequests] = useState([]);
   const [todayEntry, setTodayEntry] = useState(null);
@@ -94,8 +180,10 @@ const HoneycombFeed = () => {
 
   const loadAll = useCallback(async ({ suppressArrival = false } = {}) => {
     const today = toISODate(new Date());
-    const [feedResult, connectionsResult, requestsResult, entry] = await Promise.all([
+    const [feedResult, weekFeedResult, connectionsResult, requestsResult, entry] = await Promise.all([
       HoneycombStore.listFeed(),
+      // Window floor: today minus six days, inclusive — 7 day-buckets total.
+      HoneycombStore.listFeedSince(daysAgoISO(HIVE_WEEK_DAYS - 1)),
       HoneycombStore.listConnections(),
       HoneycombStore.listIncomingRequests(),
       EntryStore.getEntry(new Date()),
@@ -112,6 +200,7 @@ const HoneycombFeed = () => {
     knownFeedIdsRef.current = new Set(feedResult.map((share) => share.id));
 
     setFeed(feedResult);
+    setWeekFeed(weekFeedResult);
     setConnections(connectionsResult);
     setIncomingRequests(requestsResult);
     setTodayEntry(entry);
@@ -195,6 +284,11 @@ const HoneycombFeed = () => {
     );
   }
 
+  // Cheap enough to run per render (≤ WEEK_FEED_LIMIT + 19 items), and
+  // running it here means the comb's "today" moves with every refresh
+  // rather than freezing at mount.
+  const { todayMembers, weekSections } = partitionHive(weekFeed);
+
   return (
     <View style={styles.container}>
       {/* §12.2/§14.1 ambient cruise — anchored to the screen (not the
@@ -212,7 +306,17 @@ const HoneycombFeed = () => {
         title="Honeycomb"
       />
 
-      <HoneycombGrid members={buildHiveMembers(feed)} />
+      <HiveViewToggle view={hiveView} onChange={setHiveView} />
+
+      {hiveView === 'week' ? (
+        <WeekView
+          sections={weekSections}
+          truncated={weekFeed.length >= WEEK_FEED_LIMIT}
+          onLikeToggled={handleLikeToggled}
+        />
+      ) : (
+      <>
+      <HoneycombGrid members={todayMembers} />
 
       <View style={styles.addCard}>
         <PressableScale onPress={() => setAddOpen((open) => !open)} style={styles.addToggle} haptic={null}>
@@ -291,6 +395,8 @@ const HoneycombFeed = () => {
             <FeedCard key={share.id} share={share} onLikeToggled={handleLikeToggled} />
           ))}
         </View>
+      )}
+      </>
       )}
       </ScrollView>
     </View>
@@ -384,6 +490,46 @@ const styles = StyleSheet.create({
     ...theme.type.label,
     color: theme.colors.inkSoft,
     marginBottom: 12,
+  },
+  // §18 knob, structural register only: a surface pill whose active seat is
+  // the same tonal-field-plus-ink treatment as the tab bar's active marker.
+  // Pixel's motion pass replaces the seat swap with the pour (§18.2-18.3).
+  viewToggle: {
+    flexDirection: 'row',
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: theme.colors.surfaceBorder,
+    borderRadius: theme.borderRadius.full,
+    padding: 4,
+    marginBottom: 20,
+  },
+  viewToggleSeatContainer: {
+    flex: 1,
+  },
+  viewToggleSeat: {
+    paddingVertical: 8,
+    borderRadius: theme.borderRadius.full,
+    alignItems: 'center',
+  },
+  viewToggleSeatActive: {
+    backgroundColor: theme.colors.washYellow,
+  },
+  viewToggleLabel: {
+    ...theme.type.bodySm,
+    fontFamily: theme.fonts.bodySemiBold,
+    color: theme.colors.textSecondary,
+  },
+  viewToggleLabelActive: {
+    color: theme.colors.ink,
+  },
+  weekSection: {
+    marginBottom: 8,
+  },
+  weekTruncationNote: {
+    ...theme.type.bodySm,
+    color: theme.colors.inkSoft,
+    textAlign: 'center',
+    marginTop: 4,
   },
   addCard: {
     backgroundColor: theme.colors.surface,

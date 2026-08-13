@@ -81,8 +81,15 @@ export const FeedCard = ({ share, onLikeToggled }) => {
     }
   };
 
+  // §18.1.1: demo shares are keepsakes — readable, never interactive. The
+  // paler content is the week-list twin of the grid's paler demo cells, and
+  // dropping the actions row (their counts are zeroed by construction) is
+  // what keeps a tap from firing toggleLike('demo-N') at Supabase.
+  const isDemo = share.isDemo ?? false;
+
   return (
     <View style={styles.card}>
+      <View style={isDemo && styles.demoRegister}>
       <View style={styles.header}>
         <Avatar
           name={share.isOwn ? 'You' : share.author?.display_name ?? 'Someone'}
@@ -95,7 +102,9 @@ export const FeedCard = ({ share, onLikeToggled }) => {
         </View>
       </View>
       <Text style={styles.content}>"{share.content}"</Text>
+      </View>
 
+      {!isDemo && (
       <View style={styles.actionsRow}>
         <PressableScale onPress={handleLike} disabled={liking} style={styles.actionButton}>
           <Ionicons
@@ -112,6 +121,7 @@ export const FeedCard = ({ share, onLikeToggled }) => {
           {commentCount > 0 && <Text style={styles.actionText}>{commentCount}</Text>}
         </PressableScale>
       </View>
+      )}
 
       {commentsOpen && (
         <View style={styles.commentsSection}>
@@ -155,6 +165,15 @@ const styles = StyleSheet.create({
     padding: 20,
     marginBottom: 16,
     ...theme.shadows.card,
+  },
+  // Demo register, R55's physics applied to the card: the card surface
+  // stays opaque and only the CONTENT dims against it, so dimming changes
+  // strength, never hue — a translucent white card over Sunlit Honey would
+  // drift warm, the exact failure the comb's surface-backing fix killed.
+  // 0.7 keeps the quote readable; the number is provisional until Pixel
+  // widens §18.1.2's "grid parity" line for cards (Sage's 17:02 ask).
+  demoRegister: {
+    opacity: 0.7,
   },
   header: {
     flexDirection: 'row',

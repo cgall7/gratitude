@@ -3,18 +3,11 @@ import { toISODate } from '../utils/dateRanges';
 // Demo-only hive members (Colin's ask, 2026-08-09): the honeycomb should
 // always look lively for demos even with only 1-2 real connections. These are
 // decorative — never written to Supabase, never counted in real
-// connection/like/comment totals.
-//
-// Be exact about what the database does and doesn't buy you, because the
-// difference is a guard someone still has to build. A `demo-N` id is not a
-// uuid, so Postgres rejects it (22P02) before any policy is consulted — on
-// READS as well as writes (`listComments` fires on opening the comment sheet
-// and fails identically). So nothing is ever written: no data risk. It does
-// NOT mean these rows are inert. The tap still fires, `FeedCard` swallows the
-// rejection in a `console.warn`, and the heart reads as live while doing
-// nothing — a dead control, which is worse than a disabled one. Making them
-// read-only is §18.1.1's ruling and lives in `FeedCard` (three call paths:
-// toggleLike, listComments, addComment). Unbuilt as of this commit.
+// connection/like/comment totals, and never interactive. The read-only
+// register is `FeedCard`'s `isDemo` guard (§18.1.1), which is what keeps the
+// like/comment affordances from rendering at all — the database rejecting a
+// non-uuid `demo-N` id is a backstop that produces a dead control, not the
+// guard itself.
 //
 // `HoneycombTab` merges them into the raw share list; the Today comb maps that
 // list through `toGridMember`, the Last-7-Days view groups it by `entryDate`

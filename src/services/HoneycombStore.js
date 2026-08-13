@@ -5,6 +5,26 @@ const requireSupabase = () => {
   return supabase;
 };
 
+// The week query's row cap. Exported so the screen can tell "got everything"
+// from "hit the cap": the cap is cut on `created_at` while the window is cut
+// on `entry_date`, so a full page means the older end of the week may be
+// silently missing and the view should say so.
+export const WEEK_FEED_LIMIT = 200;
+
+// One share row → the shape FeedCard and the grid mappers consume. Shared
+// by both feed queries so the two views can never drift apart on fields.
+const toFeedShare = (share, userId) => ({
+  id: share.id,
+  createdAt: share.created_at,
+  isOwn: share.user_id === userId,
+  author: share.author,
+  content: share.entries?.content,
+  entryDate: share.entries?.entry_date,
+  likeCount: share.likes?.length ?? 0,
+  likedByMe: (share.likes ?? []).some((like) => like.user_id === userId),
+  commentCount: share.comments?.[0]?.count ?? 0,
+});
+
 export const HoneycombStore = {
   // --- Auth -----------------------------------------------------------
   async signUp(email, password, displayName) {
@@ -146,17 +166,30 @@ export const HoneycombStore = {
       .order('created_at', { ascending: false })
       .limit(50);
     if (error) throw error;
-    return (data ?? []).map((share) => ({
-      id: share.id,
-      createdAt: share.created_at,
-      isOwn: share.user_id === user.id,
-      author: share.author,
-      content: share.entries?.content,
-      entryDate: share.entries?.entry_date,
-      likeCount: share.likes?.length ?? 0,
-      likedByMe: (share.likes ?? []).some((like) => like.user_id === user.id),
-      commentCount: share.comments?.[0]?.count ?? 0,
-    }));
+    return (data ?? []).map((share) => toFeedShare(share, user.id));
+  },
+
+  // The last-7-days window for the hive's week view. Filters on
+  // `entries.entry_date` — the day the gratitude is *about* — because
+  // that's the key the week view groups under; filtering on `created_at`
+  // instead could let a share slip into the window while its day header
+  // falls outside it. The `!inner` join is what makes the `.gte()` prune
+  // parent share rows rather than just nulling out the embed.
+  async listFeedSince(sinceISO) {
+    const client = requireSupabase();
+    const {
+      data: { user },
+    } = await client.auth.getUser();
+    const { data, error } = await client
+      .from('shares')
+      .select(
+        'id, created_at, user_id, author:profiles(display_name, avatar_url), entries!inner(content, entry_date), likes(user_id), comments(count)'
+      )
+      .gte('entries.entry_date', sinceISO)
+      .order('created_at', { ascending: false })
+      .limit(WEEK_FEED_LIMIT);
+    if (error) throw error;
+    return (data ?? []).map((share) => toFeedShare(share, user.id));
   },
 
   async toggleLike(shareId, currentlyLiked) {
