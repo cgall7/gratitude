@@ -183,17 +183,70 @@ async function main() {
   // is covered the day it lands rather than the day someone writes its gate.
   console.log('\n  schema-wide');
 
-  const rlsOff = (
+  // 'p' as well as 'r': a partitioned parent is relkind 'p'. Its leaves are
+  // 'r' and would be caught anyway (verified — a partitioned table with no RLS
+  // fails this check via its leaf), but policies live on the parent, so the
+  // parent is the object that should carry the flag.
+  const tables = (
     await client.query(`
-      select c.relname
+      select c.relname, c.relrowsecurity
       from pg_class c
       join pg_namespace n on n.oid = c.relnamespace
-      where n.nspname = 'public' and c.relkind = 'r' and not c.relrowsecurity
+      where n.nspname = 'public' and c.relkind in ('r', 'p')
       order by 1
     `)
-  ).rows.map((r) => r.relname);
-  if (rlsOff.length === 0) ok('every table in `public` has row level security enabled');
-  else bad('every table in `public` has RLS enabled', `RLS is OFF on: ${rlsOff.join(', ')}`);
+  ).rows;
+  const rlsOff = tables.filter((t) => !t.relrowsecurity).map((t) => t.relname);
+  // A completeness assertion that passes over an empty universe asserts
+  // nothing. Same guard as the SECURITY DEFINER count below.
+  if (tables.length === 0) {
+    bad('every table in `public` has RLS enabled', 'enumerated 0 tables — the query is wrong, or the migrations did not build a schema');
+  } else if (rlsOff.length === 0) {
+    ok(`every table in \`public\` has row level security enabled (${tables.length} checked)`);
+  } else {
+    bad('every table in `public` has RLS enabled', `RLS is OFF on: ${rlsOff.join(', ')}`);
+  }
+
+  // RLS is a property of tables, and a view is not a table. A view runs with
+  // the privileges of its OWNER unless it is declared `security_invoker`, so
+  // an ordinary view over `entries` hands every row to anyone granted SELECT
+  // on the view — the underlying policies are never consulted. Measured, not
+  // assumed: an unconnected user reads another user's private journal entry
+  // straight through such a view, while the RLS assertion above still passes,
+  // because the view is relkind 'v' and was never in its universe.
+  //
+  // There are no views in `public` today. This is here so that the first one
+  // has to declare itself, rather than arriving green — the same reason the
+  // SECURITY DEFINER check exists.
+  const leakyViews = (
+    await client.query(`
+      select c.relname, c.relkind,
+        coalesce((select option_value from pg_options_to_table(c.reloptions)
+                  where option_name = 'security_invoker'), 'unset') as security_invoker
+      from pg_class c
+      join pg_namespace n on n.oid = c.relnamespace
+      where n.nspname = 'public'
+        and (c.relkind = 'm'
+             or (c.relkind = 'v'
+                 and coalesce((select option_value from pg_options_to_table(c.reloptions)
+                               where option_name = 'security_invoker'), 'false') <> 'true'))
+      order by 1
+    `)
+  ).rows;
+  if (leakyViews.length === 0) {
+    ok('no view in `public` bypasses RLS (every view is `security_invoker`, and there are no materialized views)');
+  } else {
+    bad(
+      'no view in `public` bypasses RLS',
+      leakyViews
+        .map((v) =>
+          v.relkind === 'm'
+            ? `${v.relname} is a MATERIALIZED view — it stores its own copy of the rows and has no security_invoker option, so RLS on the source table cannot apply to reads of it at all`
+            : `${v.relname} is a view with security_invoker=${v.security_invoker} — it runs as its owner, so the policies on its source tables are never consulted; add \`with (security_invoker = true)\``
+        )
+        .join('; ')
+    );
+  }
 
   // `revoke ... from public` does not reach anon: anon holds its own grant
   // from ALTER DEFAULT PRIVILEGES, so it has to be revoked by name. Asserted
