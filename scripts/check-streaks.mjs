@@ -131,17 +131,26 @@ invariant('gapped real-world history', gapped);
 // all-time at all is a product decision, and no gate that only compares a
 // number to its own label can hold that opinion. This block is the one
 // that does. Do not delete it when the AST gates land in scripts/.
+//
+// SCOPED TO THE STREAK CALL SITE ONLY (Sage, §1-2, same thread): the first
+// version of this check asked "does this file mention a year window
+// anywhere?" — file-scoped, not call-site-scoped. `TodayTab`'s `THIS YEAR`
+// total legitimately reads a year-windowed set, and the EntryStore ->
+// Supabase rewrite makes fetching that set directly (instead of filtering
+// `allEntries` in memory) the obvious edit — which the file-scoped version
+// flagged as if it were the streak regressing. Assert the positive shape
+// of the one call site that must stay all-time instead of the absence of
+// a pattern anywhere in the file; a year-windowed fetch elsewhere in
+// TodayTab is correct and must not trip this.
 {
   const todaySource = await readFile(path.join(ROOT, 'src/screens/TodayTab.js'), 'utf8');
-  if (/EntryStore\.getEntriesBetween\(\s*startOfYear/.test(todaySource)) {
+  if (/setStreak\(\s*currentStreak\(\s*allEntries\b/.test(todaySource)) {
+    ok('TodayTab static check: streak call site reads allEntries, not a year-windowed set');
+  } else {
     bad(
       'TodayTab static check',
-      'still fetches a year-windowed entry set for the streak — currentStreak(yearEntries, now) understates any run crossing Jan 1 (Pixel, thread 19e90cf8)'
+      'setStreak(currentStreak(allEntries, ...)) not found — the streak call site changed shape, was reverted to a year-windowed set, or the binding was renamed; re-verify by hand (Sage, thread 19e90cf8 §2)'
     );
-  } else if (!/EntryStore\.getAllEntries\(\)/.test(todaySource)) {
-    bad('TodayTab static check', 'no getAllEntries() call found — streak source changed shape, re-verify by hand');
-  } else {
-    ok('TodayTab static check: streak reads getAllEntries(), not a year-windowed query');
   }
 }
 
