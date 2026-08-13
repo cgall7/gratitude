@@ -9,7 +9,8 @@
     "android": "expo run:android",
     "web": "expo start --web",
     "check:demo-hive": "node scripts/check-demo-hive.mjs",
-    "test": "npm run check:demo-hive"
+    "test": "npm run check:demo-hive",
+    "deploy:migrations": "bash scripts/deploy-migrations.sh"
   },
   "dependencies": {
     "@expo-google-fonts/dancing-script": "^0.4.2",
