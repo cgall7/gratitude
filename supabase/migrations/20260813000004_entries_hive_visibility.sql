@@ -59,6 +59,17 @@ create trigger shares_mark_entry_shared
   after insert on public.shares
   for each row execute function public.entries_mark_shared();
 
+-- Sage (thread 19e90cf8, 2026-08-13): security definer with no revoke lands
+-- as the fourth member of the class Bumble's check:share-visibility gate
+-- exists to catch — `alter default privileges ... grant all on functions to
+-- anon` (20260808000001) means every function created in `public` is
+-- anon-executable at birth, migration by migration, until revoked. No live
+-- exposure here (as anon it raises "trigger functions can only be called as
+-- triggers," same as handle_new_user) — this is closing the class before
+-- the gate has to catch it as a regression.
+revoke all on function public.entries_mark_shared() from public;
+revoke execute on function public.entries_mark_shared() from anon;
+
 -- has_shared_date RPC — replaces HoneycombStore.js's client-side
 -- `.eq('entry_date', date).limit(1)` with no `.order()`, flagged by Sage
 -- (thread 19e90cf8, 2026-08-13): once an entry_date can hold more than one

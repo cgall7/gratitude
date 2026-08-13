@@ -111,45 +111,28 @@ invariant('gapped real-world history', gapped);
   }
 }
 
-// Pixel (thread 19e90cf8, same day, following this work): TodayTab.js calls
-// `currentStreak(yearEntries, now)` instead of `currentStreak(allEntries,
-// now)` — RecapTab.js already carries the fix for this exact class ("'BEST
-// EVER' was measuring the calendar year, so a record set in December
-// vanished on New Year's Day"), and Today never got it. A year-scoped call
-// can never legitimately exceed the all-entries call — the narrower window
-// is a subset of the wider one — and the two must be equal whenever the run
-// doesn't cross January 1st. TodayTab.js itself can't be imported here (RN
-// + JSX, same reason RecapTab.js can't be), so this asserts the property on
-// `currentStreak` directly; it holds regardless of which branch fixes the
-// call site (fixed independently on fizz/today-streak-scope, since the bug
-// predates P0-2 and is already live on main).
+// Sage (thread 19e90cf8, mutation-testing this file): the previous version
+// of this block asserted `currentStreak(yearFilteredCopy) <= currentStreak(
+// fullArray)` against fixtures built here, in this file — which is
+// arithmetic on the fixture, not a property of the app. The within-year
+// case filtered nothing (every date already started with the anchor's
+// year), so it compared an array to a byte-identical copy of itself:
+// `currentStreak(X) === currentStreak(X)`, true for any implementation.
+// Nothing about it could go red when `TodayTab.js:50` — three directories
+// away — actually calls `currentStreak(yearEntries, now)`. Same fix as
+// buildMonths below: read the real source instead of asserting on a
+// fixture that can't reach the call site.
 {
-  const crossYearAnchor = new Date(2026, 0, 10); // Jan 10 — mid an ongoing run
-  const crossYearRun = Array.from({ length: 27 }, (_, i) => ({ date: dateAt(i, crossYearAnchor) }));
-  const crossYearThisYear = crossYearRun.filter((e) => e.date.startsWith('2026'));
-  const crossFull = currentStreak(crossYearRun, crossYearAnchor);
-  const crossYearOnly = currentStreak(crossYearThisYear, crossYearAnchor);
-  if (crossYearOnly < crossFull) {
-    ok(`year-scoped currentStreak understates a cross-boundary run: this-year (${crossYearOnly}) < all-time (${crossFull})`);
-  } else {
+  const todaySource = await readFile(path.join(ROOT, 'src/screens/TodayTab.js'), 'utf8');
+  if (/EntryStore\.getEntriesBetween\(\s*startOfYear/.test(todaySource)) {
     bad(
-      'year-scoped currentStreak, cross-boundary run',
-      `this-year=${crossYearOnly} all-time=${crossFull}, expected this-year strictly less`
+      'TodayTab static check',
+      'still fetches a year-windowed entry set for the streak — currentStreak(yearEntries, now) understates any run crossing Jan 1 (Pixel, thread 19e90cf8)'
     );
-  }
-
-  const withinYearAnchor = new Date(2026, 5, 10); // June 10 — nowhere near a year boundary
-  const withinYearRun = Array.from({ length: 27 }, (_, i) => ({ date: dateAt(i, withinYearAnchor) }));
-  const withinYearThisYear = withinYearRun.filter((e) => e.date.startsWith('2026'));
-  const withinFull = currentStreak(withinYearRun, withinYearAnchor);
-  const withinYearOnly = currentStreak(withinYearThisYear, withinYearAnchor);
-  if (withinYearOnly === withinFull) {
-    ok(`year-scoped currentStreak matches all-time when the run doesn't cross Jan 1: both ${withinFull}`);
+  } else if (!/EntryStore\.getAllEntries\(\)/.test(todaySource)) {
+    bad('TodayTab static check', 'no getAllEntries() call found — streak source changed shape, re-verify by hand');
   } else {
-    bad(
-      'year-scoped currentStreak, within-year run',
-      `this-year=${withinYearOnly} all-time=${withinFull}, expected equal`
-    );
+    ok('TodayTab static check: streak reads getAllEntries(), not a year-windowed query');
   }
 }
 
