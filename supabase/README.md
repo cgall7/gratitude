@@ -8,9 +8,25 @@
    Every merge to `main` that adds a file here needs this step run again —
    a migration living in the repo does not mean it's live. Two ways:
    - `SUPABASE_PROJECT_REF=<ref> SUPABASE_ACCESS_TOKEN=<token> npm run deploy:migrations`
-     (wraps `supabase link` + `supabase db push`; safe to re-run, already-applied
-     migrations are skipped via the CLI's own history table on the project).
+     (wraps `supabase link` + `supabase db push`, and shows `supabase migration list`
+     before pushing so you can check local/remote agree first — see the warning below).
    - Or paste each file into the dashboard's SQL Editor, in filename order.
+
+   **Before the first run**, confirm the project's migration history actually
+   matches what's live. `db push` only skips a migration if the remote's
+   `supabase_migrations.schema_migrations` table lists its version — if any
+   of this project's tables were ever created by hand through the dashboard
+   SQL editor instead of the CLI, that table won't know about them, and
+   `db push` will try to re-run `create table` from the oldest local
+   migration and fail on `42P07 relation already exists` before it reaches
+   the migrations you actually wanted applied. Check first, in the SQL editor:
+   ```sql
+   select version from supabase_migrations.schema_migrations order by version;
+   ```
+   If a version that's already live (e.g. an early one like `20260808000001`)
+   is missing from that list, tell the CLI it's already applied instead of
+   trying to re-run it: `supabase migration repair --status applied <version>`,
+   once per missing version, oldest first — then push.
 3. **Auth:** email + password (Supabase Auth → Providers → Email). Phone-OTP
    was the original plan but needs a paid SMS provider, so connections are
    discovered by exact email match via the `find_connectable_profile` RPC

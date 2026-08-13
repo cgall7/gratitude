@@ -11,10 +11,16 @@
 #   SUPABASE_PROJECT_REF   — the project ref from the dashboard URL
 #   SUPABASE_ACCESS_TOKEN  — a personal access token (supabase.com/dashboard/account/tokens)
 #
-# `supabase link` uses the CLI's own migration history table
-# (supabase_migrations.schema_migrations) on the remote project to know what's
-# already applied, so this is safe to run repeatedly — already-applied
-# migrations are skipped, not re-run.
+# `db push` only skips what's already applied if the remote's own history
+# table (supabase_migrations.schema_migrations) says so. If earlier schema
+# on this project was ever applied by hand through the dashboard SQL editor
+# instead of this CLI, that table won't have those versions — push then
+# starts from the oldest local migration, hits `42P07 relation already
+# exists` on the first `create table`, and stops before touching the
+# migrations you actually wanted applied. `migration list` below shows the
+# local/remote diff *before* push runs, specifically so that failure mode is
+# visible instead of looking like a broken script. See supabase/README.md
+# for the repair command if local and remote disagree on the old versions.
 set -euo pipefail
 
 if [[ -z "${SUPABASE_PROJECT_REF:-}" ]]; then
@@ -28,4 +34,13 @@ if [[ -z "${SUPABASE_ACCESS_TOKEN:-}" ]]; then
 fi
 
 npx --yes supabase link --project-ref "$SUPABASE_PROJECT_REF"
+
+echo
+echo "Local vs. remote migration history — check every pre-existing version below"
+echo "shows applied on both sides before continuing:"
+echo
+npx --yes supabase migration list
+echo
+read -r -p "Matches expectations? Press Enter to run 'supabase db push', or Ctrl-C to stop and repair history first. "
+
 npx --yes supabase db push
