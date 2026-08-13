@@ -1,6 +1,6 @@
 import DefaultAsyncStorage from '@react-native-async-storage/async-storage';
 import { EntryStore as DefaultEntryStore } from './EntryStore';
-import { legacyEntriesToMigrate } from '../utils/legacyJournal';
+import { legacyEntriesToMigrate, legacyPredatesAccount } from '../utils/legacyJournal';
 
 // P0-2 (thread 19e90cf8) moved the journal from this single AsyncStorage key
 // to Supabase. Days later we found the key had zero remaining readers
@@ -23,12 +23,18 @@ const LEGACY_KEY = 'gratitude_entries_v1';
 // never recorded. So the fix isn't "attribute correctly," it's "attribute at
 // most once, permanently, to whichever identity gets there first" — a key
 // with no owner can only be given away one time. CLAIMED_BY_KEY records that
-// identity BEFORE any read of LEGACY_KEY happens, not after a successful
-// migration, so a first attempt that fails (offline, not yet migrated code)
-// still locks the key to that identity — a second, different identity
-// arriving before the first attempt's retry succeeds can never pick it up
-// instead. Only the identity that already holds the claim is allowed to
-// retry.
+// identity. `legacyPredatesAccount` (src/utils/legacyJournal.js) runs first
+// and can refuse the claim outright — one-sided, using `savedAt` against the
+// account's own `created_at`, so it can only block a provably-wrong
+// claimant, never approve a right one (same thread, Sage's follow-up:
+// closes the case where a fresh demo account would otherwise burn the one
+// claim). The claim is still written before any upload is attempted, so a
+// first attempt that fails after passing that check (offline, a rejected
+// write) still locks the key to that identity — a second, different
+// identity arriving before the first attempt's retry succeeds can never
+// pick it up instead. Only the identity that already holds the claim is
+// allowed to retry, and retrying skips the refusal check — it was already
+// judged once, on the attempt that wrote the claim.
 const CLAIMED_BY_KEY = 'gratitude_entries_v1_claimed_by';
 const MIGRATED_KEY = 'gratitude_entries_v1_migrated';
 
@@ -44,7 +50,7 @@ const MIGRATED_KEY = 'gratitude_entries_v1_migrated';
 // `flushPendingEntry`'s in-flight guard.
 let inFlight = null;
 
-export const migrateLegacyJournal = (userId, deps = {}) => {
+export const migrateLegacyJournal = (userId, accountCreatedAt, deps = {}) => {
   // Capitalized to shadow the import, not a stray convention slip:
   // check-entry-writes.mjs's census matches the literal identifier
   // `EntryStore.<method>`, by name, everywhere in src/ — documented in that
@@ -56,7 +62,7 @@ export const migrateLegacyJournal = (userId, deps = {}) => {
   const { storage = DefaultAsyncStorage, entryStore: EntryStore = DefaultEntryStore } = deps;
   if (!userId) return Promise.resolve({ migrated: 0, skipped: 0 });
   if (!inFlight) {
-    inFlight = runMigration(userId, storage, EntryStore).finally(() => {
+    inFlight = runMigration(userId, accountCreatedAt, storage, EntryStore).finally(() => {
       inFlight = null;
     });
   }
@@ -67,7 +73,7 @@ export const migrateLegacyJournal = (userId, deps = {}) => {
 // rejected Supabase write, and any other surprise here all resolve to "try
 // again next launch" — leave both keys as they were and let the caller's
 // `.catch(() => {})` swallow it.
-const runMigration = async (userId, storage, EntryStore) => {
+const runMigration = async (userId, accountCreatedAt, storage, EntryStore) => {
   try {
     const claimedBy = await storage.getItem(CLAIMED_BY_KEY);
     if (claimedBy && claimedBy !== userId) {
@@ -76,14 +82,13 @@ const runMigration = async (userId, storage, EntryStore) => {
       // finished or not — that's the whole guarantee.
       return { migrated: 0, skipped: 0 };
     }
-    if (!claimedBy) {
-      await storage.setItem(CLAIMED_BY_KEY, userId);
+    if (claimedBy === userId && (await storage.getItem(MIGRATED_KEY))) {
+      return { migrated: 0, skipped: 0 };
     }
-
-    if (await storage.getItem(MIGRATED_KEY)) return { migrated: 0, skipped: 0 };
 
     const raw = await storage.getItem(LEGACY_KEY);
     if (!raw) {
+      if (!claimedBy) await storage.setItem(CLAIMED_BY_KEY, userId);
       await storage.setItem(MIGRATED_KEY, '1');
       return { migrated: 0, skipped: 0 };
     }
@@ -92,23 +97,35 @@ const runMigration = async (userId, storage, EntryStore) => {
     try {
       legacy = JSON.parse(raw);
     } catch (parseErr) {
-      // Deliberately does NOT set MIGRATED_KEY. "Not retriable into
-      // something different" was true of a genuinely corrupt blob and false
-      // of a truncated or transient read — and this key is the one
-      // documented as recoverable exactly once. Setting the marker here
-      // would spend that once on a failure, with nobody ever looking again.
-      // Leaving it unset costs one harmless re-parse per future launch
-      // (claimedBy already pins retries to this same identity) and keeps
-      // the raw bytes exactly where they are for as long as they might
-      // become readable.
+      // Deliberately does NOT set CLAIMED_BY_KEY or MIGRATED_KEY. "Not
+      // retriable into something different" was true of a genuinely corrupt
+      // blob and false of a truncated or transient read — and this key is
+      // the one documented as recoverable exactly once. Claiming or marking
+      // it done here would spend that once on a failure nobody would ever
+      // revisit. Leaving both unset costs one harmless re-parse per future
+      // launch and keeps the raw bytes, and the choice of who gets to claim
+      // them, exactly where they were.
       console.warn('legacyJournalMigration: could not parse legacy journal', parseErr);
       return { migrated: 0, skipped: 0 };
     }
 
     const dateKeys = Object.keys(legacy);
     if (!dateKeys.length) {
+      if (!claimedBy) await storage.setItem(CLAIMED_BY_KEY, userId);
       await storage.setItem(MIGRATED_KEY, '1');
       return { migrated: 0, skipped: 0 };
+    }
+
+    if (!claimedBy) {
+      if (legacyPredatesAccount(legacy, accountCreatedAt)) {
+        // One-sided refusal: this account's own created_at proves it did not
+        // write these entries. Leave the key fully unclaimed — no
+        // CLAIMED_BY_KEY, no MIGRATED_KEY — for whoever the real owner turns
+        // out to be, rather than spending the one claim on an account that
+        // provably wasn't them.
+        return { migrated: 0, skipped: 0, refused: true };
+      }
+      await storage.setItem(CLAIMED_BY_KEY, userId);
     }
 
     // Never overwrite a row that already exists server-side — see
