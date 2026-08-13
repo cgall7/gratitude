@@ -54,26 +54,33 @@ export const hexEdgeMarks = (size, inset, edgeFraction) => {
   return marks;
 };
 
-// The "seeded" badge: a small hexagon seal at the cell's lower-right edge
-// (between the angle-0 and angle-60 vertices), figure knocked out to
-// whatever painted beneath it rather than painted in a second colour —
-// R51's register rule, "it never flew," applied to a mark instead of a
-// stripe. Two nested hexagons at one center, `evenodd`, punch the hole;
-// draw the returned path in the SAME `Svg` as the cell's own fill so the
-// hole reveals that fill, not a bare transparent gap.
+// The "seeded" badge: a small hexagon seal on the cell's lower-right VERTEX
+// ray (60° from centre), figure knocked out to whatever painted beneath it
+// rather than painted in a second colour — R51's register rule, "it never
+// flew," applied to a mark instead of a stripe. Two nested hexagons at one
+// center, `evenodd`, punch the hole; draw the returned path in the SAME
+// `Svg` as the cell's own fill so the hole reveals that fill, not a bare
+// transparent gap.
+//
+// §21.10 (R59): this used to sit on the lower-right EDGE ray (30°, the
+// midpoint of vertices 0 and 1) — the same ray `hexEdgeMarks` centres a
+// blooming mark on, so the two collided 77% of the mark's width whenever a
+// member was both blooming and seeded, and the ring silently read as five
+// marks instead of six. `hexEdgeMarks` occupies the six EDGE directions, so
+// the six VERTEX directions are free by construction. Moved to the 60°
+// vertex ray at 0.682 × the circumradius (verified: ±17.1° seal clearance
+// inside the ±18.7° gap between the 30°/90° marks; 12.12pt to each
+// adjacent edge against an 8.80pt seal radius). Seal radius unchanged.
 export const hexSealPath = (size) => {
-  const v0 = hexVertex(size, 0);
-  const v1 = hexVertex(size, 1);
-  const mid = { x: (v0.x + v1.x) / 2, y: (v0.y + v1.y) / 2 };
-  const toCenterLen = Math.hypot(size - mid.x, size - mid.y);
-  const toCenter = { x: (size - mid.x) / toCenterLen, y: (size - mid.y) / toCenterLen };
+  const angle = (Math.PI / 180) * 60; // lower-right vertex
+  const dist = size * 0.682;
+  const center = { x: size + Math.cos(angle) * dist, y: size + Math.sin(angle) * dist };
   const r = size * 0.2;
-  const center = { x: mid.x + toCenter.x * r * 1.3, y: mid.y + toCenter.y * r * 1.3 };
   const ring = (radius) => {
     const pts = [];
     for (let i = 0; i < 6; i += 1) {
-      const angle = (Math.PI / 180) * 60 * i;
-      pts.push(`${center.x + radius * Math.cos(angle)},${center.y + radius * Math.sin(angle)}`);
+      const a = (Math.PI / 180) * 60 * i;
+      pts.push(`${center.x + radius * Math.cos(a)},${center.y + radius * Math.sin(a)}`);
     }
     return `M ${pts.join(' L ')} Z`;
   };

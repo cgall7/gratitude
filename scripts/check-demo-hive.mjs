@@ -114,6 +114,18 @@ check('every tint in the rotation appears in the day-0 comb',
 check('the minority tint holds >= 2 of the day-0 cells',
   Math.min(...HEX_TINTS.map((t) => day0Tints[t] ?? 0)) >= 2, true);
 
+// --- 2b. §21.9.1 (R59): blooming/seeded are authored, not invisible ---
+// Both states are decorative-only (no notes/seeds rows back a demo member),
+// but a fresh 0-2-connection tester's ONLY comb is this one, so an
+// un-authored set ships 6.4 invisible to the round meant to validate it.
+const day0Shares = shares.filter((s) => daysAgoOf(s) === 0);
+const bloomingCount = day0Shares.filter((s) => s.blooming).length;
+console.log(`     day-0 blooming/seeded: ${day0Shares.map((s) => `${s.author.display_name}${s.blooming ? ' B' : ''}${s.seeded ? ' S' : ''}`).join(', ')}`);
+check('day 0 has at least one blooming member (states are not invisible)', bloomingCount >= 1, true);
+check('§21.9 readable-band invariant: at most 3 of the day-0 seven blooming', bloomingCount <= 3, true);
+check('at least one day-0 member carries BOTH states (§21.10 composition case on screen)',
+  day0Shares.some((s) => s.blooming && s.seeded), true);
+
 // --- 3. Dates are live, not frozen at import ---
 const todayCountOf = (set) => set.filter((s) => s.entryDate === set[0].entryDate).length;
 const after = at('2026-08-13');

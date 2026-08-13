@@ -33,12 +33,16 @@ const initialsFor = (name) => {
 
 export const avatarColorFor = (name) => AVATAR_WASHES[hashName(name || '') % AVATAR_WASHES.length];
 
-// The comb's own rotation (§18.1.2/R55). A hive cell is an 88pt surface, not
-// a sub-40pt swatch, so it can't use AVATAR_WASHES: that rotation contains
-// `accent` and `accentDeep`, and a member who happens to hash to marigold
-// wears the exact gold §18.1 reserves for the shared-today cell — the signal
-// dies. `washPeach` is out by its own token text ("no new uses at any size").
-// These two are the only tokens whose own comments permit a hive surface.
+// The comb's own rotation (§18.1.2/R55, restated R59). A hive cell is an
+// 88pt surface, not a sub-40pt swatch, so it can't use AVATAR_WASHES: that
+// rotation contains `accent` and `accentDeep`, and at 88pt those read as
+// emphasis/selection (§11), not identity — a member who happens to hash to
+// marigold would look selected when nobody selected them. (R59 retired the
+// cap's other reason, "gold is reserved for the shared-today cell" — that
+// state doesn't exist in the comb — so this is the one the cap has always
+// actually rested on.) `washPeach` is out by its own token text ("no new
+// uses at any size"). These two are the only tokens whose own comments
+// permit a hive surface.
 //
 // Same `hashName`, so a name always yields the same circle/hex pair. That is
 // DETERMINISM, not correlation — mod 5 and mod 2 of one hash have no visible
