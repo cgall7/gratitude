@@ -267,9 +267,36 @@ const classifySet = (init) => {
   if (/\.filter\([\s\S]{0,120}?startsWith\(\s*currentYear/.test(init)) return 'YEAR-SCOPED';
   return null;
 };
-// A label states a year if it carries one — a literal year, an interpolated
-// `year`, or the words "this year".
+// DOES THIS LABEL NAME A YEAR? THREE ANSWERS, NOT TWO.
+//
+// The header above says neither half of a row is inferred. §4 inferred one
+// anyway: it ran a regex over the label and took "no match" to mean "claims no
+// year". Those are different statements, and the gap between them is where the
+// bug lives. Sage reported this exact hole in their own words gate — a
+// `/\byear\b/i` probe misses `${new Date().getFullYear()}`, because `getFullYear`
+// has no word boundary before "Year" — and this gate, written afterwards, had
+// it too. A label the detector cannot read was silently classified as one that
+// claims nothing, which on a year-scoped row is a FAILURE REPORTED AS THE WRONG
+// FAILURE, and on an all-time row would be a PASS.
+//
+// So the detector returns one of three, and CANNOT TELL is a failure that asks
+// the row to say it in the table. Same rule as §2's unresolvable argument, one
+// column over: THE PLACE A CHECK DECLINES TO HAVE AN OPINION MUST NOT LOOK LIKE
+// THE PLACE IT HAS A CLEAN ONE.
+//
+// A row may override by declaring `statesYear: true | false`, which is the
+// escape hatch for a label whose year is real but unreadable statically. It is
+// a human assertion and reads as one in the output.
 const YEAR_WORDS = /\b(?:19|20)\d{2}\b|\$\{[^}]*\byear\b[^}]*\}|\bthis year\b/i;
+// Any interpolation at all. If a label carries one the detector did not already
+// recognise as year-bearing, its rendered text is not knowable from source.
+const INTERPOLATION = /\$\{[^}]*\}/;
+
+const labelNamesYear = (label) => {
+  if (YEAR_WORDS.test(label)) return 'YES';
+  if (INTERPOLATION.test(label)) return 'CANNOT TELL';
+  return 'NO';
+};
 
 // Every string a file actually renders, reconstructed from AST nodes so that a
 // label surviving only inside a comment cannot satisfy §3.
@@ -596,11 +623,36 @@ for (const row of TABLE) {
   }
 
   // §4 — agreement. This is the whole rule; §2 and §3 exist to make it real.
-  const statesYear = YEAR_WORDS.test(row.label);
-  if (row.set === 'YEAR-SCOPED') {
-    eq(`§4 ${id} — year-scoped set, and "${row.label}" says so`, statesYear, true);
+  //
+  // The assertion NAME states what was checked, never the verdict. Writing it
+  // as "…and the label says so" produces `FAIL … and the label says so` — a
+  // failure line asserting the thing that failed. This thread has now shipped
+  // that shape four times in two files; it is not a wording slip, it is what
+  // happens when a name is written for the passing case only.
+  const declared = Object.prototype.hasOwnProperty.call(row, 'statesYear');
+  const verdict = declared ? (row.statesYear ? 'YES' : 'NO') : labelNamesYear(row.label);
+  const src = declared ? 'declared in the table' : 'read from the label';
+
+  if (verdict === 'CANNOT TELL') {
+    bad(
+      `§4 ${id} — does "${row.label}" name a year?`,
+      'cannot tell from source: the label interpolates a value this gate cannot ' +
+        'read, so its rendered text is unknown. Add `statesYear: true` or ' +
+        '`statesYear: false` to the row to state it — an unreadable label must ' +
+        'not be scored as one that claims nothing.'
+    );
+  } else if (row.set === 'YEAR-SCOPED') {
+    eq(
+      `§4 ${id} — set is year-scoped; does "${row.label}" name a year? (${src})`,
+      verdict,
+      'YES'
+    );
   } else {
-    eq(`§4 ${id} — all-time set, and "${row.label}" claims no year`, statesYear, false);
+    eq(
+      `§4 ${id} — set is all-time; does "${row.label}" name a year? (${src})`,
+      verdict,
+      'NO'
+    );
   }
 }
 
