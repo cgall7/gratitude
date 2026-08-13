@@ -43,6 +43,13 @@ const FEED_ARRIVAL_PATH = {
 // authored in share shape, so they come through here too rather than being
 // handed to the grid raw — that is what `isDemo` has to be read rather than
 // assumed false.
+//
+// `blooming`/`seeded` (§21/6.4, R59): no real share carries either field yet
+// — the endpoint that would compute them (`fizz/hive-state-endpoint`) is
+// still unmerged — so every non-demo share defaults both to false here.
+// Demo shares author them directly (demoHive.js), which is the only
+// producer that exists today; wiring a real one is a follow-up, not this
+// mapper's job to fake.
 const toGridMember = (share) => ({
   id: share.id,
   name: share.isOwn ? 'You' : share.author?.display_name ?? 'Someone',
@@ -50,6 +57,8 @@ const toGridMember = (share) => ({
   avatarUrl: share.author?.avatar_url,
   isOwn: share.isOwn,
   isDemo: share.isDemo ?? false,
+  blooming: share.blooming ?? false,
+  seeded: share.seeded ?? false,
 });
 
 // §18.1.1: ONE merged share list — real shares first, then the demo set —

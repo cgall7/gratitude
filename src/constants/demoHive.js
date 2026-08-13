@@ -35,15 +35,23 @@ import { toISODate } from '../utils/dateRanges';
 //     9 / 10 across all 19, which is luck, not design — changing one name is
 //     enough to move it. The gate holds the minority tint at >= 2 of the
 //     seven: a single odd cell in a ring reads as an accident, not a rotation.
+//   * §21.9.1 (R59): `blooming`/`seeded` are authored here too, for the same
+//     reason as the tint spread — they're a real state 6.4 ships, and this
+//     set is the only comb a fresh 0-2-connection tester ever sees, so an
+//     un-authored set ships those states invisible. Two rules the gate
+//     holds: at most 3 of the day-0 seven blooming (§21.9's readable-band
+//     invariant — Maya and Jonah, here), and at least one member carrying
+//     BOTH states (Jonah — the composition case §21.10 exists to protect,
+//     on screen in every demo rather than only in a reviewer's mock).
 //
 // Day 0 first, then ascending — the pre-partition call site still takes the
 // first `HIVE_SLOTS` of this list, so today's people have to come first.
 const RAW_MEMBERS = [
-  { name: 'Maya', gratitude: 'A friend who checked in on me for no reason at all.', daysAgo: 0 },
-  { name: 'Theo', gratitude: 'The quiet five minutes before everyone else woke up.', daysAgo: 0 },
+  { name: 'Maya', gratitude: 'A friend who checked in on me for no reason at all.', daysAgo: 0, blooming: true },
+  { name: 'Theo', gratitude: 'The quiet five minutes before everyone else woke up.', daysAgo: 0, seeded: true },
   { name: 'Sam', gratitude: 'A walk that cleared my head when nothing else could.', daysAgo: 0 },
   { name: 'Dev', gratitude: 'A problem I finally solved after three days stuck.', daysAgo: 0 },
-  { name: 'Jonah', gratitude: 'Coffee that hit exactly right this morning.', daysAgo: 0 },
+  { name: 'Jonah', gratitude: 'Coffee that hit exactly right this morning.', daysAgo: 0, blooming: true, seeded: true },
   { name: 'Kai', gratitude: 'Rain that waited until I was already inside.', daysAgo: 0 },
   { name: 'Ines', gratitude: "My sister's laugh on the phone, three states away.", daysAgo: 0 },
 
@@ -86,5 +94,7 @@ export const demoHiveShares = (now = new Date()) =>
       likeCount: 0,
       likedByMe: false,
       commentCount: 0,
+      blooming: member.blooming ?? false,
+      seeded: member.seeded ?? false,
     };
   });
