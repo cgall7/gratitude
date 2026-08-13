@@ -101,7 +101,30 @@ export const InputScreen = ({ onUnlock }) => {
         duration: 200,
         useNativeDriver: true,
       }).start(() => {
-        setTimeout(() => onUnlock(text), 1400);
+        setTimeout(() => {
+          // Bumble caught this (thread 19e90cf8, 2026-08-13): the signed-in
+          // caller's onUnlock (App.js) now does a real EntryStore.saveEntry
+          // before navigating, so it can reject — a discarded setTimeout
+          // return used to mean a failure left the celebration overlay up
+          // forever with unlocking stuck true and no way to retry.
+          // Promise.resolve wraps the demo-mode caller too (Onboarding.js's
+          // LockDemoStep.onSave is synchronous), so this is safe either way.
+          Promise.resolve(onUnlock(text)).catch(() => {
+            Alert.alert("Couldn't unlock", "Your entry didn't save — try again.");
+            Animated.parallel([
+              Animated.timing(overlayOpacity, {
+                toValue: 0,
+                duration: 200,
+                useNativeDriver: true,
+              }),
+              Animated.timing(formAnim, {
+                toValue: 1,
+                duration: 200,
+                useNativeDriver: true,
+              }),
+            ]).start(() => setUnlocking(false));
+          });
+        }, 1400);
       });
     });
   };
