@@ -24,7 +24,6 @@ import { HoneycombJourneyMap } from '../components/HoneycombJourneyMap';
 import { CelebrationBadge } from '../components/CelebrationBadge';
 import { CelebrationRays } from '../components/CelebrationRays';
 import { IdeasAccordion } from '../components/IdeasAccordion';
-import { BeeTransition } from '../components/BeeTransition';
 import { FlyingBee } from '../components/FlyingBee';
 import { DevSettings } from '../services/devSettings';
 import { OnboardingState } from '../services/onboardingState';
@@ -286,6 +285,75 @@ const FlowToggle = ({ flow, onChange }) => (
 // context), which is the boundary §13.3 actually means by "app open."
 let hasArcedThisLaunch = false;
 
+// §20 — which crossings get a flight, and how often. Scarcity is HOST
+// policy, not engine behaviour: FlyingBee knows how to fly a named track,
+// it has no opinion about which boundaries in a pitch deserve one. Keyed by
+// the step being ARRIVED at.
+//
+// Name→Moment and Moment→Entry stay flightless on purpose. A bee on every
+// boundary is wallpaper, and it would cost the two new flights the meaning
+// they were added for.
+const FLIGHT_COOLDOWN_MS = 2000;
+
+// Flow-gated inside the function rather than at the call site: both flights
+// exist because of beats only Flow B has, and Flow C's step indices collide
+// with them (its sharedOffset is BELIEF_START, so its Moment step sits at
+// the same index as B2). Flow C's bee is the Welcome arc, plus the return at
+// Celebration once its double-celebration beat is resolved — see the flow
+// root below.
+const flightForStep = (step, flow, sharedOffset) => {
+  if (flow !== 'B') return null;
+  // B1→B2 and B2→B3: the bee leads the argument from beat to beat.
+  if (step > BELIEF_START && step < BELIEF_START + BELIEF_SCREENS.length) return 'beliefArc';
+  // B3→Name: beat 3 is the send beat, so the bee carries it out of frame.
+  if (step === sharedOffset + STEP_NAME) return 'sendArc';
+  return null;
+};
+
+// Mounts one flight at a time and enforces the §4 cooldown. Unmounts on
+// settle so the next crossing starts a clean flight — except that neither
+// preset it hosts holds, so "unmount on settle" is just tidiness here; the
+// one flight that holds (returnArc) is anchored inside CelebrationStep.
+const OnboardingFlight = ({ step, flow, sharedOffset }) => {
+  const [live, setLive] = useState(null);
+  const lastStepRef = useRef(step);
+  const lastFireRef = useRef(0);
+  // Same reason FlyingBee keeps `onSettle` in a ref: read the current values
+  // without making them dependencies that could re-fire a flight. Both are
+  // read together, so they live in one ref rather than two that could be
+  // updated on different renders and disagree about which flow we are in.
+  const hostRef = useRef({ flow, sharedOffset });
+  hostRef.current = { flow, sharedOffset };
+
+  useEffect(() => {
+    if (step === lastStepRef.current) return;
+    const forward = step > lastStepRef.current;
+    lastStepRef.current = step;
+    // Back-navigation is a correction, not a beat. Nothing flies backwards.
+    if (!forward) return;
+
+    const preset = flightForStep(step, hostRef.current.flow, hostRef.current.sharedOffset);
+    if (!preset) return;
+
+    const now = Date.now();
+    if (now - lastFireRef.current < FLIGHT_COOLDOWN_MS) return;
+    lastFireRef.current = now;
+    // `key` is the fire time, so two flights of the SAME preset (B1→B2 then
+    // B2→B3) remount the engine rather than reusing a settled one.
+    setLive({ key: now, preset });
+  }, [step]);
+
+  if (!live) return null;
+  return (
+    <FlyingBee
+      key={live.key}
+      preset={live.preset}
+      size={32}
+      onSettle={() => setLive(null)}
+    />
+  );
+};
+
 const WelcomeStep = ({ step, onNext, flow, onChangeFlow, onSkipDemo, splashHidden }) => {
   // Starting the arc on mount used to spend its whole flight behind the
   // still-visible splash (§13.3 follow-up, Pixel/Sage 2026-08-12: "once per
@@ -544,12 +612,22 @@ const LockDemoStep = ({ onNext }) => {
 // beat 4 (Seeds) cut one screen earlier — one screen later instead.
 // This becomes a real CTA when the invite system (project 2.6) ships, as a
 // timed insert, same pattern as the money beat.
+//
+// §20 — the bee comes back here. The flight is anchored to `badgeStage`
+// rather than hosted with the belief flights at the flow root, because it is
+// the one flight that SETTLES somewhere visible: on a 96pt anchor the
+// preset's landing waypoint is the badge's center by construction, where a
+// screen fraction would have been three layers of layout arithmetic and a
+// different answer on every device. Same trick as the Welcome wordmark.
+// It is never unmounted — returnArc's opacity spec ends at 1 and the bee
+// stays sitting on the badge, which is the point of it coming back.
 const CelebrationStep = ({ step, onNext }) => (
   <StepShell step={step} stage="done" wash={theme.colors.washYellow}>
     <View style={styles.centerFill}>
       <View style={styles.badgeStage}>
         <CelebrationRays />
         <CelebrationBadge />
+        <FlyingBee preset="returnArc" size={32} />
       </View>
       <Text style={styles.h1Center}>That's one.</Text>
       <Text style={styles.bodyLgCenter}>
@@ -784,9 +862,6 @@ export const OnboardingFlow = ({ onDone, initialFlow = 'B', startAt, navigation,
   };
 
   const isBeliefStep = flow === 'B' && step >= BELIEF_START && step < BELIEF_START + BELIEF_SCREENS.length;
-  // Bee leads transitions BETWEEN belief beats only (B1→B2→B3) — 2 flights,
-  // never on the Welcome→B1 or B3→Name boundary (§4 scarcity).
-  const beeKey = isBeliefStep && step > BELIEF_START ? step : null;
 
   const sharedStep = step - sharedOffset;
 
@@ -874,7 +949,12 @@ export const OnboardingFlow = ({ onDone, initialFlow = 'B', startAt, navigation,
   return (
     <View style={styles.flowRoot}>
       {body}
-      {flow === 'B' && <BeeTransition triggerKey={beeKey} />}
+      {/* §20 — BeeTransition's belief flight is now a FlyingBee preset, so
+          the flow root hosts the preset engine instead. Not flow-gated
+          here: the gate is inside flightForStep, where the reason for it
+          (the beats are Flow B's) sits next to the step maths it depends
+          on. BeeTransition keeps its other four call sites. */}
+      <OnboardingFlight step={step} flow={flow} sharedOffset={sharedOffset} />
     </View>
   );
 };
@@ -1110,6 +1190,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 24,
+    // §20: this is now returnArc's anchor, and the arc swings well outside
+    // the 96pt box (down to +154pt, which is over the headline). Without a
+    // zIndex the bee would pass BEHIND its later siblings, since they paint
+    // after it in source order.
+    zIndex: 2,
   },
   floatingButton: {
     marginTop: 16,

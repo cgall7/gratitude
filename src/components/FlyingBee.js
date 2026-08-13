@@ -32,8 +32,43 @@ import { DURATIONS, MAX_TRAIL_PARTICLES, useReducedMotion } from '../constants/m
 // driver) — Deezine owns cruise posture/wing-flutter/glow-particle design
 // per §12.5 ownership split; swap the waypoint set or easing here without
 // touching the trail/pooling engine.
+//
+// §20 (R57) — onboarding's narrative flights are presets on THIS engine, not
+// a particle system grown onto BeeTransition. BeeTransition has five call
+// sites (belief beat, 2× HoneycombTab, FeedCard's 13pt like flight,
+// SealCrack's keepsake bee); giving it a trail would rain pollen out of a
+// bee inside a like button. Three preset fields were added for those
+// flights, all defaulted, so `cruise` and `loginArc` are unchanged:
+//
+//   `trailIntervalMs`  — trail density. The 160ms module default is tuned
+//     against a 7000ms cruise loop; a 900ms flight drops 5 particles at
+//     that cadence and reads as dots, not a trail. Per-preset instead. The
+//     §12.5 Rule 3 guarantee is MAX_TRAIL_PARTICLES, and that is untouched:
+//     live particles are bounded by min(pool, trailFade / interval), so
+//     70ms tops out at 10.7 of the 12-slot pool — denser than cruise's 4.7,
+//     still under the ratified cap.
+//   `reducedPose`      — see the Reduce Motion note on the render below.
+//
+// One latent bug fell out of writing returnArc, which ends at opacity 1 and
+// is therefore the first preset a host keeps mounted after settle: the trail
+// timer never stopped. Every earlier preset masked it by unmounting on
+// settle. Fixed at the engine (see the trail effect), not at the call site.
+//
+// What was NOT added, reversing my own in-thread ruling: a spring driver.
+// I said I wouldn't trade R7's glide spring for `Easing.out(cubic)`, then
+// measured it. RN routes tension/friction through Origami
+// (`SpringConfig.fromOrigamiTensionAndFriction`), so glide is stiffness
+// 302.6 / damping 28 — zeta 0.805, and the ONLY thing separating its shape
+// from out(cubic) is a 1.41%-of-travel overshoot past the final waypoint.
+// Every flight below terminates off-frame or under an opacity the spec has
+// already driven to zero, so that overshoot is unobservable at all three
+// call sites. Per §12.5.1b a named curve fixes shape, not duration — and
+// paying for a second driver mode in a shared engine to buy a shape
+// difference nobody can see is the two-copies-of-one-surface cost I ruled
+// against twice the same night. R7 is untouched where it is observable:
+// BeeTransition still owns the glide spring for its four remaining sites.
 const LOOP_MS = 7000;
-const TRAIL_INTERVAL_MS = 160;
+const DEFAULT_TRAIL_INTERVAL_MS = 160;
 const DEFAULT_SIZE = 44;
 
 // Loose loop in fractional (0-1) container coordinates — five stops
@@ -70,6 +105,11 @@ const buildTrack = (path, { closed }) => {
 
 const CRUISE = buildTrack(PATH, { closed: true });
 
+// Waypoints are fractions of the HOST's box, and they position the bee's
+// TOP-LEFT, not its center — `styles.bee` is absolute with no offsets, so
+// the translate lands its origin. Any preset that has to hit a specific
+// point subtracts half its own size (see beliefArc/returnArc). Fractions
+// outside 0..1 are how a flight starts or ends off the box.
 const PRESETS = {
   // Inward spiral: in from off-right, over the top, down the left edge,
   // under, then tightening up into the anchor's center. Fades over the
@@ -87,6 +127,98 @@ const PRESETS = {
     ),
     duration: 1800,
     opacity: { inputRange: [0, 0.08, 0.8, 1], outputRange: [0, 1, 1, 0] },
+  },
+
+  // §20 — the bee LEADS each belief beat. Hosted full-screen, it enters off
+  // the right edge, crosses over the headline, and arrives at the spot where
+  // ArrivingLight is about to bloom before slipping off the left edge. It
+  // gets there at driven t=0.5, which `Easing.out(cubic)` reaches at 20.6%
+  // of 900ms = 186ms — while the 900ms glow is only ~20% bloomed. So the
+  // light comes up in the pollen the bee just dropped, rather than the bee
+  // flying past a light that was already there. That ordering is the whole
+  // point of the flight; if the durations are ever retuned, keep it.
+  //
+  // Waypoint 3 is the glow's center less half a 32pt bee. The glow's center
+  // is a constant 46pt/138pt from the screen's top-left (all fixed padding:
+  // 60 container + 24 topBar + 32 gap, then the orb's own -68/+90), but a
+  // screen FRACTION is not, so the landing drifts with device height:
+  // exactly centered on iPhone 16, 26.5pt high on an SE, 15.3pt low on a Pro
+  // Max. Worst case is 29% of the orb's 90pt radius — inside the soft field
+  // either way, which is why this is a constant and not measured plumbing.
+  // On the device gate regardless: smallest supported screen.
+  beliefArc: {
+    track: buildTrack(
+      [
+        { x: 1.06, y: 0.34 },
+        { x: 0.58, y: 0.1 },
+        { x: 0.07634, y: 0.14319 },
+        { x: -0.05, y: 0.3 },
+        { x: -0.3, y: 0.52 },
+      ],
+      { closed: false }
+    ),
+    duration: 900,
+    trailIntervalMs: 70,
+    opacity: { inputRange: [0, 0.08, 0.8, 1], outputRange: [0, 1, 1, 0] },
+    reducedPose: { at: 2 },
+  },
+
+  // §20 — beat 3 is "So tell them," the send beat, so the bee leaves
+  // carrying. Lifts off the body copy and climbs out of the top-right
+  // corner; it never settles, because the thing it took is gone. Slower
+  // than beliefArc on purpose — a departure that reads as deliberate rather
+  // than as another transition. §4 scarcity closed this boundary; the
+  // amendment is earned by that beat's content and stays closed on
+  // Welcome→B1, Name→Moment and Moment→Entry.
+  sendArc: {
+    track: buildTrack(
+      [
+        { x: 0.3, y: 0.46 },
+        { x: 0.46, y: 0.3 },
+        { x: 0.66, y: 0.22 },
+        { x: 0.92, y: 0.1 },
+        { x: 1.25, y: -0.06 },
+      ],
+      { closed: false }
+    ),
+    duration: 1100,
+    trailIntervalMs: 80,
+    opacity: { inputRange: [0, 0.06, 0.85, 1], outputRange: [0, 1, 1, 0] },
+    reducedPose: { at: 1 },
+  },
+
+  // §20 — the return. Onboarding's honest half of the loop is outbound, and
+  // a day-0 promise about what the app does on day 30 is a cheque we can't
+  // cash; but the loop can still be FELT, and motion is the one register
+  // that says it without claiming it. The bee took something out at beat 3
+  // and comes back here, swinging in from off the upper-left, under the
+  // badge, and up onto it.
+  //
+  // Hosted on CelebrationStep's 96pt `badgeStage`, not full-screen — the
+  // same trick as the Welcome wordmark anchor. It's the one flight with a
+  // VISIBLE settle, so its landing point has to be exact rather than
+  // within-a-soft-orb, and anchoring makes 0.5/0.5 the badge center by
+  // construction instead of by three layers of layout arithmetic. Out-of-box
+  // fractions do the travel: -3.2 is 307pt left of the badge.
+  returnArc: {
+    track: buildTrack(
+      [
+        { x: -3.2, y: -0.9 },
+        { x: -1.6, y: 0.9 },
+        { x: 0.4, y: 1.6 },
+        { x: 1.5, y: 0.1 },
+        { x: 0.3333, y: 0.3333 },
+      ],
+      { closed: false }
+    ),
+    duration: 1300,
+    trailIntervalMs: 80,
+    // Ends at 1, not 0: this bee alights and STAYS, as part of the tableau.
+    // That one number is the whole hold — there is no `hold` flag, because a
+    // flag would be a second place to read the same fact off, and the host
+    // (which simply doesn't unmount on settle) already reads this one.
+    opacity: { inputRange: [0, 0.05, 1], outputRange: [0, 1, 1] },
+    reducedPose: { at: 4 },
   },
 };
 
@@ -107,6 +239,20 @@ export const FlyingBee = ({ active = true, size = DEFAULT_SIZE, style, preset, o
   const presetDef = preset ? PRESETS[preset] : null;
   const track = presetDef ? presetDef.track : CRUISE;
   const flightSuppressed = reduced || !active;
+  // §12.5 Rule 4 collapses motion; it does not delete narrative. A preset
+  // that declares `reducedPose` still PLAYS under Reduce Motion — as a fade
+  // in place at one named waypoint, no travel and no particles, which is
+  // exactly what BeeTransition has always done at these same boundaries.
+  // Without this the swap off BeeTransition would have silently deleted a
+  // beat for Reduce Motion users, because a suppressed preset renders null
+  // (§13.3: an entrance flourish the OS was asked to suppress is skipped,
+  // not slowed — right for an entrance, wrong for a story beat). `active:
+  // false` is a different instruction (the host parking the bee off a text
+  // field) and keeps the null path.
+  const reducedPose = active && reduced && presetDef?.reducedPose ? presetDef.reducedPose : null;
+  const trailIntervalMs = presetDef?.trailIntervalMs ?? DEFAULT_TRAIL_INTERVAL_MS;
+  // A landed one-shot stops shedding pollen; see the trail effect below.
+  const [settled, setSettled] = useState(false);
 
   // One interpolation node per preset, shared by the render style AND the
   // trail sampler below — a node built fresh in each place could drift
@@ -172,12 +318,16 @@ export const FlyingBee = ({ active = true, size = DEFAULT_SIZE, style, preset, o
 
   // Drive the flight — looping cruise, or a one-shot preset that settles.
   useEffect(() => {
-    if (!layout || flightSuppressed) {
+    if (!layout || (flightSuppressed && !reducedPose)) {
       loopRef.current?.stop();
       return undefined;
     }
     t.setValue(0);
+    setSettled(false);
     if (presetDef) {
+      // The reduced pose runs the SAME driver at the SAME duration and just
+      // renders less of it, so `onSettle` fires when it always did — hosts
+      // sequence on that callback and shouldn't need a reduced-motion branch.
       loopRef.current = Animated.timing(t, {
         toValue: 1,
         duration: presetDef.duration,
@@ -185,7 +335,10 @@ export const FlyingBee = ({ active = true, size = DEFAULT_SIZE, style, preset, o
         useNativeDriver: true,
       });
       loopRef.current.start(({ finished }) => {
-        if (finished) onSettleRef.current?.();
+        if (finished) {
+          setSettled(true);
+          onSettleRef.current?.();
+        }
       });
     } else {
       loopRef.current = Animated.loop(
@@ -202,10 +355,12 @@ export const FlyingBee = ({ active = true, size = DEFAULT_SIZE, style, preset, o
   }, [layout, flightSuppressed, preset]);
 
   // A suppressed preset flight settles instantly — the host is waiting on
-  // onSettle to move on, and there is no parked pose for an entrance.
+  // onSettle to move on, and there is no parked pose for an entrance. A
+  // preset with a reduced pose is NOT suppressed in this sense: it plays,
+  // and the driver above fires onSettle on its own schedule.
   useEffect(() => {
-    if (presetDef && flightSuppressed) onSettleRef.current?.();
-  }, [flightSuppressed, preset]);
+    if (presetDef && flightSuppressed && !reducedPose) onSettleRef.current?.();
+  }, [flightSuppressed, preset, reducedPose]);
 
   // Drop a pooled glow-trail particle at the bee's current position on a
   // fixed cadence, fading it out over DURATIONS.trailFade. Paused whenever
@@ -222,8 +377,13 @@ export const FlyingBee = ({ active = true, size = DEFAULT_SIZE, style, preset, o
   // particle seeded a hair before settle, already near-zero — while
   // keeping the glow lit the whole arc. Cruise opacity is a constant 1, so
   // the scale is the identity there; no preset-vs-cruise branch needed.
+  //
+  // §20: also stops once a one-shot has landed. returnArc's opacity spec
+  // ends at 1, so its host keeps it mounted — and a drop timer still running
+  // there would pile every pooled particle onto one resting point. Every
+  // earlier preset masked this by unmounting on settle; latent, not new.
   useEffect(() => {
-    if (!layout || flightSuppressed) return undefined;
+    if (!layout || flightSuppressed || settled) return undefined;
     trailTimerRef.current = setInterval(() => {
       const slot = trailPool[nextTrailIndexRef.current];
       nextTrailIndexRef.current = (nextTrailIndexRef.current + 1) % trailPool.length;
@@ -236,9 +396,9 @@ export const FlyingBee = ({ active = true, size = DEFAULT_SIZE, style, preset, o
         Animated.timing(slot.opacity, { toValue: 0, duration: DURATIONS.trailFade, useNativeDriver: true }),
         Animated.timing(slot.scale, { toValue: 0.3, duration: DURATIONS.trailFade, useNativeDriver: true }),
       ]).start();
-    }, TRAIL_INTERVAL_MS);
+    }, trailIntervalMs);
     return () => clearInterval(trailTimerRef.current);
-  }, [layout, flightSuppressed, preset]);
+  }, [layout, flightSuppressed, preset, trailIntervalMs, settled]);
 
   // Reduced motion (§12.5 Rule 4) / parked (inactive): no flight, no
   // particles — a small static bee that breathes via opacity only.
@@ -253,6 +413,34 @@ export const FlyingBee = ({ active = true, size = DEFAULT_SIZE, style, preset, o
     loop.start();
     return () => loop.stop();
   }, [flightSuppressed, preset]);
+
+  // Reduced pose: the flight's own opacity spec, played at one waypoint.
+  // Reusing the spec rather than inventing a fade means each preset degrades
+  // the way it was written — the two flights that leave still leave (their
+  // spec ends at 0), and returnArc still ends up sitting on the badge (its
+  // spec ends at 1). No travel, no rotation, no flutter, zero particles
+  // (§12.5 Rule 4). Rendered inside the same `fill` so `onLayout` still
+  // fires and the waypoint can be resolved against a real box.
+  if (reducedPose) {
+    const stop = track.path[reducedPose.at] ?? track.path[track.path.length - 1];
+    return (
+      <View style={[styles.fill, style]} onLayout={onLayout} pointerEvents="none">
+        {layout && (
+          <Animated.View
+            style={[
+              styles.bee,
+              {
+                opacity: presetOpacity ?? 1,
+                transform: [{ translateX: stop.x * layout.width }, { translateY: stop.y * layout.height }],
+              },
+            ]}
+          >
+            <StripedBee size={size} bandColor={theme.colors.accent} />
+          </Animated.View>
+        )}
+      </View>
+    );
+  }
 
   if (flightSuppressed) {
     if (presetDef) return null;
