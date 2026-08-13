@@ -1,0 +1,95 @@
+-- Close the last three SECURITY DEFINER functions a signed-out caller can
+-- still execute. Found by scripts/check-share-visibility.mjs, which asserts
+-- the property across the whole catalog rather than one function at a time
+-- (thread 19e90cf8, 2026-08-13).
+--
+-- Two of the three already carry `revoke all ... from public` and are still
+-- reachable, because a new function in this schema is granted to anon TWICE,
+-- by two independent mechanisms, and revoking either one leaves the other.
+-- The ACL of a freshly created function, read off pg_proc rather than
+-- reasoned about:
+--
+--   {=X/postgres, postgres=X/postgres, anon=X/postgres,
+--    authenticated=X/postgres, service_role=X/postgres}
+--
+--   =X       Postgres's own built-in default: EXECUTE to PUBLIC on every
+--            function. anon reaches it as a member of PUBLIC.
+--   anon=X   Supabase's `alter default privileges in schema public grant all
+--            on functions to anon, authenticated, service_role`, which names
+--            anon and therefore survives any revoke from PUBLIC.
+--
+-- Executed: revoke PUBLIC only -> anon still true. Revoke anon only -> anon
+-- still true (it keeps =X). Revoke both -> false. So both lines are needed on
+-- every function, which is what 20260813000003 does for list_hive_state();
+-- these three predate that. The earlier framing in this repo — "PUBLIC does
+-- not reach anon, which holds its own named grant" — is the second half only,
+-- and it is why `revoke all from public` on its own looked sufficient here.
+--
+-- THIS FILE IS A CLEANUP, NOT A GUARD, AND THE DIFFERENCE IS TESTED
+--
+--   create or replace  -> the revoke SURVIVES (proacl is preserved)
+--   drop + create      -> the revoke is LOST, silently; the new function is
+--                         born with both grants again
+--
+-- A signature change forces the second one. Worse, `drop function
+-- public.owns_entry(uuid) cascade` also takes a policy with it — measured:
+-- `shares` goes from 3 policies to 2, no warning — so that edit re-opens anon
+-- AND deletes an RLS rule in the same statement.
+--
+-- I tried to close the class at the source instead and could not. On PG 18.4,
+-- as `postgres`, `alter default privileges in schema public revoke execute on
+-- functions from public` is accepted and records NOTHING — pg_default_acl
+-- stays empty, the next function is still born with =X — with or without
+-- `for role postgres`. The control passes in the same run: an ADP *grant* to
+-- a test role does register. So there is no default-privilege switch to flip;
+-- every future function starts open to anon, and the only durable guard is
+-- the catalog assertion in scripts/check-share-visibility.mjs, which is why
+-- that gate should land before, not after, the next migration that adds one.
+-- Verified it does catch both cases above: the drop/create signature change
+-- fails it on 3 assertions, exit 1.
+--
+-- WHAT WAS ACTUALLY EXPOSED, measured rather than assumed. Every call below
+-- was executed as `anon` against all 11 migrations on a real Postgres:
+--
+--   owns_entry(uuid)          -> false, always. auth.uid() is null for a
+--                                signed-out caller, so the ownership test
+--                                cannot match. No leak.
+--   handle_new_user()         -> raises "trigger functions can only be
+--                                called as triggers". No leak.
+--   find_connectable_profile  -> 0 rows, for a registered address and an
+--     (text)                     unregistered one alike. No leak, and no
+--                                distinguishable oracle between the two.
+--
+-- So this migration fixes no live data exposure, and it is still worth
+-- landing, because of WHY find_connectable_profile returns nothing. The
+-- function is SECURITY DEFINER precisely so it can read auth.users, which
+-- clients can never query. Its last predicate is `and p.id <> auth.uid()`,
+-- written to stop the search returning you to yourself. For anon,
+-- auth.uid() is null, the comparison is NULL, and every row is filtered.
+-- The empty result is a side effect of NULL propagation in a clause with
+-- an unrelated purpose — not a guard.
+--
+-- Proven by removing only that clause and re-running as anon: the same
+-- definer body then returns (id, display_name) for any email an attacker
+-- guesses. That is unauthenticated email -> account-existence and real
+-- name, over auth.users, and the anon key ships inside the app bundle.
+-- One edit to a self-exclusion clause is all that stands between here and
+-- there, and nothing in the file says so. An EXECUTE grant is the right
+-- place to hold that line, because it does not depend on the body.
+--
+-- Verified that this breaks nothing, on the same instance, after revoking:
+--   * a signed-in caller still gets the profile from
+--     find_connectable_profile (HoneycombStore.js:58)
+--   * inserting a share still succeeds — shares_insert_own calls
+--     owns_entry(), and policy expressions run as the invoking role
+--   * inserting into auth.users still fires handle_new_user and still
+--     creates the profile row with the right display_name; EXECUTE is
+--     checked when a trigger is created, not each time it fires
+--
+-- `authenticated` is left alone deliberately, including on
+-- handle_new_user(): it needs the first two, and calling the third
+-- directly raises regardless of grant. Only anon is narrowed here.
+revoke execute on function public.find_connectable_profile(text) from anon;
+revoke execute on function public.owns_entry(uuid) from anon;
+revoke all on function public.handle_new_user() from public;
+revoke execute on function public.handle_new_user() from anon;
