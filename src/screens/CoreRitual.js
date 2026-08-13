@@ -54,7 +54,7 @@ export const LockScreen = ({ onOpen }) => {
             GlowOrb's job. Gives the gate a face to arrive at instead of
             opening on a wordmark and a question. */}
         <WelcomeBee size={132} />
-        <Text style={styles.logo}>pollinate</Text>
+        <Text style={styles.logo}>Pollinate</Text>
         <Text style={styles.prompt}>Pause.{"\n"}What are you grateful for today?</Text>
 
         {/* Medium, not the default Light: this is the one tap in the app
@@ -123,7 +123,7 @@ export const InputScreen = ({ onUnlock }) => {
       )}
 
       <Animated.View style={[styles.content, { opacity: formAnim }]}>
-        <Text style={styles.logoSmall}>pollinate</Text>
+        <Text style={styles.logoSmall}>Pollinate</Text>
         <Text style={styles.promptQuestion}>{dailyPrompt.question}</Text>
 
         <SparkChips
