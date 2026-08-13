@@ -19,6 +19,7 @@ import { PressableScale } from '../components/PressableScale';
 import { StaggeredItem } from '../components/StaggeredItem';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { GlowOrb } from '../components/GlowOrb';
+import { HoneycombWatermark } from '../components/HoneycombWatermark';
 import { HoneycombJourneyMap } from '../components/HoneycombJourneyMap';
 import { CelebrationBadge } from '../components/CelebrationBadge';
 import { CelebrationRays } from '../components/CelebrationRays';
@@ -122,6 +123,10 @@ const BELIEF_SCREENS = [
     bodyLg:
       "The list you'd make is mostly a list of people. Most of them have never heard you say it.",
     cta: 'Next',
+    // Pixel's beat-2 placement ruling (2026-08-13): the honeycomb IS this
+    // sentence's list, drawn — a comb of unnamed cells behind the line, no
+    // new copy, no claim about the reader's actual connections. Beat-2 only.
+    visual: 'honeycomb',
   },
   {
     // Notes, live on main since 2026-08-13 (Project 7, no-tip variant).
@@ -364,7 +369,14 @@ const BeliefStep = ({ step, data, onNext, onBack }) => (
           <Text style={styles.h1}>{renderAccentH1(data.h1, data.accent)}</Text>
         </StaggeredItem>
         <StaggeredItem index={4}>
-          <Text style={styles.bodyLgClaim}>{data.bodyLg}</Text>
+          <View style={styles.bodyLgWrap}>
+            {data.visual === 'honeycomb' && (
+              <View style={styles.bodyLgWatermark}>
+                <HoneycombWatermark size={16} />
+              </View>
+            )}
+            <Text style={styles.bodyLgClaim}>{data.bodyLg}</Text>
+          </View>
         </StaggeredItem>
       </View>
       <PrimaryButton onPress={onNext}>{data.cta}</PrimaryButton>
@@ -908,6 +920,23 @@ const styles = StyleSheet.create({
     ...theme.type.bodyLg,
     color: theme.colors.inkSoft,
     marginTop: 12,
+  },
+  bodyLgWrap: {
+    position: 'relative',
+  },
+  // Centered over the paragraph's own box rather than a fixed offset —
+  // `bodyLg` at 3 lines (18px/27 lineHeight) runs ~81pt tall, which is
+  // within a point of the watermark's own 87pt height at size=16, so
+  // centering lands the comb behind the copy without either edge poking
+  // out past a typical wrap.
+  bodyLgWatermark: {
+    position: 'absolute',
+    top: 12,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   topBar: {
     flexDirection: 'row',

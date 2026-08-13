@@ -120,11 +120,21 @@ export const FlyingBee = ({ active = true, size = DEFAULT_SIZE, style, preset, o
   // Fixed pool of trail-particle drivers — hard-capped per §12.5 Rule 3
   // (bee trail is the #1 low-end perf risk). Reused round-robin instead of
   // growing an array, so live particle count never exceeds the cap.
+  //
+  // Pollen reskin (Deezine, 2026-08-13, per Pixel's ownership ruling —
+  // "straight visual swap on the existing trail engine, no touching
+  // pooling/perf code"): `rotation` is the only thing added to the pool
+  // itself, and it's a fixed per-slot value, not an animated one — a
+  // stable tilt read off the slot index, not Math.random(), so scattered
+  // dust costs nothing per drop and the pool stays exactly as cheap as it
+  // was. 30deg apart across 12 slots means the round-robin reuse order
+  // never drops two flecks at the same tilt back-to-back.
   const trailPool = useRef(
-    Array.from({ length: MAX_TRAIL_PARTICLES }).map(() => ({
+    Array.from({ length: MAX_TRAIL_PARTICLES }).map((_, i) => ({
       opacity: new Animated.Value(0),
       scale: new Animated.Value(1),
       pos: { x: 0, y: 0 },
+      rotation: i * (360 / MAX_TRAIL_PARTICLES),
     }))
   ).current;
   const [, forceTrailRender] = useState(0);
@@ -270,17 +280,26 @@ export const FlyingBee = ({ active = true, size = DEFAULT_SIZE, style, preset, o
           <Animated.View
             key={i}
             style={[
-              styles.trailDot,
+              styles.trailWrap,
               {
                 opacity: slot.opacity,
                 transform: [
                   { translateX: slot.pos.x },
                   { translateY: slot.pos.y },
                   { scale: slot.scale },
+                  { rotate: `${slot.rotation}deg` },
                 ],
               },
             ]}
-          />
+          >
+            {/* Two flat tones, not a rendered gradient — §19.5's LOD note
+                applies here too (these flights sit at 22-44pt, well under
+                the ~64pt hero-detail threshold), so the fleck stays a
+                simple shape a viewer's eye fills in rather than a textured
+                sprite that would smear at this scale. */}
+            <View style={styles.trailHalo} />
+            <View style={styles.trailCore} />
+          </Animated.View>
         ))}
       {layout && (
         <Animated.View
@@ -301,11 +320,32 @@ const styles = StyleSheet.create({
   bee: {
     position: 'absolute',
   },
-  trailDot: {
+  // Pollen fleck: a soft golden halo (accent, tapered oval — not a perfect
+  // circle, so a chain of them reads as scattered dust) around a small hot
+  // core (accentBurst, the same "motion only, never a static fill" token
+  // the old flat dot used). Concentric inside one rotated/scaled Animated
+  // wrapper, so the two-layer look costs one extra plain View per pooled
+  // particle and nothing else — the fade curve, cadence and cap above are
+  // all untouched.
+  trailWrap: {
     position: 'absolute',
-    width: 6,
+    width: 9,
+    height: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  trailHalo: {
+    position: 'absolute',
+    width: 9,
     height: 6,
     borderRadius: 3,
+    backgroundColor: theme.colors.accent,
+    opacity: 0.4,
+  },
+  trailCore: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
     backgroundColor: theme.colors.accentBurst,
   },
   parkedAnchor: {
