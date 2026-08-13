@@ -38,3 +38,6 @@ yarn-error.*
 
 # scratch cluster created by check:seeds-rls (removed on a clean run)
 .seeds-rls-pgdata/
+
+# scratch cluster created by check:share-visibility (removed on a clean run)
+.share-visibility-pgdata/
