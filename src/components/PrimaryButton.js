@@ -21,6 +21,14 @@ export const PrimaryButton = ({
   // inner transform layer `style` targets.
   containerStyle,
   haptic = Haptics.ImpactFeedbackStyle.Light,
+  // Pure passthrough, undefined by default — zero change for every existing
+  // consumer, same shape as the one PressableScale documents above its own
+  // label prop. Without it the prop was accepted at the call site and silently
+  // dropped here, so a caller could write an accessibility label, see no
+  // error, and ship a button that announces only its visible text. §23.7's
+  // retry is the first caller that needs to name what it is retrying — "Try
+  // again" is the right thing to read and the wrong thing to hear.
+  accessibilityLabel,
 }) => (
   <PressableScale
     style={[styles.button, style]}
@@ -29,6 +37,7 @@ export const PrimaryButton = ({
     disabled={disabled}
     scaleTo={0.97}
     haptic={haptic}
+    accessibilityLabel={accessibilityLabel}
   >
     <Text style={styles.text}>{children}</Text>
   </PressableScale>

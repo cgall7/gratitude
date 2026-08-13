@@ -55,6 +55,13 @@ export const SeedsStore = {
     const trimmed = content.trim();
     if (!trimmed) throw new Error('Seed text is required');
     if (trimmed.length > SEED_CONTENT_MAX) throw new Error(`Seeds are capped at ${SEED_CONTENT_MAX} characters`);
+    // `bloomAt == null` is checked before parsing rather than left to the NaN
+    // branch, because `new Date(null)` is not NaN — it is the epoch. Without
+    // this line a caller who passed no date at all fell through to the
+    // future-date guard and was told "A seed has to bloom in the future"
+    // about a date they never picked. Caught by check-plant-seed.mjs, which
+    // compares this message against the one the compose screen shows.
+    if (bloomAt == null) throw new Error('Pick a date for this seed to bloom');
     const bloom = bloomAt instanceof Date ? bloomAt : new Date(bloomAt);
     if (Number.isNaN(bloom.getTime())) throw new Error('Pick a date for this seed to bloom');
     if (bloom.getTime() <= Date.now()) throw new Error('A seed has to bloom in the future');

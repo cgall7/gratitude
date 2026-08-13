@@ -367,11 +367,31 @@ const HoneycombFeed = () => {
         }
         title="Honeycomb"
         right={
-          // Project 7 entry point — modal route lives on the root stack,
-          // not this tab's own navigator, hence getParent().
-          <PressableScale onPress={() => navigation.getParent()?.navigate('Notes')} haptic={null}>
-            <Ionicons name="mail-outline" size={22} color={theme.colors.ink} />
-          </PressableScale>
+          // Project 7 and Project 8 entry points — both modal routes live on
+          // the root stack, not this tab's own navigator, hence getParent().
+          //
+          // PLACEMENT IS A DESIGN CALL I MADE, NOT AN ENGINEERING ONE. A
+          // compose screen nothing opens is a well-tested absence, so Seeds
+          // needed *a* door; the header beside Notes is the only surface that
+          // already has this shape. @Pixel/@Deezine — moving it is this block
+          // and nothing else, and the tab bar rebuild (Project 10) may well
+          // take both icons anyway.
+          <View style={styles.headerActions}>
+            <PressableScale
+              onPress={() => navigation.getParent()?.navigate('PlantSeed')}
+              haptic={null}
+              accessibilityLabel="Plant a seed"
+            >
+              <Ionicons name="leaf-outline" size={22} color={theme.colors.ink} />
+            </PressableScale>
+            <PressableScale
+              onPress={() => navigation.getParent()?.navigate('Notes')}
+              haptic={null}
+              accessibilityLabel="Notes"
+            >
+              <Ionicons name="mail-outline" size={22} color={theme.colors.ink} />
+            </PressableScale>
+          </View>
         }
       />
 
@@ -528,6 +548,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: theme.colors.background,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 18,
   },
   scroll: {
     flex: 1,

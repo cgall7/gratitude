@@ -202,6 +202,10 @@ await rejects('empty text is refused', () => SeedsStore.plantSeed('r', '   ', FU
 await rejects('over-length text is refused', () => SeedsStore.plantSeed('r', 'x'.repeat(SEED_CONTENT_MAX + 1), FUTURE));
 await rejects('a past bloom date is refused', () => SeedsStore.plantSeed('r', 'hi', PAST));
 await rejects('an unparseable date is refused', () => SeedsStore.plantSeed('r', 'hi', 'not a date'));
+// `new Date(null)` is the epoch, not NaN, so a missing date used to reach the
+// future-date guard and be reported as a past date the caller never picked.
+const noDate = await SeedsStore.plantSeed('r', 'hi', null).then(() => null, (e) => e.message);
+eq('a missing date is refused AS MISSING, not as a past date', noDate, 'Pick a date for this seed to bloom');
 eq(`SEED_CONTENT_MAX is 500, matching the CHECK constraint`, SEED_CONTENT_MAX, 500);
 
 console.log(`\ncheck-seeds-contract: ${pass} passed, ${failures.length} failed`);

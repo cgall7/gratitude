@@ -13,6 +13,7 @@ import { LegalScreen } from './src/screens/Legal';
 import { AccountScreen } from './src/screens/Account';
 import { NotesInbox } from './src/screens/NotesInbox';
 import { ComposeNote } from './src/screens/ComposeNote';
+import { PlantSeed } from './src/screens/PlantSeed';
 import { MainTabs } from './src/navigation/MainTabs';
 import { AuthProvider } from './src/contexts/AuthContext';
 import { OnboardingState } from './src/services/onboardingState';
@@ -177,6 +178,12 @@ export default function App() {
               design placement call, not an engineering one. */}
           <Stack.Screen name="Notes" component={NotesInbox} options={{ presentation: 'modal' }} />
           <Stack.Screen name="ComposeNote" component={ComposeNote} options={{ presentation: 'modal' }} />
+
+          {/* Project 8 (Seeds). Compose only so far — 8.4's seed list and 8.8's
+              bloom reveal aren't built, so a seed is currently plantable and
+              then invisible until they are. Modal for the same reason Compose
+              is: where Seeds finally lives in the IA is Project 10's call. */}
+          <Stack.Screen name="PlantSeed" component={PlantSeed} options={{ presentation: 'modal' }} />
 
           <Stack.Screen name="Evening">
             {(props) => (
