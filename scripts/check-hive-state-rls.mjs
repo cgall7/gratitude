@@ -16,8 +16,16 @@
 // value where a query would otherwise return a row regardless of RLS. See
 // that file for the fuller rationale on all three rules.
 //
-// Requires `embedded-postgres` and `pg` (devDependencies) — SKIPS rather
-// than fails if they're not installed, same as check-seeds-rls.mjs.
+// Requires `embedded-postgres` and `pg` — both are listed in
+// `devDependencies`, so `npm install` fetches them on any normal checkout,
+// and a missing install FAILS this gate rather than skipping it. This is
+// the one gate in the repo proving `anon` cannot call `list_hive_state()`;
+// a silent skip there is a green `npm test` over an unchecked grant. Set
+// `SKIP_PG_GATES=1` to explicitly opt out on a machine that genuinely can't
+// run a local Postgres — that has to be a deliberate flag, never a default
+// (Sage's finding, thread e10d0fed, 2026-08-13: as written, this and
+// check-seeds-rls.mjs both defaulted to skip-and-pass on any fresh checkout
+// that hadn't run `npm install` yet, which is every fresh checkout).
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -27,13 +35,22 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const MIGRATIONS = path.join(ROOT, 'supabase/migrations');
 const require = createRequire(import.meta.url);
 
+if (process.env.SKIP_PG_GATES === '1') {
+  console.log('check-hive-state-rls: SKIPPED — SKIP_PG_GATES=1 set explicitly');
+  process.exit(0);
+}
+
 let EmbeddedPostgres;
 try {
   EmbeddedPostgres = require('embedded-postgres').default;
   require('pg');
-} catch {
-  console.log('check-hive-state-rls: SKIPPED — embedded-postgres/pg not installed (npm i -D embedded-postgres pg)');
-  process.exit(0);
+} catch (e) {
+  console.error(
+    `check-hive-state-rls: FAILED — embedded-postgres/pg not installed (${e.message.split('\n')[0]}).\n` +
+      '  Run `npm install` (both are devDependencies), or set SKIP_PG_GATES=1 to skip deliberately\n' +
+      '  on a machine that genuinely cannot run a local Postgres.'
+  );
+  process.exit(1);
 }
 
 // Listed rather than globbed so an unrelated new migration can't silently
