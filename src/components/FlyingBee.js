@@ -33,12 +33,13 @@ import { DURATIONS, MAX_TRAIL_PARTICLES, useReducedMotion } from '../constants/m
 // per §12.5 ownership split; swap the waypoint set or easing here without
 // touching the trail/pooling engine.
 //
-// §20 (R57) — onboarding's narrative flights are presets on THIS engine, not
+// §20 (R58) — onboarding's narrative flights are presets on THIS engine, not
 // a particle system grown onto BeeTransition. BeeTransition has five call
 // sites (belief beat, 2× HoneycombTab, FeedCard's 13pt like flight,
 // SealCrack's keepsake bee); giving it a trail would rain pollen out of a
-// bee inside a like button. Three preset fields were added for those
-// flights, all defaulted, so `cruise` and `loginArc` are unchanged:
+// bee inside a like button. Two preset fields were added for those flights,
+// both defaulted, so `cruise` and `loginArc` are unchanged — the engine
+// reads exactly these two off `presetDef` and nothing else new:
 //
 //   `trailIntervalMs`  — trail density. The 160ms module default is tuned
 //     against a 7000ms cruise loop; a 900ms flight drops 5 particles at
