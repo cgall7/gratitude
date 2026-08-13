@@ -125,6 +125,26 @@ const runMigration = async (userId, accountCreatedAt, storage, EntryStore) => {
         // provably wasn't them.
         return { migrated: 0, skipped: 0, refused: true };
       }
+      // Written here, AFTER the read and parse above, and that ordering is
+      // load-bearing: you cannot apply legacyPredatesAccount to data you
+      // have not read yet, so claiming any earlier structurally forecloses
+      // it — there would be nothing to test against (Sage, thread ba3783a7,
+      // 22:04Z). This is NOT protected by the in-flight promise above; that
+      // memo only serializes calls within one running process, and the
+      // failure case this matters for is a later app launch — a new
+      // process, no memo.
+      //
+      // Consequence, measured rather than assumed: a transient failure
+      // reading LEGACY_KEY itself (not a parse failure — that's caught
+      // separately above and behaves the same way) leaves this identity
+      // unclaimed, same as a refusal. If a different identity signs in
+      // before the rightful owner's retry, THEY can claim the device
+      // instead. This is a real, inherent window, and it is not a
+      // regression to close by moving this line back above the read: doing
+      // that would mean claiming on behalf of someone whose data you failed
+      // to read at all — zero evidence, the original defect wearing a
+      // different hat. Refusing to claim on a failed read is strictly
+      // better than the alternative it would be traded for.
       await storage.setItem(CLAIMED_BY_KEY, userId);
     }
 
