@@ -8,7 +8,7 @@ import { PrimaryButton } from '../components/PrimaryButton';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { StreakBadge } from '../components/StreakBadge';
 import { StaggeredItem } from '../components/StaggeredItem';
-import { currentStreak, nextMilestone, startOfYear, endOfYear } from '../utils/dateRanges';
+import { currentStreak, nextMilestone } from '../utils/dateRanges';
 import { TAB_CLEARANCE } from '../navigation/tabBarLayout';
 
 const greeting = (date) => {
@@ -41,14 +41,22 @@ export const TodayTab = ({ navigation }) => {
       let cancelled = false;
       (async () => {
         const now = new Date();
-        const [today, yearEntries] = await Promise.all([
+        const [today, allEntries] = await Promise.all([
           EntryStore.getEntry(now),
-          EntryStore.getEntriesBetween(startOfYear(now), endOfYear(now)),
+          EntryStore.getAllEntries(),
         ]);
         if (cancelled) return;
         setEntry(today);
-        setStreak(currentStreak(yearEntries, now));
-        setTotal(yearEntries.length);
+        // Streak reads every entry, not just this year's — Recap already
+        // fixed this (RecapTab.js: "'BEST EVER' was measuring the calendar
+        // year, so a record set in December vanished on New Year's Day").
+        // Today had the same bug one tab over: a year-scoped streak resets
+        // to 1 on January 1st mid-run, while the header's StreakBadge and
+        // Recap's badge disagree on the same day (Pixel, thread 19e90cf8,
+        // 2026-08-13). "THIS YEAR" stays year-scoped — it says so.
+        setStreak(currentStreak(allEntries, now));
+        const currentYear = String(now.getFullYear());
+        setTotal(allEntries.filter((e) => e.date.startsWith(currentYear)).length);
         setLoading(false);
       })();
       return () => {
