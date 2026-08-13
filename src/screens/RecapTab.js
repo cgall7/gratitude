@@ -7,7 +7,8 @@ import {
   ActivityIndicator,
   useWindowDimensions,
 } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 import Svg, { Polygon } from 'react-native-svg';
 import { theme } from '../constants/theme';
 import { hexPoints, HEX_ASPECT } from '../utils/combGeometry';
@@ -19,6 +20,7 @@ import { DevVersionTag } from '../components/DevVersionTag';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { StreakBadge } from '../components/StreakBadge';
 import { StaggeredItem } from '../components/StaggeredItem';
+import { PressableScale } from '../components/PressableScale';
 import { TAB_CLEARANCE } from '../navigation/tabBarLayout';
 
 const describeTheme = (insight, periodLabel) => {
@@ -102,6 +104,37 @@ const MonthRail = ({ count, activeIndex }) => (
   </View>
 );
 
+// Project 10 moved Wrapped out of the tab bar and into the Garden, per the
+// ruling ("@Pixel's Wrapped goes into the Garden tab, not as a top-level
+// tab"). This card is now the ONLY entry point to `PollinateWrapped` anywhere
+// in the app — nothing else navigates to that route. Removing it doesn't tidy
+// the screen, it strands a shipped one.
+//
+// Below the month pager rather than above it: the months are what you came
+// for, and a year-in-review teaser at the top spoils the reveal the same way
+// Recap's old always-on insight card did (§17.5).
+const WrappedCard = () => {
+  const navigation = useNavigation();
+
+  return (
+    <PressableScale
+      containerStyle={styles.wrappedOuter}
+      style={styles.wrappedCard}
+      onPress={() => navigation.getParent()?.navigate('Wrapped')}
+      accessibilityLabel="Your year, wrapped"
+    >
+      <View style={styles.wrappedIcon}>
+        <Ionicons name="gift" size={22} color={theme.colors.ink} />
+      </View>
+      <View style={styles.wrappedText}>
+        <Text style={styles.wrappedTitle}>Your year, wrapped</Text>
+        <Text style={styles.wrappedSubtitle}>Every month, in one sitting</Text>
+      </View>
+      <Ionicons name="chevron-forward" size={20} color={theme.colors.inkSoft} />
+    </PressableScale>
+  );
+};
+
 export const RecapTab = () => {
   const [loading, setLoading] = useState(true);
   const [allEntries, setAllEntries] = useState([]);
@@ -157,9 +190,14 @@ export const RecapTab = () => {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      {/* "Garden", not "Recap": Project 10 made this the Garden tab, and a
+          tab labelled one thing opening a screen titled another is the kind
+          of mismatch nobody files a bug for and everybody trips on. The
+          monthly recap is still what the screen opens on — the month pager
+          below names each month itself. */}
       <ScreenHeader
         eyebrow="YOUR PROGRESS"
-        title="Recap"
+        title="Garden"
         right={<StreakBadge streak={streak} />}
       />
 
@@ -213,6 +251,8 @@ export const RecapTab = () => {
         })}
       </ScrollView>
 
+      <WrappedCard />
+
       <DevVersionTag />
     </ScrollView>
   );
@@ -233,6 +273,54 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 7,
     marginBottom: 18,
+  },
+  // `containerStyle` carries the layout (the outer Pressable is the flex
+  // child of the ScrollView), `wrappedCard` carries the paint — that split is
+  // PressableScale's contract, and putting the background on `style` is what
+  // makes the card scale on press instead of the paint sitting still while an
+  // invisible box shrinks inside it.
+  wrappedOuter: {
+    marginTop: 20,
+  },
+  wrappedCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.borderRadius.large,
+    borderWidth: 1,
+    borderColor: theme.colors.surfaceBorder,
+    paddingVertical: 18,
+    paddingHorizontal: 20,
+  },
+  // The roundel is accent as a fill behind ink, which is the only thing §2
+  // lets accent be. Computed, not recalled: ink `#221B03` on marigold
+  // `#FFD200` is 11.80:1, `accentDeep` `#FF7A00` on it is 1.80:1 — under 3:1,
+  // so the glyph is ink and stays ink.
+  //
+  // R15 withdrew `accentDeep` for exactly this reason, but its number is
+  // 1.53:1 and that is a different pair — `accentDeep` on the Year Card's
+  // gold `#F0C023`. The ruling transfers; the measurement does not, and both
+  // fail the same bar anyway.
+  wrappedIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  wrappedText: {
+    flex: 1,
+  },
+  wrappedTitle: {
+    ...theme.type.h3,
+    color: theme.colors.ink,
+  },
+  wrappedSubtitle: {
+    ...theme.type.bodySm,
+    color: theme.colors.inkSoft,
+    marginTop: 2,
   },
   statsCard: {
     flexDirection: 'row',

@@ -281,7 +281,11 @@ const HoneycombFeed = () => {
     try {
       const profile = await HoneycombStore.findProfileByEmail(email);
       if (!profile) {
-        setAddMessage({ tone: 'error', text: "No Honeycomb account with that email yet." });
+        // "Pollinate", not "Honeycomb" — an account belongs to the product,
+        // not to one of its tabs, so this does not become "No Hive account".
+        // Rebrand leftover found by grepping for the old tab name; no gate
+        // asserts this string.
+        setAddMessage({ tone: 'error', text: "No Pollinate account with that email yet." });
         return;
       }
       await HoneycombStore.sendConnectionRequest(profile.id);
@@ -365,7 +369,21 @@ const HoneycombFeed = () => {
             ? `${connections.length} CONNECTION${connections.length === 1 ? '' : 'S'}`
             : 'YOUR HIVE'
         }
-        title="Honeycomb"
+        // "Hive", not "Honeycomb": Project 10 renamed the tab per the ruling,
+        // and this header was the last place the old word was still on
+        // screen — one of two. Grepping `src/` + `App.js` for the old name
+        // also turned up live copy at `:284` (fixed to "Pollinate" there, and
+        // an account belongs to the product rather than to a tab). Everything
+        // else is an identifier or a comment, except `supabase.js:16`, which
+        // is a `console.warn` — developer-visible, rebrand debt, not mine to
+        // sweep from inside a navigation change.
+        //
+        // The files keep their names. `check-demo-hive.mjs:74` reads
+        // `src/components/HoneycombGrid.js` by path and unwraps its regex
+        // match with no null guard, so a file rename fails that gate as a
+        // TypeError rather than a diagnosis — and a rename with no
+        // user-facing half is not worth buying that with.
+        title="Hive"
         right={
           // Project 7 and Project 8 entry points — both modal routes live on
           // the root stack, not this tab's own navigator, hence getParent().
