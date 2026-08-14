@@ -188,13 +188,37 @@ export const FlyingBee = ({
     [layout, size, preset, plan]
   );
 
-  // One interpolation node per preset, shared by the render style AND the
-  // trail sampler below — a node built fresh in each place could drift
-  // across re-renders even though both read the same spec. `t` is a stable
-  // ref so this only rebuilds when `preset` itself changes.
+  // One interpolation node per channel, built once and shared by the render
+  // style AND the sampler below. Two things rest on that single identity, and
+  // only the first is obvious:
+  //
+  //  * **drift** — a node built fresh in each place could hold a different
+  //    spec even though both were written from the same source arrays.
+  //  * **liveness** — the sampler reads these nodes by calling `__getValue()`
+  //    on them from inside a listener on `t`. A node rebuilt in the render
+  //    body leaves that listener holding whichever copy existed when the
+  //    effect last ran: correct only for as long as two dep arrays happen to
+  //    agree, and the dep array is the thing most likely to be edited by
+  //    someone who does not know a listener depends on it. Memoised, **the
+  //    node is the dependency** — the effect below lists these identifiers
+  //    rather than the inputs they were built from.
   const presetOpacity = useMemo(
     () => (presetDef?.opacity ? t.interpolate(presetDef.opacity) : null),
     [preset]
+  );
+  const translateX = useMemo(
+    () =>
+      layout
+        ? t.interpolate({ inputRange: track.inputRange, outputRange: track.path.map((p) => p.x * layout.width) })
+        : null,
+    [layout, track]
+  );
+  const translateY = useMemo(
+    () =>
+      layout
+        ? t.interpolate({ inputRange: track.inputRange, outputRange: track.path.map((p) => p.y * layout.height) })
+        : null,
+    [layout, track]
   );
 
   // Fixed pool of trail-particle drivers — hard-capped per §12.5 Rule 3
@@ -234,34 +258,52 @@ export const FlyingBee = ({
     });
   };
 
-  // Live numeric read of the current translated position, kept in a ref
-  // (not state) so the 160ms trail-drop tick can sample it without
-  // re-rendering the whole component every frame. Same pattern covers the
-  // bee's own opacity for one-shot presets — read off the identical
-  // `presetDef.opacity` spec the render interpolates, never a second
-  // hand-derived easing, so a seeded trail particle can never claim a
-  // brighter opacity than the bee it was born from.
+  // Live numeric read of the current translated position and of the bee's own
+  // opacity, kept in refs (not state) so the 160ms trail tick and the plan
+  // builders can sample them without re-rendering every frame.
+  //
+  // **Listen on `t`; read the nodes.** R89 — a listener on a DERIVED node
+  // (`t.interpolate(...)`) is registered and then never called once `t` goes
+  // native. `AnimatedWithChildren.__callListeners` cascades to children only
+  // `if (!this.__isNative)` (`:74`), and `__makeNative` walks *down* (`:24-39`),
+  // so every descendant of a natively-driven value loses its listeners — the
+  // class of the child is irrelevant, and attaching it to a real transform
+  // does not help (measured: 0 callbacks in 800ms either way). That guard is
+  // *correct*: under the native driver JS has no fresh value to propagate, and
+  // RN chose frozen over stale. It is also why `posRef` held its initialiser
+  // `{ x: 0, y: 0 }` for the lifetime of the component, and why the break that
+  // "costs no teleport" started every flight in this container's top-left
+  // corner instead — for as long as the beat has existed.
+  //
+  // `AnimatedValue` DOES override `addListener` (`AnimatedValue.js:137-145`)
+  // to open a native update subscription, and `__makeNative` (`:130-134`)
+  // opens one for listeners that were already registered — so this fires
+  // whichever order the effects run in, once per display frame. `_updateValue`
+  // writes `this._value` (`:359`) before calling listeners (`:363`), so
+  // `__getValue()` down the chain is already current inside the callback.
+  //
+  // What it reads is not the same arithmetic as the render — it is the same
+  // *node*, the one in the transform at the bottom of this file. It therefore
+  // cannot drift from what is on screen, and there is no captured `track` to
+  // go stale behind. `__getValue` is private API: that is the price, and it is
+  // cheaper than re-deriving the interpolation in JS, which reintroduces
+  // exactly the drift the memo above exists to prevent.
   useEffect(() => {
     if (!layout || flightSuppressed) return undefined;
-    const translateX = t.interpolate({ inputRange: track.inputRange, outputRange: track.path.map((p) => p.x * layout.width) });
-    const translateY = t.interpolate({ inputRange: track.inputRange, outputRange: track.path.map((p) => p.y * layout.height) });
-    const xId = translateX.addListener(({ value }) => { posRef.current.x = value; });
-    const yId = translateY.addListener(({ value }) => { posRef.current.y = value; });
-    let oId = null;
-    if (presetOpacity) {
-      oId = presetOpacity.addListener(({ value }) => { beeOpacityRef.current = value; });
-    } else {
-      beeOpacityRef.current = 1;
-    }
-    return () => {
-      translateX.removeListener(xId);
-      translateY.removeListener(yId);
-      if (presetOpacity) presetOpacity.removeListener(oId);
-    };
-    // `plan` is in the deps because `posRef` is what waypoint 0 and every
-    // abort read: a listener still bound to the cruise interpolation would
-    // hand the return leg a position the bee left a second ago.
-  }, [layout, flightSuppressed, preset, presetOpacity, plan]);
+    // Cruise opacity is a constant 1, so there is nothing to sample; a preset
+    // is the only flight whose bee fades, and a seeded particle scales by this.
+    if (!presetOpacity) beeOpacityRef.current = 1;
+    const id = t.addListener(() => {
+      posRef.current.x = translateX.__getValue();
+      posRef.current.y = translateY.__getValue();
+      if (presetOpacity) beeOpacityRef.current = presetOpacity.__getValue();
+    });
+    return () => t.removeListener(id);
+    // The nodes themselves are the deps. `translateX`/`translateY` change
+    // identity exactly when `track` does (a new plan, a preset, a resize), and
+    // `presetOpacity` exactly when `preset` does — so this can no longer be
+    // right by coincidence between two hand-written dep arrays.
+  }, [layout, flightSuppressed, translateX, translateY, presetOpacity]);
 
   // §28.5 — every speed in the beat derives from the cruise the bee is already
   // flying, so a re-authored `PATH` or a different container moves all of them
@@ -482,8 +524,10 @@ export const FlyingBee = ({
     );
   }
 
-  const translateX = layout ? t.interpolate({ inputRange: track.inputRange, outputRange: track.path.map((p) => p.x * layout.width) }) : 0;
-  const translateY = layout ? t.interpolate({ inputRange: track.inputRange, outputRange: track.path.map((p) => p.y * layout.height) }) : 0;
+  // `translateX`/`translateY` are the memoised nodes above, because something
+  // samples them. `rotate` and `scaleX` stay here, rebuilt per render, because
+  // nothing does — memoise them the same way the moment anything listens.
+  //
   // Two channels, never one angle. `rotate` is a bank bounded by ±22° by
   // construction; `scaleX` is the mirror, and it crosses zero at the same
   // instant the bank does, so a facing change reads as the bee wheeling
