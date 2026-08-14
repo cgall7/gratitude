@@ -507,8 +507,18 @@ for (const entry of CALL_SITES) {
       (r) =>
         Math.abs(r.a.rotateOutput[r.a.rotateOutput.length - 1] - r.a.rotateOutput[0]) < 1e-9 &&
         Math.abs(r.a.scaleXOutput[r.a.scaleXOutput.length - 1] - r.a.scaleXOutput[0]) < 1e-9,
-      (r) =>
-        `rotate ${r.a.rotateOutput[r.a.rotateOutput.length - 1].toFixed(2)} vs ${r.a.rotateOutput[0].toFixed(2)}`,
+      (r) => {
+        // Name the channel that actually snapped. Reporting only `rotate` would print
+        // two identical numbers on a scaleX-only failure — a true red worded as a broken gate.
+        const channels = [
+          ['rotate', r.a.rotateOutput],
+          ['scaleX', r.a.scaleXOutput],
+        ];
+        const snapped = channels.filter(([, out]) => Math.abs(out[out.length - 1] - out[0]) >= 1e-9);
+        return snapped
+          .map(([name, out]) => `${name} ${out[out.length - 1].toFixed(3)} at t=1 vs ${out[0].toFixed(3)} at t=0`)
+          .join('; ');
+      },
     );
     check(
       'a seam turn lies entirely before t=1',

@@ -61,9 +61,12 @@ export const MAX_BANK_DEG = 22;
 // Wall-clock length of a facing change. Fixed in *milliseconds*, which is
 // the whole reason `buildAttitude` needs the easing and the duration:
 // `t` is already eased, so a window of fixed width in `t` is a window of
-// wildly varying width in wall time. On the cruise loop 120ms is 0.0285 of
-// `t` at the apex (driver at 1.724× peak velocity) and 0.00107 at the loop
-// seam (driver velocity → 0) — a 27× spread from one hard-coded number.
+// wildly varying width in wall time. On the cruise loop, buying the same
+// 120ms costs 0.0288 of `t` at the apex (driver at 1.724× peak velocity)
+// and 0.00107 at the loop seam (driver velocity → 0). Those are *required
+// windows*, not durations: hard-code one Δt instead and the wall times it
+// produces differ by 5.6× at Δt = 0.0288, 12.9× at Δt = 0.005 — the spread
+// isn't a single number because the relationship isn't linear.
 // §17.3 R51's rule, third outing: every timeline figure states its space.
 export const TURN_MS = 120;
 
