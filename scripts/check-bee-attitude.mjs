@@ -2162,6 +2162,36 @@ let tickPropName = null;
     });
     return deps;
   })();
+  // Which of the sampled names actually sit in a `transform` array in this
+  // file (Sage). COMPUTED per run from the AST rather than typed in, so it is
+  // not a fact about the tree — it re-derives the day somebody moves a node,
+  // which is the H4 argument applied to this row. The branch is not the unit
+  // of scoping; the NAME is, because `notMemo` is a list whose members do not
+  // share a hazard.
+  //
+  // REFERENCE POSITIONS ONLY. A property key and a member-expression property
+  // are `Identifier` nodes that name nothing: `{ scale: slot.scale }` holds
+  // three Identifiers and exactly one of them is a variable. Collecting all
+  // three is R85's "prose about a variable is not the variable" one layer in
+  // — the node type is right and the ROLE is wrong. Blind, this set carries
+  // `pos`, `x`, `y`, `scale`, `driftX`, `driftY` off the particle array, and
+  // a sampled node named any of those would take the clause without ever
+  // being in a transform. Shorthand is safe either way: `{ rotate }` parses
+  // key and value as distinct nodes, so dropping the key keeps the reference.
+  const inTransform = new Set();
+  walk(flyingBeeAst.program, (n) => {
+    if (n.type !== 'ObjectProperty') return;
+    if ((n.key?.name ?? n.key?.value) !== 'transform') return;
+    if (n.value?.type !== 'ArrayExpression') return;
+    const notARef = new Set();
+    walk(n.value, (m) => {
+      if (m.type === 'ObjectProperty' && !m.computed) notARef.add(m.key);
+      if (m.type === 'MemberExpression' && !m.computed) notARef.add(m.property);
+    });
+    walk(n.value, (m) => {
+      if (m.type === 'Identifier' && !notARef.has(m)) inTransform.add(m.name);
+    });
+  });
   const notMemo = [...new Set(readNames)].filter((n) => !memoised.has(n));
   const notDep = [...new Set(readNames)].filter((n) => !(listenerEffectDeps ?? []).includes(n));
   if (readNames.length === 0) {
@@ -2182,7 +2212,7 @@ let tickPropName = null;
         // about this tree — "here `rotate` is rebuilt per render so you are
         // fine" would be a sentence that goes false the day somebody memoises
         // `rotate`, in the message that told them to.
-        notMemo.length ? `\`${notMemo.join('`, `')}\` is not declared by a \`useMemo\` at component scope, so this row cannot show its identity is stable across renders. §28.13 — memoising is also an ARMING edit: if it leaves EVERY node in a shared \`transform\` array identity-stable, every plain number in that array freezes at its first commit, and those have to become nodes in the same change.` : '',
+        notMemo.length ? `\`${notMemo.join('`, `')}\` is not declared by a \`useMemo\` at component scope, so this row cannot show its identity is stable across renders.` + (notMemo.filter((n) => inTransform.has(n)).length ? ` §28.13 — \`${notMemo.filter((n) => inTransform.has(n)).join('`, `')}\` sits in a \`transform\` array, so memoising is also an ARMING edit: if it leaves EVERY node in a shared \`transform\` array identity-stable, every plain number in that array freezes at its first commit, and those have to become nodes in the same change.` : '') : '',
         notDep.length ? `\`${notDep.join('`, `')}\` is not in the effect's deps [${listenerEffectDeps.join(', ')}], so the subscription outlives the node it samples.` : '',
       ].filter(Boolean).join(' '),
     );
