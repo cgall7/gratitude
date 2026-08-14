@@ -10,7 +10,7 @@ import { toISODate, daysAgoISO, groupSharesByDay, HIVE_WEEK_DAYS } from '../util
 import { PrimaryButton } from '../components/PrimaryButton';
 import { PressableScale } from '../components/PressableScale';
 import { FeedCard } from '../components/FeedCard';
-import { HoneycombGrid, HIVE_SLOTS } from '../components/HoneycombGrid';
+import { HoneycombGrid, HIVE_SLOTS, personKey } from '../components/HoneycombGrid';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { BeeTransition } from '../components/BeeTransition';
 import { FlyingBee } from '../components/FlyingBee';
@@ -51,8 +51,17 @@ const FEED_ARRIVAL_PATH = {
 // Demo shares author them directly (demoHive.js), which is the only
 // producer that exists today; wiring a real one is a follow-up, not this
 // mapper's job to fake.
+//
+// `authorId` (§28.9 correction 2): `id` is the SHARE. The comb draws faces,
+// so everything that asks "is this still the one you tapped" — the selection
+// ring, the reveal card, the pollination abort — has to key on the person.
+// Real shares carry `authorId` from `toFeedShare` (HoneycombStore:19) and it
+// died here; demo shares have no author key at all, so `personKey` falls back
+// to `id`, which demoHive generates one-per-person. Not a degraded path: one
+// meaning across both populations.
 const toGridMember = (share) => ({
   id: share.id,
+  authorId: share.authorId,
   name: share.isOwn ? 'You' : share.author?.display_name ?? 'Someone',
   gratitude: share.content,
   avatarUrl: share.author?.avatar_url,
@@ -70,13 +79,38 @@ const toGridMember = (share) => ({
 // drops `entryDate`, so mapping first would bucket every share under
 // undefined. The list side never maps at all — FeedCard's vocabulary is
 // the raw share (one vocabulary per LAYER, not per feature).
+//
+// ONE SEAT PER PERSON, and it belongs INSIDE the `todayMembers` chain — never
+// on `merged`, which is the tempting spot one line higher and produces no
+// error. `merged` feeds both returns, and a person with two entries in a week
+// SHOULD produce two cards in the week list; deduping there would silently
+// delete them. Comb dedupes, list must not — another instance of the split
+// this header already states (one vocabulary per LAYER).
+//
+// Today the filter is provably a no-op: a person cannot hold two shares today
+// (`entries_one_journal_per_day` unique on (user_id, entry_date),
+// `shares.entry_id` unique, and nothing in `src/` deletes an entry or a
+// share). But that index is PARTIAL — `where hive_id is null` — so Private
+// Hives entries sit outside it. Installing the rule while it is a no-op is
+// the point: the fixture that proves it changes nothing today is the same
+// fixture that proves it works then. It also protects `HoneycombGrid`, which
+// now resolves its selection by looking the person up in this list and would
+// answer a duplicate with the wrong seat. Feed order is newest-first, so
+// keeping the first occurrence keeps the person's most recent share.
 const partitionHive = (weekFeed, now = new Date()) => {
   const merged = weekFeed.concat(demoHiveShares(now));
   const todayISO = toISODate(now);
+  const seen = new Set();
   return {
     todayMembers: merged
       .filter((share) => share.entryDate === todayISO)
       .map(toGridMember)
+      .filter((member) => {
+        const key = personKey(member);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
       .slice(0, HIVE_SLOTS),
     weekSections: groupSharesByDay(merged, now),
   };
@@ -203,6 +237,25 @@ const HoneycombFeed = () => {
   const [shareCarryKey, setShareCarryKey] = useState(0);
   const [feedArrivalKey, setFeedArrivalKey] = useState(0);
   const knownFeedIdsRef = useRef(null);
+
+  // §28 — the pollination target currently handed to the cruiser, in WINDOW
+  // coordinates. The comb produces it, the bee consumes it, and this screen is
+  // only the wire between two boxes that never learn each other's units.
+  const [pollination, setPollination] = useState(null);
+  const pollinationRef = useRef(null);
+  pollinationRef.current = pollination;
+  // The live scroll offset (read by value by the abort predicate) and a tick
+  // that carries no information and exists only to re-run it. §28.9: put
+  // completeness in the trigger and correctness in the predicate.
+  const scrollYRef = useRef(0);
+  const [scrollTick, setScrollTick] = useState(0);
+  const handleScroll = useCallback((e) => {
+    scrollYRef.current = e.nativeEvent.contentOffset.y;
+    // Only publish while a flight is airborne. The predicate is the tick's
+    // only consumer, and a per-frame setState on a screen with fourteen
+    // `useState` hooks is a real cost to pay when there is no bee to abort.
+    if (pollinationRef.current) setScrollTick((n) => n + 1);
+  }, []);
 
   const loadAll = useCallback(async ({ suppressArrival = false } = {}) => {
     // finally, not a trailing call: any of the six Promise.all members below
@@ -359,8 +412,17 @@ const HoneycombFeed = () => {
           scroll content) so it never scrolls off with the feed; parked
           while idle content loads is handled by the `active` gate at the
           top of the tree, not here. */}
-      <FlyingBee active />
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+      <FlyingBee active pollinate={pollination} onPollinateEnd={() => setPollination(null)} />
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.content}
+        // §28.9 — new wiring, not a prop flip: this ScrollView had no
+        // `onScroll` and no `scrollEventThrottle` at all. A flight's aim point
+        // is fixed in window space while the comb is not, and the longest
+        // approaches are the most interruptible ones.
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
+      >
       <ScreenHeader
         eyebrow={
           connections.length > 0
@@ -438,7 +500,15 @@ const HoneycombFeed = () => {
           onLikeToggled={handleLikeToggled}
         />
       ) : (
-        <HoneycombGrid members={todayMembers} onInvitePress={() => setAddOpen(true)} />
+        <HoneycombGrid
+          members={todayMembers}
+          onInvitePress={() => setAddOpen(true)}
+          scrollYRef={scrollYRef}
+          scrollTick={scrollTick}
+          activePollinationKey={pollination?.key ?? null}
+          onPollinate={setPollination}
+          onPollinateCancel={() => setPollination(null)}
+        />
       )}
 
       <View style={styles.addCard}>

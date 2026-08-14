@@ -922,6 +922,461 @@ console.log('\nE. One bee');
   }
 }
 
+// =========================================================================
+// F. The pollination tap (§28)
+// =========================================================================
+//
+// The beat: you tap a face in your hive and the bee comes over and agrees
+// with you. §28.1 makes it decorative by ruling — he is never the
+// acknowledgement and never on the critical path — so nothing here is about
+// whether the flight looks right. It is about the three ways a decorative
+// flight can quietly start asserting something untrue:
+//
+//   • it lands somewhere other than the face you tapped (§28.2 two boxes,
+//     §28.3 a waypoint names a corner);
+//   • it keeps flying at a target that stopped being the one you chose
+//     (§28.9, and the two corrections underneath it);
+//   • a duration or a count stops being derived and becomes a number
+//     somebody typed, at which point every figure in §28.5 is a claim about
+//     nothing.
+//
+// The rows follow section A's method rather than section B's wherever they
+// can: the flight math lives in `pollinationFlight.js` and the seating and
+// hit-test in `combLattice.js`, both dependency-free on purpose, so this
+// gate SAMPLES THE FUNCTIONS instead of reading the config they happen to be
+// called with. R81, third outing: four live waypoints cannot pin a rule.
+console.log('\nF. the pollination tap');
+
+const FLIGHT_MODULE = path.join(ROOT, 'src/components/pollinationFlight.js');
+const LATTICE_MODULE = path.join(ROOT, 'src/components/combLattice.js');
+const HONEYCOMB_GRID = path.join(ROOT, 'src/components/HoneycombGrid.js');
+
+const flightSource = await readFile(FLIGHT_MODULE, 'utf8');
+const latticeSource = await readFile(LATTICE_MODULE, 'utf8');
+const gridSource = await readFile(HONEYCOMB_GRID, 'utf8');
+
+// --- F0. both modules are loadable, which is what every row below rests on
+for (const [label, src] of [
+  ['pollinationFlight.js', flightSource],
+  ['combLattice.js', latticeSource],
+]) {
+  const imports = parseJs(src).program.body.filter((n) => n.type === 'ImportDeclaration');
+  if (imports.length === 0) {
+    ok(`${label} declares no imports, so this gate can load it as a module`);
+  } else {
+    bad(
+      `${label} declares no imports, so this gate can load it as a module`,
+      `found ${imports.length}: ${imports.map((n) => n.source.value).join(', ')}. The rows below ` +
+        'import and sample these functions; one dependency and they degrade to string-matching.',
+    );
+  }
+}
+
+const flight = await import(`data:text/javascript;base64,${Buffer.from(flightSource).toString('base64')}`);
+const lattice = await import(`data:text/javascript;base64,${Buffer.from(latticeSource).toString('base64')}`);
+
+// --- the module's own numbers, read rather than retyped. Every row below
+//     that quotes a figure derives it from these, so the "should pass"
+//     mutation §28.7 asks for — move `cellSize` and watch every distance and
+//     derived duration move with it — actually exercises the rows instead of
+//     sliding past them.
+const CRUISE_PATH = (() => {
+  const d = flyingBeeAst.program.body
+    .flatMap((n) => (n.type === 'VariableDeclaration' ? n.declarations : []))
+    .find((x) => x.id?.name === 'PATH');
+  return JSON.parse(
+    flyingBeeSource.slice(d.init.start, d.init.end).replace(/(\w+):/g, '"$1":').replace(/,\s*]/g, ']'),
+  );
+})();
+const CRUISE_LOOP_MS = (() => {
+  const d = flyingBeeAst.program.body
+    .flatMap((n) => (n.type === 'VariableDeclaration' ? n.declarations : []))
+    .find((x) => x.id?.name === 'LOOP_MS');
+  return d?.init?.value ?? null;
+})();
+// The comb's cell size, from the prop default its only call site relies on.
+const CELL_SIZE = (() => {
+  const m = gridSource.match(/cellSize\s*=\s*(\d+(?:\.\d+)?)/);
+  return m ? Number(m[1]) : null;
+})();
+if (CRUISE_PATH?.length && CRUISE_LOOP_MS && CELL_SIZE) {
+  ok(`the gate reads its inputs off the source (PATH ${CRUISE_PATH.length} waypoints, LOOP_MS ${CRUISE_LOOP_MS}, cellSize ${CELL_SIZE})`);
+} else {
+  bad('the gate reads its inputs off the source', `PATH=${JSON.stringify(CRUISE_PATH)} LOOP_MS=${CRUISE_LOOP_MS} cellSize=${CELL_SIZE} — a null here means a row below is about to assert against a default it invented.`);
+}
+
+// --- F1. §28.7 row 1 — no pixel constant crosses the two boxes -----------
+//
+// §28.2: a flight's target is MEASURED in the flight's own box, never
+// COMPUTED in the target's. The comb is three containers and a live scroll
+// offset away from the bee, so the only honest currency is window
+// coordinates. The enforceable form of that is an import check: if
+// `FlyingBee` can see the comb's geometry it can be tempted to do the
+// arithmetic, and the arithmetic is wrong by construction.
+{
+  const crossings = [];
+  for (const [label, src, forbidden] of [
+    ['FlyingBee.js', flyingBeeSource, ['./HoneycombGrid', './combLattice', '../screens/HoneycombTab']],
+    ['HoneycombGrid.js', gridSource, ['./FlyingBee']],
+  ]) {
+    for (const node of parseJs(src).program.body) {
+      if (node.type !== 'ImportDeclaration') continue;
+      if (forbidden.includes(node.source.value)) crossings.push(`${label} imports ${node.source.value}`);
+    }
+  }
+  // `ringStep` is a measured property of the comb and travels WITH the
+  // target for exactly this reason; a bee that knew the comb's cell size
+  // would be a bee that knew what it was flying over.
+  //
+  // Asserted on IDENTIFIERS, not on the source text. The first draft of this
+  // row was a regex and it went red on the comment two lines above — which is
+  // R51's own rule (a grep overcounts a class; classify the hits, never quote
+  // the count) failing inside the row written to enforce a different one.
+  // Prose about a variable is not the variable.
+  walk(flyingBeeAst.program, (n) => {
+    if (n.type === 'Identifier' && n.name === 'cellSize') crossings.push('FlyingBee.js binds cellSize');
+  });
+  if (crossings.length === 0) {
+    ok('no pixel constant crosses between the flight box and the comb box (§28.2)');
+  } else {
+    bad('no pixel constant crosses between the flight box and the comb box (§28.2)', crossings.join('; '));
+  }
+}
+
+// --- F2. §28.7 row 2 — the half-box correction, on both axes -------------
+//
+// `styles.bee` is absolutely positioned with no offsets, so translateX/Y
+// place the TOP-LEFT of the bee's box and every waypoint in this app has
+// always named a corner. On a decorative loop nobody notices. On a landing
+// it is 22.00pt in each axis at size 44 — 0.408 of a seat step, most of the
+// way to the neighbour of the face he came to visit.
+//
+// The correction is half the BOX, not half the character: `MascotBee`
+// centres the character inside `size × size`, so the box centre and the
+// character centre are the same point. The row asserts the expression, both
+// axes, and that no other divisor sneaks in — `size / 2` written once per
+// axis is the whole fix and there is nothing else to tune.
+{
+  const halves = [];
+  const others = [];
+  walk(flyingBeeAst.program, (n) => {
+    if (n.type !== 'ObjectProperty' || !['x', 'y'].includes(n.key?.name)) return;
+    const src = flyingBeeSource.slice(n.start, n.end);
+    if (!/originRef/.test(src)) return;
+    if (/-\s*size\s*\/\s*2/.test(src)) halves.push(n.key.name);
+    else others.push(`${n.key.name}: ${src.replace(/\s+/g, ' ')}`);
+  });
+  if (halves.length === 2 && halves.includes('x') && halves.includes('y') && others.length === 0) {
+    ok('the target is corrected by size / 2 on both axes (§28.3 — the waypoint names a corner, not a bee)');
+  } else {
+    bad(
+      'the target is corrected by size / 2 on both axes (§28.3 — the waypoint names a corner, not a bee)',
+      `axes corrected: [${halves.join(', ')}]${others.length ? `; uncorrected: ${others.join(', ')}` : ''}. ` +
+        'Uncorrected, the bee lands 0.408 of a seat step down-and-right of the face he came to visit.',
+    );
+  }
+}
+
+// --- F3. §28.7 row 4 — waypoint 0 is read, not assumed -------------------
+//
+// §28.4: waypoint 0 is where the bee already is, so the break costs no
+// teleport. `posRef` already holds the live translated position — the trail
+// sampler reads it. A constant here would make the bee jump to the start of
+// its own approach, and on the abort path it would jump BACKWARDS to
+// wherever the visit began.
+{
+  const froms = [];
+  walk(flyingBeeAst.program, (n) => {
+    if (n.type !== 'CallExpression') return;
+    const callee = n.callee?.name;
+    if (!['buildPollinationPlan', 'buildReturnPlan'].includes(callee)) return;
+    const arg = n.arguments[0];
+    const prop = arg?.properties?.find((p) => p.key?.name === 'from');
+    froms.push({ callee, src: prop ? flyingBeeSource.slice(prop.start, prop.end).replace(/\s+/g, ' ') : '(absent)' });
+  });
+  const bad0 = froms.filter((f) => !/posRef\.current/.test(f.src));
+  if (froms.length === 2 && bad0.length === 0) {
+    ok('both plans take waypoint 0 from the live position ref (§28.4 — the break costs no teleport)');
+  } else {
+    bad(
+      'both plans take waypoint 0 from the live position ref (§28.4 — the break costs no teleport)',
+      froms.length !== 2
+        ? `expected one visit plan and one return plan, found ${froms.length}`
+        : bad0.map((f) => `${f.callee} from: ${f.src}`).join('; '),
+    );
+  }
+}
+
+// --- F4. §28.7 row 3 — the return ends exactly on PATH[0] ----------------
+//
+// `PATH[0] === PATH[4]`: the cruise track already closes there, so when the
+// return finishes `t` restarts at 0 and `Animated.loop` resumes with ZERO
+// discontinuity. That is free, and it is the only place a return can end
+// without a seam. Compared numerically against the module's own PATH rather
+// than against a copy of it here.
+{
+  const PATH = CRUISE_PATH;
+  const box = { width: 393, height: 852 };
+  const home = { x: PATH[0].x * box.width, y: PATH[0].y * box.height };
+  const plan = flight.buildReturnPlan({
+    from: { x: 12, y: 640 },
+    home,
+    width: box.width,
+    height: box.height,
+    cruiseSpeedPxS: flight.cruiseSpeedPxS(PATH, box.width, box.height, CRUISE_LOOP_MS),
+    easing: (w) => w,
+  });
+  const last = plan.path[plan.path.length - 1];
+  const closes = Math.abs(PATH[0].x - PATH[PATH.length - 1].x) < 1e-12 && Math.abs(PATH[0].y - PATH[PATH.length - 1].y) < 1e-12;
+  const lands = Math.abs(last.x - PATH[0].x) < 1e-12 && Math.abs(last.y - PATH[0].y) < 1e-12;
+  if (closes && lands) {
+    ok('the return leg ends exactly on PATH[0], and PATH closes there (§28.4 — the loop resumes with no seam)');
+  } else {
+    bad(
+      'the return leg ends exactly on PATH[0], and PATH closes there (§28.4 — the loop resumes with no seam)',
+      `${closes ? '' : 'PATH[0] !== PATH[last]; '}${lands ? '' : `return ends at ${JSON.stringify(last)}, PATH[0] is ${JSON.stringify(PATH[0])}`}`,
+    );
+  }
+}
+
+// --- F5. §28.7 row 5 — the approach is distance/speed, with no clamp -----
+//
+// THE ROW THIS GATE EXISTS FOR, and it is R81's lesson applied one beat
+// later. A clamp was drafted; sweeping the loop killed it, because sampled
+// uniformly in wall time the departure distance runs 41 -> 417px, so any
+// clamp pair binds on a large fraction of taps — a guard that fires most of
+// the time is the mechanism wearing a guard's name.
+//
+// Four live waypoints cannot see that. A domain sweep can: a clamp is a flat
+// region, a floor is a flat region, and a piecewise "speed up when far" is a
+// second-difference spike. All three die on the same rows.
+{
+  const speed = 375.18;
+  const samples = [];
+  for (let d = 0; d <= 900; d += 0.25) samples.push({ d, ms: flight.approachDurationMs(d, speed) });
+
+  const flats = samples.filter((s, i) => i > 0 && Math.abs(s.ms - samples[i - 1].ms) < 1e-12 && s.d > 0);
+  if (flats.length === 0) {
+    ok(`approachDurationMs is strictly monotonic over distance 0..900px (${samples.length} samples, no flat region)`);
+  } else {
+    bad(
+      `approachDurationMs is strictly monotonic over distance 0..900px (${samples.length} samples, no flat region)`,
+      `${flats.length} flat steps, first at ${flats[0].d}px. A flat region is a clamp, a floor or a ceiling — ` +
+        'at which point the bee no longer moves at one speed and §28.5\'s p05/p50/p95 describe nothing.',
+    );
+  }
+
+  let worstBend = 0;
+  let bendAt = 0;
+  for (let i = 1; i < samples.length - 1; i += 1) {
+    const bend = Math.abs(samples[i + 1].ms - 2 * samples[i].ms + samples[i - 1].ms);
+    if (bend > worstBend) { worstBend = bend; bendAt = samples[i].d; }
+  }
+  if (worstBend < 1e-9) {
+    ok(`approachDurationMs is linear in distance (worst second difference ${worstBend.toExponential(1)}ms) — one speed, by construction`);
+  } else {
+    bad(
+      'approachDurationMs is linear in distance — one speed, by construction',
+      `second difference ${worstBend.toExponential(2)}ms at ${bendAt}px. A bend means the speed changes with ` +
+        'distance, which is a clamp or an ease-by-length wearing a division.',
+    );
+  }
+}
+
+// --- F6. §28.5 — the approach speed is a RATIO, and the cruise is derived
+//
+// The published 375 px/s is a consequence of a 393x852 box, not a design
+// decision. What reads as "he broke off to come here" is that he is moving
+// faster than he was a moment ago, so the ratified quantity is the ratio.
+// This row also pins the derivation chain: change the cruise PATH or the
+// loop length and every figure in §28.5 moves with it.
+{
+  const rows = DEVICES.map((d) => {
+    const cruise = flight.cruiseSpeedPxS(CRUISE_PATH, d.width, d.height, CRUISE_LOOP_MS);
+    return { d, cruise, approach: cruise * flight.APPROACH_SPEED_RATIO };
+  });
+  const offBy = rows.filter((r) => Math.abs(r.approach / r.cruise - flight.APPROACH_SPEED_RATIO) > 1e-12);
+  const shipped = rows.find((r) => r.d.width === 393);
+  const cruiseOk = Math.abs(shipped.cruise - 187.59) < 0.01;
+  if (offBy.length === 0 && cruiseOk) {
+    ok(`approach = ${flight.APPROACH_SPEED_RATIO}x cruise on all ${rows.length} device boxes (cruise 187.59 px/s at 393x852, so approach 375.18)`);
+  } else {
+    bad(
+      `approach = ${flight.APPROACH_SPEED_RATIO}x cruise on all device boxes`,
+      cruiseOk ? offBy.map((r) => r.d.label).join(', ') : `cruise at 393x852 is ${shipped.cruise.toFixed(2)} px/s, not the published 187.59 — the PATH or LOOP_MS moved and §28.5 did not`,
+    );
+  }
+}
+
+// --- F7. §28.7 row 6 — the pollen count is derived, not chosen -----------
+//
+// Six flecks is `pool 12 − ceil(750/160) live trail particles − 1 slack`. A
+// literal 6 would silently start overrunning the pool the moment the cap
+// drops or the cadence speeds up, and the hard cap is §12.5 Rule 3's answer
+// to the #1 low-end perf risk in this app. So the row asserts that the
+// number MOVES when its inputs do, not that it currently equals six.
+{
+  const shipped = flight.pollenCountFor({ poolSize: 12, trailFadeMs: 750, trailIntervalMs: 160 });
+  const responses = [
+    { label: 'a bigger pool', args: { poolSize: 20, trailFadeMs: 750, trailIntervalMs: 160 } },
+    { label: 'a faster trail cadence', args: { poolSize: 12, trailFadeMs: 750, trailIntervalMs: 80 } },
+    { label: 'a longer particle life', args: { poolSize: 12, trailFadeMs: 1500, trailIntervalMs: 160 } },
+  ].map((c) => ({ ...c, got: flight.pollenCountFor(c.args) }));
+  const deaf = responses.filter((r) => r.got === shipped);
+  // And the call site must hand it the real inputs, not numbers that happen
+  // to match them today.
+  const callSite = flyingBeeSource.match(/pollenCountFor\(\{[^}]*\}\)/s)?.[0] ?? '';
+  const literals = /:\s*\d/.test(callSite);
+  if (shipped === 6 && deaf.length === 0 && !literals && /MAX_TRAIL_PARTICLES/.test(callSite) && /DURATIONS\.trailFade/.test(callSite) && /TRAIL_INTERVAL_MS/.test(callSite)) {
+    ok(`pollen count is derived from the pool: 6 today, and it moves under all ${responses.length} input changes (${responses.map((r) => `${r.label} -> ${r.got}`).join(', ')})`);
+  } else {
+    bad(
+      'pollen count is derived from the pool, not literal',
+      literals
+        ? `pollenCountFor is called with numeric literals: ${callSite.replace(/\s+/g, ' ')}`
+        : deaf.length
+          ? `${deaf.map((r) => r.label).join(', ')} did not move the count off ${shipped}`
+          : `expected 6 at the shipped numbers, got ${shipped}`,
+    );
+  }
+}
+
+// --- F8. §28.9 rows 7 + 8 — the abort predicate --------------------------
+//
+// §28.9, ratified: **abort when the point the bee is aimed at would no
+// longer resolve, under the comb's OWN hit-test, to the PERSON the user
+// tapped.** Two corrections got it to that sentence, and both were the same
+// mistake — the English was right and the field was wrong:
+//
+//   correction 1: keyed on SEAT. Re-seating does not move the seat; the
+//     lattice is fixed. It moves who is sitting in it, so a seat-keyed check
+//     passes while the bee alights on the right hexagon holding the wrong
+//     person — the failure the condition exists to catch, passing it.
+//   correction 2: keyed on `member.id`, which is a SHARE. The user tapped a
+//     face, not a post.
+//
+// So the fixtures below are not examples of the rule, they ARE the rule.
+// **The fixture is what pins the noun.** Fixture 2 goes green only under
+// author-keying; fixture 1 goes red under correction 1's predicate; the
+// sweep is what stops "abort when it drifts" from being pinned by the two
+// or three offsets a fixture happens to use.
+{
+  const CELL = CELL_SIZE;
+  const person = (n) => ({ authorId: `person-${n}`, id: `share-${n}-a`, name: `P${n}` });
+  const members = Array.from({ length: 7 }, (_, i) => person(i));
+  const layoutOf = (list) => lattice.buildCombLayout(list, CELL, lattice.hexSpiral(1));
+  const base = layoutOf(members);
+  // Aim at the centre seat: it is the only one with a neighbour on every
+  // side, so a vertical sweep crosses a real boundary rather than falling
+  // off the cluster.
+  const centre = base.cells[0];
+  const aim = {
+    personId: lattice.personKey(members[0]),
+    localX: centre.x + CELL,
+    localY: centre.y + CELL,
+    scrollY: 0,
+  };
+  const half = lattice.ringStepFor(CELL) / 2;
+
+  // --- the sweep
+  const drifts = [];
+  for (let d = -120; d <= 120; d += 0.25) drifts.push({ d, abort: lattice.shouldAbortPollination(base, aim, d) });
+  const wrong = drifts.filter(({ d, abort }) => {
+    if (Math.abs(d) <= half - 0.2) return abort;       // still inside the seat
+    if (Math.abs(d) >= half + 0.2) return !abort;      // past the Voronoi midpoint
+    return false;                                       // the boundary itself, unasserted
+  });
+  if (wrong.length === 0) {
+    ok(`abort tracks the comb's own Voronoi boundary over ±120pt of drift (${drifts.length} samples; boundary √3·cellSize/2 = ${half.toFixed(3)}pt)`);
+  } else {
+    bad(
+      `abort tracks the comb's own Voronoi boundary over ±120pt of drift (boundary ${half.toFixed(3)}pt)`,
+      `${wrong.length} samples disagree, first at drift ${wrong[0].d}pt (abort=${wrong[0].abort}). A threshold ` +
+        'read off anything but the lattice will pass a fixture at 0 and 100 and fail in between.',
+    );
+  }
+
+  // --- fixture 1: a re-seat with the aim point UNMOVED. Someone else's
+  //     share arrives and re-orders feed order, so the person you tapped
+  //     moves seat. Must abort. Fails correction 1's seat-keyed predicate,
+  //     and no scroll event fires — which is why the trigger set includes
+  //     `layout` identity.
+  const reseated = layoutOf([person(9), ...members]);
+  const f1 = lattice.shouldAbortPollination(reseated, aim, 0);
+
+  // --- fixture 2: a re-share BY THE SAME PERSON. Aim point and seat both
+  //     unmoved; only the share id changes. Must NOT abort — §28.1 says he
+  //     decorates the source you tapped and the source is a face. This is
+  //     the row that pins person over post; it is red under share-keying.
+  const resharedList = members.map((m, i) => (i === 0 ? { ...m, id: 'share-0-b' } : m));
+  const f2 = lattice.shouldAbortPollination(layoutOf(resharedList), aim, 0);
+
+  // --- fixture 3: the tapped person is pushed off the comb entirely. In
+  //     today's build this is the REACHABLE one: the demo set fills all
+  //     seven seats, so the first real share of the day evicts the seventh
+  //     member and re-seats the rest.
+  const evicted = layoutOf([person(9), ...members.slice(0, 6)].filter((m) => m.authorId !== 'person-0'));
+  const f3 = lattice.shouldAbortPollination(evicted, aim, 0);
+
+  const fixtures = [
+    { label: 'a re-seat with the aim point unmoved aborts', got: f1, want: true },
+    { label: 'a re-share by the same person does NOT abort', got: f2, want: false },
+    { label: 'the tapped person evicted from the comb aborts', got: f3, want: true },
+  ];
+  const missed = fixtures.filter((f) => f.got !== f.want);
+  if (missed.length === 0) {
+    ok('the abort predicate keys on the PERSON: ' + fixtures.map((f) => f.label).join('; '));
+  } else {
+    bad(
+      'the abort predicate keys on the PERSON',
+      missed
+        .map((f) => `${f.label} — got abort=${f.got}`)
+        .join('; ') +
+        '. Seat-keying passes fixture 1 while landing on the wrong person; share-keying fails fixture 2 ' +
+        'and spends the abort on the one event that is NOT "the wrong person is there."',
+    );
+  }
+}
+
+// --- F9. §28.9 row 8 — the predicate IS the hit-test, not a copy ---------
+//
+// §17.5's two-utils ruling permits distinct mechanisms for distinct surfaces
+// (the comb hit-tests by cube-round, the hive comb by first-containment). It
+// does not permit two answers to one question inside one screen. A second
+// nearest-cell implementation appearing anywhere under `src/components` or
+// `src/screens` fails this row even if it is numerically identical, because
+// "identical today" is not a property anything maintains.
+{
+  const dirs = ['src/components', 'src/screens', 'src/utils'];
+  const owners = [];
+  for (const dir of dirs) {
+    for (const name of await readdir(path.join(ROOT, dir))) {
+      if (!name.endsWith('.js')) continue;
+      const rel = `${dir}/${name}`;
+      const src = await readFile(path.join(ROOT, rel), 'utf8');
+      for (const fn of ['axialRound', 'pixelToAxialRaw']) {
+        // A definition, not a call: `const axialRound =` / `function axialRound`.
+        if (new RegExp(`(const|let|function)\\s+${fn}\\b`).test(src)) owners.push(`${rel}:${fn}`);
+      }
+    }
+  }
+  const expected = ['src/components/combLattice.js:axialRound', 'src/components/combLattice.js:pixelToAxialRaw'];
+  const extra = owners.filter((o) => !expected.includes(o));
+  const usesShared = /shouldAbortPollination/.test(gridSource) && /from '\.\/combLattice'/.test(gridSource);
+  if (extra.length === 0 && owners.length === 2 && usesShared) {
+    ok('one lattice implementation, and the abort predicate is it (HoneycombGrid imports shouldAbortPollination rather than re-deriving nearest-cell)');
+  } else {
+    bad(
+      'one lattice implementation, and the abort predicate is it',
+      extra.length
+        ? `a second nearest-cell implementation exists: ${extra.join(', ')}`
+        : usesShared
+          ? `expected exactly 2 lattice definitions in combLattice.js, found ${owners.length}: ${owners.join(', ')}`
+          : 'HoneycombGrid does not use shouldAbortPollination from combLattice — the predicate has been copied out',
+    );
+  }
+}
+
 console.log(`\ncheck-bee-attitude: ${pass} passed, ${failures.length} failed`);
 if (failures.length) {
   failures.forEach((f) => console.log(`  - ${f}`));

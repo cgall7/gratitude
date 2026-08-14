@@ -2,6 +2,15 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, StyleSheet, View } from 'react-native';
 import { MascotBee } from './MascotBee';
 import { buildAttitude } from './beeAttitude';
+import {
+  APPROACH_SPEED_RATIO,
+  POLLEN_RADIUS_FRACTION,
+  buildPollinationPlan,
+  buildReturnPlan,
+  cruiseSpeedPxS,
+  pollenCountFor,
+  pollenFlecks,
+} from './pollinationFlight';
 import { theme } from '../constants/theme';
 import { DURATIONS, MAX_TRAIL_PARTICLES, useReducedMotion } from '../constants/motion';
 
@@ -103,9 +112,34 @@ const PRESETS = {
   },
 };
 
-export const FlyingBee = ({ active = true, size = DEFAULT_SIZE, style, preset, onSettle }) => {
+// §28 — the pollination visit. `pollinate` is `{ key, x, y, ringStep }` in
+// WINDOW coordinates, or null. Window coordinates are the only honest currency
+// between two boxes that both exist at runtime (§28.2): the comb measures the
+// cell in its own space and converts once; this component measures its OWN
+// container and subtracts. No pixel constant crosses the two files, and
+// `ringStep` travels with the target because it is a measured property of the
+// comb — a bee that knew the comb's cell size would be a bee that knew what it
+// was flying over.
+export const FlyingBee = ({
+  active = true,
+  size = DEFAULT_SIZE,
+  style,
+  preset,
+  onSettle,
+  pollinate = null,
+  onPollinateEnd,
+}) => {
   const reduced = useReducedMotion();
   const [layout, setLayout] = useState(null);
+  // The pollination plan currently in the air: a `visit`, then a `return`,
+  // then null (cruise). One driver throughout — R46: `AnimatedValue` holds a
+  // single `_animation` and both `setValue` and `animate` stop the incumbent,
+  // so the legal move is stop, rebuild the track, and re-run `t` from 0 in a
+  // TIMING. Never a spring onto a just-rewound value; that is the one
+  // configuration R46 left open.
+  const [plan, setPlan] = useState(null);
+  const planRef = useRef(null);
+  planRef.current = plan;
   const t = useRef(new Animated.Value(0)).current;
   const breathe = useRef(new Animated.Value(0)).current;
   const posRef = useRef({ x: 0, y: 0 });
@@ -113,15 +147,25 @@ export const FlyingBee = ({ active = true, size = DEFAULT_SIZE, style, preset, o
   const loopRef = useRef(null);
   const trailTimerRef = useRef(null);
   const nextTrailIndexRef = useRef(0);
+  const containerRef = useRef(null);
+  // Window origin of this component's own box. Measured once per layout and
+  // then held, which is sound precisely because §28.2's screen-anchoring is
+  // deliberate (`HoneycombTab:358-361`) — this box never scrolls. The thing
+  // that moves is the comb, and that is handled by aborting, not by re-aiming
+  // (§28.9).
+  const originRef = useRef({ x: 0, y: 0 });
+  const pollinateKeyRef = useRef(null);
   // Ref so a new callback identity never restarts an in-progress flight.
   const onSettleRef = useRef(onSettle);
   onSettleRef.current = onSettle;
+  const onPollinateEndRef = useRef(onPollinateEnd);
+  onPollinateEndRef.current = onPollinateEnd;
 
   const presetDef = preset ? PRESETS[preset] : null;
-  const track = presetDef ? presetDef.track : CRUISE;
+  const track = plan ?? (presetDef ? presetDef.track : CRUISE);
   const flightSuppressed = reduced || !active;
-  const easing = presetDef ? PRESET_EASING : CRUISE_EASING;
-  const durationMs = presetDef ? presetDef.duration : LOOP_MS;
+  const easing = plan ? plan.easing : presetDef ? PRESET_EASING : CRUISE_EASING;
+  const durationMs = plan ? plan.durationMs : presetDef ? presetDef.duration : LOOP_MS;
 
   // Attitude is resolved against the measured container, not the path's
   // fractions — the call site names the box (`loginArc` is flown in a
@@ -136,12 +180,12 @@ export const FlyingBee = ({ active = true, size = DEFAULT_SIZE, style, preset, o
             width: layout.width,
             height: layout.height,
             size,
-            closed: !presetDef,
+            closed: !presetDef && !plan,
             easing,
             durationMs,
           })
         : null,
-    [layout, size, preset]
+    [layout, size, preset, plan]
   );
 
   // One interpolation node per preset, shared by the render style AND the
@@ -156,18 +200,38 @@ export const FlyingBee = ({ active = true, size = DEFAULT_SIZE, style, preset, o
   // Fixed pool of trail-particle drivers — hard-capped per §12.5 Rule 3
   // (bee trail is the #1 low-end perf risk). Reused round-robin instead of
   // growing an array, so live particle count never exceeds the cap.
+  //
+  // `drift` is the pollen burst's only addition to the pool: a trail particle
+  // is dropped and fades in place, a pollen fleck is dropped and pushed
+  // outward. Same particle, different push — which is why the burst reuses
+  // this pool rather than adding a second one, and why the hard cap still
+  // means what §12.5 Rule 3 says it means.
   const trailPool = useRef(
     Array.from({ length: MAX_TRAIL_PARTICLES }).map(() => ({
       opacity: new Animated.Value(0),
       scale: new Animated.Value(1),
+      driftX: new Animated.Value(0),
+      driftY: new Animated.Value(0),
       pos: { x: 0, y: 0 },
     }))
   ).current;
   const [, forceTrailRender] = useState(0);
 
+  const takeSlot = () => {
+    const slot = trailPool[nextTrailIndexRef.current];
+    nextTrailIndexRef.current = (nextTrailIndexRef.current + 1) % trailPool.length;
+    return slot;
+  };
+
   const onLayout = (e) => {
     const { width, height } = e.nativeEvent.layout;
     if (width && height) setLayout({ width, height });
+    // §28.2 — measure the bee's own container, not the target's. Everything
+    // arriving from the comb is in window coordinates and converts through
+    // this one number.
+    containerRef.current?.measureInWindow?.((x, y) => {
+      if (Number.isFinite(x) && Number.isFinite(y)) originRef.current = { x, y };
+    });
   };
 
   // Live numeric read of the current translated position, kept in a ref
@@ -194,16 +258,139 @@ export const FlyingBee = ({ active = true, size = DEFAULT_SIZE, style, preset, o
       translateY.removeListener(yId);
       if (presetOpacity) presetOpacity.removeListener(oId);
     };
-  }, [layout, flightSuppressed, preset, presetOpacity]);
+    // `plan` is in the deps because `posRef` is what waypoint 0 and every
+    // abort read: a listener still bound to the cruise interpolation would
+    // hand the return leg a position the bee left a second ago.
+  }, [layout, flightSuppressed, preset, presetOpacity, plan]);
 
-  // Drive the flight — looping cruise, or a one-shot preset that settles.
+  // §28.5 — every speed in the beat derives from the cruise the bee is already
+  // flying, so a re-authored `PATH` or a different container moves all of them
+  // together. The published 187.59 px/s is what this returns at 393 x 852; it
+  // is a consequence of the box, not a constant.
+  const cruiseSpeed = layout ? cruiseSpeedPxS(PATH, layout.width, layout.height, LOOP_MS) : 0;
+  const homePx = layout ? { x: PATH[0].x * layout.width, y: PATH[0].y * layout.height } : null;
+
+  // Pollen. The count is derived from what the trail pool has spare, never
+  // chosen: raise the cap or slow the cadence and it moves on its own.
+  const pollenCount = pollenCountFor({
+    poolSize: MAX_TRAIL_PARTICLES,
+    trailFadeMs: DURATIONS.trailFade,
+    trailIntervalMs: TRAIL_INTERVAL_MS,
+  });
+
+  const burstPollen = (landingCorner, ringStep) => {
+    // The flecks leave the CHARACTER, not its box: `landingCorner` is the
+    // top-left the track drives (§28.3), so put the burst's origin back at the
+    // centre the same `size / 2` took it off.
+    const origin = { x: landingCorner.x + size / 2, y: landingCorner.y + size / 2 };
+    pollenFlecks(pollenCount, ringStep * POLLEN_RADIUS_FRACTION).forEach((fleck) => {
+      const slot = takeSlot();
+      slot.pos.x = origin.x;
+      slot.pos.y = origin.y;
+      slot.driftX.setValue(0);
+      slot.driftY.setValue(0);
+      // Same seed as a trail drop. The burst reads as an event through its
+      // count and its outward push, not by being brighter than the trail that
+      // led to it — one fewer invented number, and it keeps R51's "no particle
+      // outglows the bee it came from" true without a second rule.
+      slot.opacity.setValue(0.8 * beeOpacityRef.current);
+      slot.scale.setValue(1);
+      Animated.parallel([
+        Animated.timing(slot.driftX, { toValue: fleck.dx, duration: DURATIONS.trailFade, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+        Animated.timing(slot.driftY, { toValue: fleck.dy, duration: DURATIONS.trailFade, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+        Animated.timing(slot.opacity, { toValue: 0, duration: DURATIONS.trailFade, useNativeDriver: true }),
+        Animated.timing(slot.scale, { toValue: 0.3, duration: DURATIONS.trailFade, useNativeDriver: true }),
+      ]).start();
+    });
+    forceTrailRender((n) => n + 1);
+  };
+
+  const returnFromHere = () =>
+    buildReturnPlan({
+      from: { ...posRef.current },
+      home: homePx,
+      width: layout.width,
+      height: layout.height,
+      cruiseSpeedPxS: cruiseSpeed,
+      easing: CRUISE_EASING,
+    });
+
+  // A target arrives, or the one in the air stops being the one you tapped.
+  //
+  // §28.9, ratified: **the flight aborts; it does not re-aim.** By §28.1 the
+  // bee is off the critical path, so a bee that gives up costs the user
+  // exactly nothing — while a bee that chases a moving cell is doing the very
+  // thing "never fetch the card" exists to prevent. And abort needs no new
+  // mechanism: it IS the return leg, started early, with no pollen because he
+  // never landed.
+  //
+  // A second tap mid-flight re-targets by the same stop-and-rebuild, so unlike
+  // `BeeTransition` this beat needs no cooldown — there is no state to protect.
+  useEffect(() => {
+    if (!layout || flightSuppressed) return;
+    if (!pollinate) {
+      if (planRef.current?.kind === 'visit') setPlan(returnFromHere());
+      return;
+    }
+    if (pollinate.key === pollinateKeyRef.current) return;
+    pollinateKeyRef.current = pollinate.key;
+    // §28.3 — the waypoint names a CORNER, not a bee. `styles.bee` is
+    // absolutely positioned with no offsets, so `translateX/Y` place the
+    // top-left of the box; the character is centred inside it. Uncorrected the
+    // bee lands `size / 2` down and right of the face he came to visit, which
+    // on a 7-seat comb is 0.408 of a seat step — most of the way to the
+    // neighbour. One place, one expression.
+    const target = {
+      x: pollinate.x - originRef.current.x - size / 2,
+      y: pollinate.y - originRef.current.y - size / 2,
+    };
+    setPlan({
+      ...buildPollinationPlan({
+        from: { ...posRef.current },
+        target,
+        ringStep: pollinate.ringStep,
+        width: layout.width,
+        height: layout.height,
+        approachSpeedPxS: cruiseSpeed * APPROACH_SPEED_RATIO,
+        easeApproach: Easing.inOut(Easing.ease),
+        easeDescent: Easing.out(Easing.cubic),
+      }),
+      ringStep: pollinate.ringStep,
+    });
+  }, [pollinate, layout, flightSuppressed]);
+
+  // Drive the flight — looping cruise, a one-shot preset that settles, or a
+  // pollination visit/return.
   useEffect(() => {
     if (!layout || flightSuppressed) {
       loopRef.current?.stop();
       return undefined;
     }
     t.setValue(0);
-    if (presetDef) {
+    if (plan) {
+      loopRef.current = Animated.timing(t, {
+        toValue: 1,
+        duration: plan.durationMs,
+        easing: plan.easing,
+        useNativeDriver: true,
+      });
+      loopRef.current.start(({ finished }) => {
+        if (!finished) return;
+        if (plan.kind === 'visit') {
+          burstPollen(plan.landing, plan.ringStep);
+          // The abort window closes the instant he lands; tell the host so it
+          // stops publishing scroll positions for a flight that can no longer
+          // be aborted.
+          onPollinateEndRef.current?.();
+          setPlan(returnFromHere());
+        } else {
+          // §28.4 — the return ends exactly on `PATH[0]`, and `PATH[0] ===
+          // PATH[4]`, so `t` restarting at 0 resumes the loop with zero
+          // discontinuity. The only place a return can end without a seam.
+          setPlan(null);
+        }
+      });
+    } else if (presetDef) {
       loopRef.current = Animated.timing(t, {
         toValue: 1,
         duration: presetDef.duration,
@@ -225,7 +412,7 @@ export const FlyingBee = ({ active = true, size = DEFAULT_SIZE, style, preset, o
       loopRef.current.start();
     }
     return () => loopRef.current?.stop();
-  }, [layout, flightSuppressed, preset]);
+  }, [layout, flightSuppressed, preset, plan]);
 
   // A suppressed preset flight settles instantly — the host is waiting on
   // onSettle to move on, and there is no parked pose for an entrance.
@@ -251,10 +438,13 @@ export const FlyingBee = ({ active = true, size = DEFAULT_SIZE, style, preset, o
   useEffect(() => {
     if (!layout || flightSuppressed) return undefined;
     trailTimerRef.current = setInterval(() => {
-      const slot = trailPool[nextTrailIndexRef.current];
-      nextTrailIndexRef.current = (nextTrailIndexRef.current + 1) % trailPool.length;
+      const slot = takeSlot();
       slot.pos.x = posRef.current.x;
       slot.pos.y = posRef.current.y;
+      // Reset the pollen push: the pool is shared, so a slot last used as a
+      // fleck still holds its outward drift.
+      slot.driftX.setValue(0);
+      slot.driftY.setValue(0);
       slot.opacity.setValue(0.8 * beeOpacityRef.current);
       slot.scale.setValue(1);
       forceTrailRender((n) => n + 1);
@@ -314,7 +504,7 @@ export const FlyingBee = ({ active = true, size = DEFAULT_SIZE, style, preset, o
   const flightOpacity = presetOpacity ?? 1;
 
   return (
-    <View style={[styles.fill, style]} onLayout={onLayout} pointerEvents="none">
+    <View ref={containerRef} style={[styles.fill, style]} onLayout={onLayout} pointerEvents="none">
       {layout &&
         trailPool.map((slot, i) => (
           <Animated.View
@@ -323,9 +513,17 @@ export const FlyingBee = ({ active = true, size = DEFAULT_SIZE, style, preset, o
               styles.trailDot,
               {
                 opacity: slot.opacity,
+                // `pos` is where the particle was born (a plain number, set
+                // once) and `drift` is the pollen push (zero for a trail
+                // drop). Two translations compose additively, so one pool
+                // serves both. `scale` stays last: RN applies the array
+                // right-to-left, so it scales about the fleck's own centre
+                // before it is moved.
                 transform: [
                   { translateX: slot.pos.x },
                   { translateY: slot.pos.y },
+                  { translateX: slot.driftX },
+                  { translateY: slot.driftY },
                   { scale: slot.scale },
                 ],
               },
