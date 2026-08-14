@@ -420,6 +420,13 @@ const HoneycombFeed = () => {
         // `onScroll` and no `scrollEventThrottle` at all. A flight's aim point
         // is fixed in window space while the comb is not, and the longest
         // approaches are the most interruptible ones.
+        //
+        // `onScroll` is the load-bearing half. The 16 is INERT on RN 0.86.2 —
+        // both architectures collapse any value ≤ 1/60s to an internal 0, and
+        // 0 already dispatches every frame; on Android nothing reads the prop
+        // at all. It stays because "0 means every frame" is behaviour this
+        // beat depends on and does not own. Measurements are in section G of
+        // check-bee-attitude, which asserts the bound rather than the prop.
         onScroll={handleScroll}
         scrollEventThrottle={16}
       >

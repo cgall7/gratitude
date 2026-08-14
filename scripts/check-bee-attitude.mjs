@@ -1397,6 +1397,383 @@ if (CRUISE_PATH?.length && CRUISE_LOOP_MS && CELL_SIZE) {
   }
 }
 
+// =========================================================================
+// G. §28.9 — the abort is INVOKED (Sage's find, and the chain under it)
+// =========================================================================
+//
+// Section F sweeps `shouldAbortPollination` 961 ways and never once asserts
+// that anything CALLS it. Delete `onScroll` from the ScrollView and every row
+// in F stays green while the abort stops reaching one of its two cases.
+// That is this gate's own rule, one commit later, in the mechanism it was
+// written to guard: A GATE ASSERTS A PROPERTY OF WHATEVER IT CAN IMPORT, AND
+// THE DEFECT LIVES AT THE CALL SITE IT COULDN'T.
+//
+// THE TRIGGER IS A CHAIN, NOT THREE PROPS. Three call sites were named when
+// this was raised — `onScroll`, `scrollEventThrottle`, and the effect's
+// dependency array. Walking the path from the native event to the predicate
+// turns up six links, and a row per named prop would have had the same shape
+// as the hole it was closing: true of the parts somebody thought to list.
+//
+//   native scroll event
+//     → onScroll is bound to a handler                        (G1)
+//     → the handler writes contentOffset.y into a ref          (G1)
+//     → the handler publishes a tick                           (G1)
+//     → the tick is published while a flight is airborne       (G2)
+//     → both carriers cross into HoneycombGrid                 (G3)
+//     → the effect's deps are the union of what can change
+//       either of hitTest's two inputs                         (G4)
+//     → the predicate reads the scroll LIVE, not off the aim   (G5)
+//
+// Every row resolves the NEXT link's name from the PREVIOUS row's finding
+// rather than from a string typed here, so renaming any identifier or prop in
+// the chain passes and removing any link fails. G1 finds the handler from the
+// JSX attribute, the ref from the handler's own assignment, and the state
+// variable from the setter's `useState` pair; G3 finds the prop names from
+// the values passed at the JSX call site; G4 and G5 look for those prop
+// names on the other side of the component boundary.
+console.log('\nG. the abort predicate is invoked (§28.9)');
+
+const HONEYCOMB_TAB = path.join(ROOT, 'src/screens/HoneycombTab.js');
+const tabSource = await readFile(HONEYCOMB_TAB, 'utf8');
+const tabAst = parseJs(tabSource);
+const gridAst = parseJs(gridSource);
+
+const sliceOf = (src) => (n) => (n ? src.slice(n.start, n.end).replace(/\s+/g, ' ') : '(absent)');
+const tabTxt = sliceOf(tabSource);
+const collect = (ast, pred) => {
+  const out = [];
+  walk(ast.program, (n) => {
+    if (pred(n)) out.push(n);
+  });
+  return out;
+};
+const jsxElements = (ast, name) =>
+  collect(ast, (n) => n.type === 'JSXElement' && n.openingElement?.name?.name === name);
+const jsxOpenings = (ast, name) =>
+  collect(ast, (n) => n.type === 'JSXOpeningElement' && n.name?.name === name);
+const attrOf = (opening, name) =>
+  (opening?.attributes || []).find((a) => a.type === 'JSXAttribute' && a.name?.name === name);
+const attrExpr = (opening, name) => {
+  const a = attrOf(opening, name);
+  return a?.value?.type === 'JSXExpressionContainer' ? a.value.expression : null;
+};
+// `x.current` and `x?.current` are different node types in Babel, and the
+// second one is what this file actually writes.
+const isDotCurrent = (n, objectName) =>
+  (n?.type === 'MemberExpression' || n?.type === 'OptionalMemberExpression') &&
+  n.property?.name === 'current' &&
+  (objectName === undefined || n.object?.name === objectName);
+
+// --- G1. §28.9 row 9 — the aim trigger is bound, and it writes what the
+//     predicate reads ----------------------------------------------------
+//
+// Three claims in one row because they are one link: an `onScroll` that is
+// bound to nothing, a handler that publishes a tick without updating the aim
+// point, and a handler that updates the aim point without publishing a tick
+// are three ways to have wiring that looks present and re-evaluates nothing.
+// The row also asserts the comb is INSIDE the ScrollView — if it ever moves
+// out, scrolling stops moving the target and this whole beat is solving a
+// problem the screen no longer has.
+let scrollHandlerName = null;
+let aimRefName = null;
+let tickSetterName = null;
+let tickStateName = null;
+let scrollView = null;
+let gridOpening = null;
+{
+  const svs = jsxElements(tabAst, 'ScrollView');
+  const grids = jsxOpenings(tabAst, 'HoneycombGrid');
+  scrollView = svs.length === 1 ? svs[0] : null;
+  gridOpening = grids.length === 1 ? grids[0] : null;
+  const nested = scrollView && gridOpening && gridOpening.start > scrollView.start && gridOpening.end < scrollView.end;
+
+  const onScroll = scrollView ? attrExpr(scrollView.openingElement, 'onScroll') : null;
+  scrollHandlerName = onScroll?.type === 'Identifier' ? onScroll.name : null;
+
+  let handlerDecl = null;
+  if (scrollHandlerName) {
+    handlerDecl = collect(tabAst, (n) => n.type === 'VariableDeclarator' && n.id?.name === scrollHandlerName)[0] ?? null;
+  }
+  const setters = [];
+  if (handlerDecl?.init) {
+    walk(handlerDecl.init, (n) => {
+      if (
+        n.type === 'AssignmentExpression' &&
+        isDotCurrent(n.left) &&
+        /contentOffset\s*\.\s*y/.test(tabTxt(n.right))
+      ) {
+        aimRefName = n.left.object?.name ?? null;
+      }
+      if (n.type === 'CallExpression' && n.callee?.type === 'Identifier' && /^set[A-Z]/.test(n.callee.name)) {
+        setters.push(n.callee.name);
+      }
+    });
+  }
+  tickSetterName = setters.length === 1 ? setters[0] : null;
+  if (tickSetterName) {
+    const pair = collect(
+      tabAst,
+      (n) =>
+        n.type === 'VariableDeclarator' &&
+        n.id?.type === 'ArrayPattern' &&
+        n.init?.type === 'CallExpression' &&
+        n.init.callee?.name === 'useState' &&
+        n.id.elements?.[1]?.name === tickSetterName,
+    )[0];
+    tickStateName = pair?.id?.elements?.[0]?.name ?? null;
+  }
+
+  if (nested && scrollHandlerName && aimRefName && tickSetterName && tickStateName) {
+    ok(
+      `the aim trigger is bound and writes what the predicate reads (<ScrollView onScroll={${scrollHandlerName}}> → ${aimRefName}.current = contentOffset.y, and ${tickSetterName} publishes ${tickStateName})`,
+    );
+  } else {
+    bad(
+      'the aim trigger is bound and writes what the predicate reads',
+      !scrollView
+        ? `expected exactly 1 <ScrollView> in HoneycombTab.js, found ${jsxElements(tabAst, 'ScrollView').length}`
+        : !gridOpening
+          ? `expected exactly 1 <HoneycombGrid>, found ${jsxOpenings(tabAst, 'HoneycombGrid').length}`
+          : !nested
+            ? 'the comb is not inside the ScrollView — scrolling no longer moves the target, so §28.9 is guarding a hazard that has moved'
+            : !scrollHandlerName
+              ? 'the ScrollView has no `onScroll={handler}` — the aim point is never re-read and the abort reaches only the re-seat case'
+              : !aimRefName
+                ? `${scrollHandlerName} never assigns contentOffset.y into a ref — the tick fires, the predicate re-runs, and it compares the offset captured at tap time against itself forever`
+                : !tickSetterName
+                  ? `expected exactly 1 state setter call in ${scrollHandlerName}, found ${setters.length}${setters.length ? `: ${setters.join(', ')}` : ' — scrolling updates the aim point and nothing re-evaluates the predicate'}`
+                  : `${tickSetterName} is not the setter of any useState pair — this row cannot name the value that crosses into the comb`,
+    );
+  }
+}
+
+// --- G2. §28.9 row 10 — the tick is published WHILE A FLIGHT IS AIRBORNE --
+//
+// G1 asserts a setter is called, which is true of `if (false) setTick(...)`
+// too — the return-leg hole again, one link along. The publish here is
+// deliberately guarded, because a per-frame `setState` on a screen with
+// fourteen `useState` hooks is a real cost to pay when there is no bee to
+// abort. So the row does not ask for an unguarded publish; it asks that the
+// guard and the flight read THE SAME STATE. An unguarded publish passes (it
+// is strictly more complete); a guard on anything else fails.
+{
+  let guardTest = null;
+  if (scrollHandlerName) {
+    const handlerDecl = collect(tabAst, (n) => n.type === 'VariableDeclarator' && n.id?.name === scrollHandlerName)[0];
+    if (handlerDecl?.init && tickSetterName) {
+      walk(handlerDecl.init, (n) => {
+        if (n.type === 'IfStatement' && new RegExp(`\\b${tickSetterName}\\s*\\(`).test(tabTxt(n.consequent))) guardTest = n.test;
+        if (
+          n.type === 'LogicalExpression' &&
+          n.operator === '&&' &&
+          new RegExp(`\\b${tickSetterName}\\s*\\(`).test(tabTxt(n.right))
+        ) {
+          guardTest = n.left;
+        }
+      });
+    }
+  }
+  // What each `someRef.current = X` mirrors, at component scope.
+  const mirrors = {};
+  walk(tabAst.program, (n) => {
+    if (n.type === 'AssignmentExpression' && isDotCurrent(n.left) && n.right?.type === 'Identifier' && n.left.object?.name) {
+      mirrors[n.left.object.name] = n.right.name;
+    }
+  });
+  const guardReads = [];
+  if (guardTest) {
+    walk(guardTest, (n) => {
+      if (isDotCurrent(n) && n.object?.name) guardReads.push(n.object.name);
+      if (n.type === 'Identifier') guardReads.push(n.name);
+    });
+  }
+  const flightKeySrc = tabTxt(attrExpr(gridOpening, 'activePollinationKey'));
+  const sharedState = guardReads
+    .map((r) => mirrors[r] ?? r)
+    .find((state) => state && new RegExp(`\\b${state}\\b`).test(flightKeySrc));
+
+  if (!tickSetterName) {
+    bad('the tick is published while a flight is airborne', 'G1 could not name the setter, so this row has nothing to check — a row that cannot tell must fail rather than look clean');
+  } else if (!guardTest) {
+    ok(`${tickSetterName} publishes unconditionally — strictly more complete than the airborne guard this row permits`);
+  } else if (sharedState) {
+    ok(`the tick's guard and the flight read the same state (\`${tabTxt(guardTest)}\` mirrors \`${sharedState}\`, which activePollinationKey derives from)`);
+  } else {
+    bad(
+      'the tick is published while a flight is airborne',
+      `the guard on ${tickSetterName} is \`${tabTxt(guardTest)}\`, which reads ${guardReads.length ? guardReads.join('/') : 'nothing'} — none of which is the state activePollinationKey derives from (\`${flightKeySrc}\`). A guard that closes during the flight makes the aim trigger dead wiring.`,
+    );
+  }
+}
+
+// --- G3. §28.9 row 11 — both carriers cross the component boundary -------
+//
+// Resolved from G1's names, not from strings typed here: the row finds which
+// PROPS carry the ref and the tick by looking at what is passed at the JSX
+// call site, then checks those prop names are destructured on the other side.
+// Rename anything in the chain and this passes; drop either prop and the
+// predicate silently reads `0` forever (the ref) or never re-runs (the tick).
+let refPropName = null;
+let tickPropName = null;
+{
+  const passedAs = (identName) =>
+    (gridOpening?.attributes || []).find(
+      (a) => a.type === 'JSXAttribute' && a.value?.type === 'JSXExpressionContainer' && a.value.expression?.type === 'Identifier' && a.value.expression.name === identName,
+    )?.name?.name ?? null;
+  refPropName = aimRefName ? passedAs(aimRefName) : null;
+  tickPropName = tickStateName ? passedAs(tickStateName) : null;
+
+  let gridParams = [];
+  walk(gridAst.program, (n) => {
+    if (n.type === 'VariableDeclarator' && n.id?.name === 'HoneycombGrid' && n.init?.params?.[0]?.type === 'ObjectPattern') {
+      gridParams = n.init.params[0].properties.map((p) => p.key?.name).filter(Boolean);
+    }
+  });
+  const received = [refPropName, tickPropName].every((p) => p && gridParams.includes(p));
+
+  if (refPropName && tickPropName && received) {
+    ok(`both carriers cross into the comb (${aimRefName} as \`${refPropName}\`, ${tickStateName} as \`${tickPropName}\`, both destructured by HoneycombGrid)`);
+  } else {
+    bad(
+      'both carriers cross into the comb',
+      !aimRefName || !tickStateName
+        ? 'G1 could not name what to look for, so this row cannot tell — which is a failure, not a pass'
+        : !refPropName
+          ? `${aimRefName} is not passed to <HoneycombGrid> — readScrollY falls back to 0 and the drift the predicate measures is a constant`
+          : !tickPropName
+            ? `${tickStateName} is not passed to <HoneycombGrid> — the aim trigger never reaches the effect`
+            : `HoneycombGrid does not destructure ${[refPropName, tickPropName].filter((p) => !gridParams.includes(p)).join(' or ')} — the props are passed and dropped`,
+    );
+  }
+}
+
+// --- G4. §28.9 row 12 — the effect's deps are the union of hitTest's inputs
+//
+// `hitTest` has exactly two inputs, so the trigger set is the union of what
+// can change either: the aim point (the scroll tick) and the seating
+// (`layout`'s identity). The second half is complete BY CONSTRUCTION rather
+// than by enumeration — `layout`'s own dependency list is the definition of
+// what can re-seat — which is only true while `layout` really is the memo
+// over the seating. So the row asserts both: the effect watches `layout`, and
+// `layout` is `useMemo(buildCombLayout(...), [members, cellSize])`.
+{
+  let effect = null;
+  walk(gridAst.program, (n) => {
+    if (n.type === 'CallExpression' && n.callee?.name === 'useEffect') {
+      let callsPredicate = false;
+      walk(n.arguments?.[0], (m) => {
+        if (m.type === 'CallExpression' && m.callee?.name === 'shouldAbortPollination') callsPredicate = true;
+      });
+      if (callsPredicate) effect = n;
+    }
+  });
+  const deps = effect?.arguments?.[1]?.type === 'ArrayExpression' ? effect.arguments[1].elements.map((e) => e?.name ?? null) : null;
+  const layoutMemo = collect(
+    gridAst,
+    (n) => n.type === 'VariableDeclarator' && n.id?.name === 'layout' && n.init?.type === 'CallExpression' && n.init.callee?.name === 'useMemo',
+  )[0];
+  const memoDeps = layoutMemo?.init?.arguments?.[1]?.elements?.map((e) => e?.name) ?? [];
+  const seatingInputs = ['members', 'cellSize'].every((d) => memoDeps.includes(d));
+  const watchesLayout = deps?.includes('layout');
+  const watchesTick = tickPropName ? deps?.includes(tickPropName) : false;
+
+  if (deps && watchesLayout && watchesTick && seatingInputs) {
+    ok(`the abort effect watches both of hitTest's inputs ([${deps.join(', ')}]; layout re-memoizes on [${memoDeps.join(', ')}])`);
+  } else {
+    bad(
+      "the abort effect watches both of hitTest's inputs",
+      !effect
+        ? 'no useEffect in HoneycombGrid.js calls shouldAbortPollination — the predicate is dead code'
+        : !deps
+          ? 'the abort effect has no dependency array — it re-runs on every render, which passes the aim point but makes the trigger set unreadable'
+          : !watchesLayout
+            ? `\`layout\` is not in [${deps.join(', ')}] — a re-seat emits no scroll event, so the case the row-7 fixtures pin is evaluated by nothing`
+            : !watchesTick
+              ? `the scroll tick (\`${tickPropName ?? '?'}\`) is not in [${deps.join(', ')}] — scrolling moves the target and nothing re-checks it`
+              : `layout re-memoizes on [${memoDeps.join(', ')}] — "complete by construction" holds only while that list IS the definition of what can re-seat`,
+    );
+  }
+}
+
+// --- G5. §28.9 row 13 — the predicate reads the scroll LIVE --------------
+//
+// The seeded aim carries `scrollY` at tap time and the predicate takes a
+// second `scrollY` as its third argument; `drift` is their difference. Pass
+// the seeded one and the drift is identically zero — a predicate that is
+// wired, triggered, swept 961 ways and structurally incapable of ever being
+// true. So the third argument must be a CALL, and that call must resolve to
+// something reading the ref prop G3 named.
+{
+  let abortCall = null;
+  walk(gridAst.program, (n) => {
+    if (n.type === 'CallExpression' && n.callee?.name === 'shouldAbortPollination') abortCall = n;
+  });
+  const third = abortCall?.arguments?.[2] ?? null;
+  const readerName = third?.type === 'CallExpression' && third.callee?.type === 'Identifier' ? third.callee.name : null;
+  let readerReadsProp = false;
+  if (readerName && refPropName) {
+    const readerDecl = collect(gridAst, (n) => n.type === 'VariableDeclarator' && n.id?.name === readerName)[0];
+    if (readerDecl?.init) {
+      walk(readerDecl.init, (m) => {
+        if (isDotCurrent(m, refPropName)) readerReadsProp = true;
+      });
+    }
+  }
+
+  if (readerName && readerReadsProp) {
+    ok(`the abort predicate reads the scroll live (\`${readerName}()\` reads ${refPropName}.current, not the offset seeded at tap time)`);
+  } else {
+    bad(
+      'the abort predicate reads the scroll live',
+      !abortCall
+        ? 'shouldAbortPollination is not called anywhere in HoneycombGrid.js'
+        : !readerName
+          ? `its third argument is \`${sliceOf(gridSource)(third)}\` — not a call, so it cannot be a live read. If it is the seeded offset, drift is identically zero and the predicate can never fire.`
+          : `\`${readerName}\` does not read ${refPropName ?? '(the ref prop)'}.current — the drift is measured against something other than the live scroll offset`,
+    );
+  }
+}
+
+// --- G6. §28.9 row 14 — nothing throttles the aim below one frame --------
+//
+// MEASURED, not recited, because the familiar claim about this prop does not
+// hold on the installed version. `scrollEventThrottle={16}` is INERT here:
+//
+//   • Fabric — `BaseScrollViewProps.h:57` defaults it to 0;
+//     `RCTScrollViewComponentView.mm:381-388` maps any value ≤ 1/60 s to an
+//     internal 0, and `:744` then dispatches whenever `now - last > 0`. 16
+//     and absent produce the identical internal value.
+//   • Old arch — `RCTScrollView.m:385` defaults it to 0 and `:716` tests
+//     `_scrollEventThrottle < MAX(0.017, elapsed)`, true for both 0 and
+//     0.016. (The TODO at `:708` says 0 means "once per scroll"; the code
+//     under it has not done that for some time. The comment is stale.)
+//   • Android — `ReactScrollView.java:1620` stores it and
+//     `getScrollEventThrottle()` has NO reader anywhere under
+//     `ReactAndroid/src/main/java`. Probe scope stated: that directory, that
+//     method name.
+//
+// So the row does not assert the PROP, which would be asserting a token that
+// governs nothing on this version. It asserts the PROPERTY: absent is fine,
+// present must be ≤ 16. The value stays in the source anyway, because a
+// default of 0 meaning "every frame" is behaviour this beat depends on and
+// does not own.
+{
+  const expr = scrollView ? attrExpr(scrollView.openingElement, 'scrollEventThrottle') : null;
+  const value = expr?.type === 'NumericLiteral' ? expr.value : null;
+  if (!scrollView) {
+    bad('nothing throttles the aim point below one frame', 'G1 could not find the ScrollView, so this row cannot tell');
+  } else if (!attrOf(scrollView.openingElement, 'scrollEventThrottle')) {
+    ok('scrollEventThrottle is absent, which is 0 on this version — every frame (see the measurements above this row)');
+  } else if (typeof value === 'number' && value <= 16) {
+    ok(`scrollEventThrottle={${value}} ≤ 16, so the aim point is re-read every frame`);
+  } else {
+    bad(
+      'nothing throttles the aim point below one frame',
+      `scrollEventThrottle is \`${tabTxt(expr)}\` — above 16 this genuinely throttles on iOS, and the longest approaches (p95 1112ms) are the most interruptible ones`,
+    );
+  }
+}
+
 console.log(`\ncheck-bee-attitude: ${pass} passed, ${failures.length} failed`);
 if (failures.length) {
   failures.forEach((f) => console.log(`  - ${f}`));
