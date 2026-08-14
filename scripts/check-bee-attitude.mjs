@@ -1129,12 +1129,32 @@ if (CRUISE_PATH?.length && CRUISE_LOOP_MS && CELL_SIZE) {
   const last = plan.path[plan.path.length - 1];
   const closes = Math.abs(PATH[0].x - PATH[PATH.length - 1].x) < 1e-12 && Math.abs(PATH[0].y - PATH[PATH.length - 1].y) < 1e-12;
   const lands = Math.abs(last.x - PATH[0].x) < 1e-12 && Math.abs(last.y - PATH[0].y) < 1e-12;
-  if (closes && lands) {
+
+  // AND THE CALL SITE, which is where this row's first draft had a hole. It
+  // asserted that `buildReturnPlan` ends where it was TOLD to end — true of
+  // any home at all — and stayed green while `homePx` was mutated to PATH[1].
+  // A gate asserts a property of whatever it can import, and the defect lives
+  // at the call site it couldn't; the module is importable, so read the call
+  // site off the AST rather than trusting the module to speak for it.
+  let homeDecl = null;
+  walk(flyingBeeAst.program, (n) => {
+    if (n.type === 'VariableDeclarator' && n.id?.name === 'homePx') homeDecl = n;
+  });
+  const homeSrc = homeDecl ? flyingBeeSource.slice(homeDecl.init.start, homeDecl.init.end).replace(/\s+/g, ' ') : '(absent)';
+  const homeIdx = [...homeSrc.matchAll(/PATH\[(\d+)\]/g)].map((m) => Number(m[1]));
+  const wired =
+    /home:\s*homePx/.test(flyingBeeSource) &&
+    homeIdx.length === 2 &&
+    homeIdx.every((i) => i === 0);
+
+  if (closes && lands && wired) {
     ok('the return leg ends exactly on PATH[0], and PATH closes there (§28.4 — the loop resumes with no seam)');
   } else {
     bad(
       'the return leg ends exactly on PATH[0], and PATH closes there (§28.4 — the loop resumes with no seam)',
-      `${closes ? '' : 'PATH[0] !== PATH[last]; '}${lands ? '' : `return ends at ${JSON.stringify(last)}, PATH[0] is ${JSON.stringify(PATH[0])}`}`,
+      `${closes ? '' : 'PATH[0] !== PATH[last]; '}` +
+        `${lands ? '' : `buildReturnPlan ends at ${JSON.stringify(last)}, PATH[0] is ${JSON.stringify(PATH[0])}; `}` +
+        `${wired ? '' : `the call site's home is \`${homeSrc}\` — it must be PATH[0] on both axes, or the loop resumes from a waypoint the bee is not standing on`}`,
     );
   }
 }
