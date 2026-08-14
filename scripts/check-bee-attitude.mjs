@@ -2126,6 +2126,22 @@ let tickPropName = null;
   // `translateX` in the render body and the listener holds whichever copy
   // existed when the effect last ran, which is right only for as long as two
   // hand-written dep arrays agree. Memoised, the node IS the dependency.
+  //
+  // This row's remedy is also §28.13's arming edit, so the remedy carries the
+  // warning. Nowhere else in the suite can: the app-wide row would read "a
+  // transform array whose nodes are all stable may not contain a varying plain
+  // entry", and that is red on `CelebrationRays.js:74` today — a row that fails
+  // a correct tree is a row people learn to edit. A failure message is not a
+  // row. It costs no false red, and it reaches the person at the instant they
+  // are holding the edit.
+  //
+  // It goes on the `notMemo` clause only. The `notDep` clause asks for a
+  // dependency array, which arms nothing, and a warning about an edit somebody
+  // is not making is noise. Scope, since it is the rule: this reaches whoever
+  // memoises BECAUSE THIS ROW TOLD THEM TO. Whoever memoises for their own
+  // reasons never sees it — for them the cover is §28.13 and the site comment
+  // at `MascotBee.js:94`, which is the only place in `src/` where the edit
+  // freezes real geometry.
   const memoised = new Set();
   walk(flyingBeeAst.program, (n) => {
     if (n.type !== 'VariableDeclarator' || n.id?.type !== 'Identifier') return;
@@ -2162,7 +2178,11 @@ let tickPropName = null;
         // consequence. An earlier draft said "is rebuilt on every render",
         // which is false of a `useRef` and sent a mutation's diagnosis to the
         // wrong line.
-        notMemo.length ? `\`${notMemo.join('`, `')}\` is not declared by a \`useMemo\` at component scope, so this row cannot show its identity is stable across renders.` : '',
+        // The remedy's side effect, stated as the rule rather than as a fact
+        // about this tree — "here `rotate` is rebuilt per render so you are
+        // fine" would be a sentence that goes false the day somebody memoises
+        // `rotate`, in the message that told them to.
+        notMemo.length ? `\`${notMemo.join('`, `')}\` is not declared by a \`useMemo\` at component scope, so this row cannot show its identity is stable across renders. §28.13 — memoising is also an ARMING edit: if it leaves EVERY node in a shared \`transform\` array identity-stable, every plain number in that array freezes at its first commit, and those have to become nodes in the same change.` : '',
         notDep.length ? `\`${notDep.join('`, `')}\` is not in the effect's deps [${listenerEffectDeps.join(', ')}], so the subscription outlives the node it samples.` : '',
       ].filter(Boolean).join(' '),
     );
