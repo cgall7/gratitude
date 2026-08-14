@@ -2281,6 +2281,225 @@ let tickPropName = null;
   }
 }
 
+// --- I. §28.13 — a plain number sharing a transform array with a natively
+//     driven node is frozen at its first commit ---------------------------
+//
+// Section H made `posRef` live, so the flight starts where the bee is. The
+// particles it drops did not: every trail dot and every pollen fleck in the
+// app rendered at the container's top-left corner, for as long as the pool
+// has existed. Measured on device, 20 frames of ambient cruise: one 6.0 x 6.0
+// pt `accentBurst` square at (2.8, 2.8) pt in 20 of 20 frames, and not one
+// particle anywhere near the bee. The named glow of §17.3 R51 and the pollen
+// of §20.7 have never been on a screen.
+//
+// The cause is two deliberate steps in RN 0.86.2, both measured in the
+// running app rather than read:
+//
+//   1. `createAnimatedPropsMemoHook.js:162-189` builds the memo key that
+//      decides whether to rebuild an `AnimatedProps` node from `AnimatedNode`
+//      instances ONLY. A plain number becomes `null` in that key. Two styles
+//      differing only in `translateX` (0 -> 211) compare
+//      `areCompositeKeysEqual === true`, so the node is reused, forever.
+//   2. `AnimatedTransform.js:147-156` bakes every non-node entry into the
+//      native config as `{type: 'static', value}`. That config is generated
+//      once, when the node goes native. Measured on a pool slot:
+//      `{"type":"static","property":"translateX","value":0}`.
+//
+// The JS render path is fine — `__getValueWithStaticTransforms` reads the
+// FRESH array every render — which is exactly why a state dump of the pool
+// showed twelve correctly positioned particles while the screen showed one
+// stack of them in the corner. The model was right. Only the native side was
+// stale, and the native side is what you see.
+//
+// R89's shape, one layer over, and with the same tell: the initialiser
+// happened to be the correct value at the only place anyone looked.
+//
+// WHAT THESE ROWS DO NOT CLAIM. A non-node entry is not a defect — it is a
+// CONSTANT, and a constant baked once is correct. Whether a given expression
+// is constant for the life of a mount is not decidable here, so I1 asserts
+// only the part that is: an entry the file itself can be seen to CHANGE.
+// The sites that are constant today by call-site coincidence rather than by
+// construction (`MascotBee.js:94`'s hinge offsets, derived from a `size`
+// prop no caller currently varies) are named in §28.13 instead, because a
+// row that fails a correct tree is a row people learn to edit.
+{
+  const NAME = 'I1 §28.13 — no transform array mixes an Animated node with a value the file mutates';
+  const offenders = [];
+  let arrays = 0;
+  let nodeArrays = 0;
+
+  // Resolvably an Animated node: built by the Animated API, or an identifier
+  // whose single declarator is. Deliberately conservative — an entry this
+  // cannot call a node is simply treated as a plain value, which can only
+  // make the row stricter, never blinder.
+  const NODE_INIT = /new\s+Animated\.Value\s*\(|\.interpolate\s*\(|Animated\.(?:add|subtract|multiply|divide|modulo|diffClamp)\s*\(/;
+
+  for (const file of [path.join(ROOT, 'App.js'), ...(await jsFiles(path.join(ROOT, 'src')))]) {
+    const src = await readFile(file, 'utf8');
+    if (!src.includes('transform:')) continue;
+    const ast = parseJs(src);
+
+    // Everything this file assigns to, by printed path: `slot.pos.x = 5`
+    // records `slot.pos.x`, and `setPos(...)` records nothing (a setter's
+    // name is not the value's name, so state is caught by its own rule).
+    const mutated = new Set();
+    const stateful = new Set();
+    walk(ast.program, (n) => {
+      if (n.type === 'AssignmentExpression' && n.left?.type === 'MemberExpression') {
+        mutated.add(src.slice(n.left.start, n.left.end).replace(/\s+/g, ''));
+      }
+      // `const [x, setX] = useState(...)` — x changes by definition.
+      if (
+        n.type === 'VariableDeclarator' &&
+        n.id?.type === 'ArrayPattern' &&
+        n.init?.type === 'CallExpression' &&
+        n.init.callee?.name === 'useState'
+      ) {
+        const first = n.id.elements[0];
+        if (first?.type === 'Identifier') stateful.add(first.name);
+      }
+    });
+
+    const declInit = new Map();
+    walk(ast.program, (n) => {
+      if (n.type !== 'VariableDeclarator' || n.id?.type !== 'Identifier' || !n.init) return;
+      const prev = declInit.get(n.id.name);
+      // Two declarators of one name is ambiguous — record the ambiguity
+      // rather than the last one seen.
+      declInit.set(n.id.name, prev === undefined ? src.slice(n.init.start, n.init.end) : null);
+    });
+
+    const isNode = (v) => {
+      const text = src.slice(v.start, v.end);
+      if (NODE_INIT.test(text)) return true;
+      if (v.type === 'Identifier') {
+        const init = declInit.get(v.name);
+        return typeof init === 'string' && NODE_INIT.test(init);
+      }
+      if (v.type === 'MemberExpression') {
+        // `slot.opacity` — resolve through the object's declarator, which is
+        // where a pool declares what its slots hold.
+        let root = v;
+        while (root.type === 'MemberExpression') root = root.object;
+        if (root.type !== 'Identifier') return false;
+        const init = declInit.get(root.name);
+        if (typeof init !== 'string') return false;
+        const prop = v.property?.name;
+        return prop ? new RegExp(`${prop}\\s*:\\s*new\\s+Animated\\.Value`).test(init) : false;
+      }
+      return false;
+    };
+
+    walk(ast.program, (n) => {
+      if (n.type !== 'ObjectProperty') return;
+      if ((n.key?.name ?? n.key?.value) !== 'transform') return;
+      if (n.value?.type !== 'ArrayExpression') return;
+      arrays += 1;
+
+      const entries = [];
+      for (const el of n.value.elements) {
+        if (el?.type !== 'ObjectExpression') continue;
+        for (const p of el.properties) {
+          if (p.type !== 'ObjectProperty') continue;
+          entries.push({ prop: p.key?.name ?? p.key?.value, value: p.value });
+        }
+      }
+      if (!entries.some((e) => isNode(e.value))) return;
+      nodeArrays += 1;
+
+      const rel = `${path.relative(ROOT, file)}:${n.loc.start.line}`;
+      for (const e of entries) {
+        if (isNode(e.value)) continue;
+        const text = src.slice(e.value.start, e.value.end).replace(/\s+/g, ' ');
+        const flat = text.replace(/\s+/g, '');
+        if (mutated.has(flat)) {
+          offenders.push(
+            `${rel} \`${e.prop}: ${text}\` is not an Animated node and this file assigns to \`${flat}\` — it is baked into the native config once and every later write is invisible on screen (§28.13)`
+          );
+        } else if (e.value.type === 'Identifier' && stateful.has(e.value.name)) {
+          offenders.push(
+            `${rel} \`${e.prop}: ${text}\` is not an Animated node and \`${text}\` is React state — a re-render cannot rebuild the memoised AnimatedProps node, so the rendered value is frozen at the first commit (§28.13)`
+          );
+        }
+      }
+    });
+  }
+
+  if (offenders.length === 0) {
+    ok(`${NAME} — ${nodeArrays} of ${arrays} transform arrays contain an Animated node; no non-node entry in them is written by its own file`);
+  } else {
+    bad(NAME, offenders.join('; '));
+  }
+}
+
+{
+  // I2 — the particle pool itself, named rather than inferred. I1 is a rule
+  // about a shape; this is a rule about the one array that had the defect,
+  // and it is stricter: EVERY entry is a node, so there is nothing left for
+  // a future edit to make constant by accident.
+  const NAME = 'I2 §28.13 — every entry of the particle transform is an Animated node';
+  const src = await readFile(FLYING_BEE, 'utf8');
+  const ast = parseJs(src);
+
+  let poolInit = null;
+  walk(ast.program, (n) => {
+    if (n.type === 'VariableDeclarator' && n.id?.name === 'trailPool' && n.init) {
+      poolInit = src.slice(n.init.start, n.init.end);
+    }
+  });
+
+  const arrays = [];
+  walk(ast.program, (n) => {
+    if (n.type !== 'ObjectProperty') return;
+    if ((n.key?.name ?? n.key?.value) !== 'transform') return;
+    if (n.value?.type !== 'ArrayExpression') return;
+    const entries = [];
+    for (const el of n.value.elements) {
+      if (el?.type !== 'ObjectExpression') continue;
+      for (const p of el.properties) {
+        if (p.type !== 'ObjectProperty') continue;
+        entries.push({ prop: p.key?.name ?? p.key?.value, text: src.slice(p.value.start, p.value.end).replace(/\s+/g, '') });
+      }
+    }
+    // The particle array is the one whose entries read off a pool slot. Found
+    // by that property, not by a line number, so the row survives an edit
+    // above it.
+    if (entries.length && entries.every((e) => /^slot\./.test(e.text))) {
+      arrays.push({ line: n.loc.start.line, entries });
+    }
+  });
+
+  if (poolInit === null) {
+    bad(NAME, 'no `trailPool` declarator found in FlyingBee.js, so this row cannot resolve what a slot holds — CANNOT TELL, which is a fail');
+  } else if (arrays.length !== 1) {
+    bad(
+      NAME,
+      `expected exactly one transform array whose every entry reads a pool slot, found ${arrays.length}${arrays.length ? ` (lines ${arrays.map((a) => a.line).join(', ')})` : ' — the particle render may have been renamed, so this row cannot locate it, which is a fail'}`
+    );
+  } else {
+    const [{ line, entries }] = arrays;
+    const notNodes = entries.filter((e) => {
+      const prop = e.text.split('.').slice(1);
+      // `slot.pos.x` -> the pool must declare `pos:` holding Animated.Values;
+      // `slot.opacity` -> the pool must declare `opacity: new Animated.Value`.
+      const key = prop[0];
+      const idx = poolInit.indexOf(`${key}:`);
+      if (idx === -1) return true;
+      const tail = poolInit.slice(idx, idx + 140);
+      const decl = prop.length > 1 ? tail.slice(0, tail.indexOf('}') + 1) : tail.slice(0, tail.indexOf(','));
+      return !/new\s+Animated\.Value/.test(prop.length > 1 ? decl : decl);
+    });
+    if (notNodes.length) {
+      bad(
+        NAME,
+        `FlyingBee.js:${line} — ${notNodes.map((e) => `\`${e.prop}: ${e.text}\``).join(', ')} does not resolve to an \`Animated.Value\` in the \`trailPool\` declaration, so it is baked into the native transform once (§28.13)`
+      );
+    } else {
+      ok(`${NAME} — FlyingBee.js:${line}, ${entries.length} entries [${entries.map((e) => e.prop).join(', ')}], all resolving to Animated.Values in the pool`);
+    }
+  }
+}
+
 console.log(`\ncheck-bee-attitude: ${pass} passed, ${failures.length} failed`);
 if (failures.length) {
   failures.forEach((f) => console.log(`  - ${f}`));

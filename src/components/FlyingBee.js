@@ -228,16 +228,38 @@ export const FlyingBee = ({
   // outward. Same particle, different push — which is why the burst reuses
   // this pool rather than adding a second one, and why the hard cap still
   // means what §12.5 Rule 3 says it means.
+  //
+  // §28.13 — `pos` is an `Animated.Value` pair and MUST stay one. It used to
+  // be two plain numbers mutated in place plus a state bump to re-render, and
+  // every particle in the app rendered at the container origin for as long as
+  // that was true. A plain number sharing a `transform` array with a natively
+  // driven node is frozen at its first-committed value, by two steps that are
+  // each deliberate:
+  //
+  //   1. `createAnimatedPropsMemoHook.js:162-189` builds the memo key from
+  //      `AnimatedNode` instances only — a plain number becomes `null` in the
+  //      key, so changing it cannot rebuild the `AnimatedProps` node. Measured
+  //      in the running app: two styles differing only in `translateX`
+  //      (0 -> 211) compare `areCompositeKeysEqual === true`.
+  //   2. `AnimatedTransform.js:147-156` bakes non-node entries into the native
+  //      config as `{type: 'static', value}`. That config is generated once,
+  //      when the node is made native, and the node is never rebuilt. Measured:
+  //      `{"type":"static","property":"translateX","value":0}`.
+  //
+  // The JS render path is fine (`__getValueWithStaticTransforms` reads the
+  // fresh array), which is exactly why this was invisible in a state dump: the
+  // model was right and only the native side was stale. `setValue` on an
+  // `Animated.Value` routes to the native node, so a node-valued `pos` cannot
+  // reach that state.
   const trailPool = useRef(
     Array.from({ length: MAX_TRAIL_PARTICLES }).map(() => ({
       opacity: new Animated.Value(0),
       scale: new Animated.Value(1),
       driftX: new Animated.Value(0),
       driftY: new Animated.Value(0),
-      pos: { x: 0, y: 0 },
+      pos: { x: new Animated.Value(0), y: new Animated.Value(0) },
     }))
   ).current;
-  const [, forceTrailRender] = useState(0);
 
   const takeSlot = () => {
     const slot = trailPool[nextTrailIndexRef.current];
@@ -353,8 +375,8 @@ export const FlyingBee = ({
     const origin = { x: landingCorner.x + size / 2, y: landingCorner.y + size / 2 };
     pollenFlecks(pollenCount, ringStep * POLLEN_RADIUS_FRACTION).forEach((fleck) => {
       const slot = takeSlot();
-      slot.pos.x = origin.x;
-      slot.pos.y = origin.y;
+      slot.pos.x.setValue(origin.x);
+      slot.pos.y.setValue(origin.y);
       slot.driftX.setValue(0);
       slot.driftY.setValue(0);
       // Same seed as a trail drop. The burst reads as an event through its
@@ -370,7 +392,6 @@ export const FlyingBee = ({
         Animated.timing(slot.scale, { toValue: 0.3, duration: DURATIONS.trailFade, useNativeDriver: true }),
       ]).start();
     });
-    forceTrailRender((n) => n + 1);
   };
 
   const returnFromHere = () =>
@@ -511,15 +532,14 @@ export const FlyingBee = ({
     if (!layout || flightSuppressed) return undefined;
     trailTimerRef.current = setInterval(() => {
       const slot = takeSlot();
-      slot.pos.x = posRef.current.x;
-      slot.pos.y = posRef.current.y;
+      slot.pos.x.setValue(posRef.current.x);
+      slot.pos.y.setValue(posRef.current.y);
       // Reset the pollen push: the pool is shared, so a slot last used as a
       // fleck still holds its outward drift.
       slot.driftX.setValue(0);
       slot.driftY.setValue(0);
       slot.opacity.setValue(0.8 * beeOpacityRef.current);
       slot.scale.setValue(1);
-      forceTrailRender((n) => n + 1);
       Animated.parallel([
         Animated.timing(slot.opacity, { toValue: 0, duration: DURATIONS.trailFade, useNativeDriver: true }),
         Animated.timing(slot.scale, { toValue: 0.3, duration: DURATIONS.trailFade, useNativeDriver: true }),
@@ -587,12 +607,15 @@ export const FlyingBee = ({
               styles.trailDot,
               {
                 opacity: slot.opacity,
-                // `pos` is where the particle was born (a plain number, set
-                // once) and `drift` is the pollen push (zero for a trail
-                // drop). Two translations compose additively, so one pool
-                // serves both. `scale` stays last: RN applies the array
-                // right-to-left, so it scales about the fleck's own centre
-                // before it is moved.
+                // `pos` is where the particle was born (jumped to with
+                // `setValue`, never animated) and `drift` is the pollen push
+                // (zero for a trail drop). Two translations compose additively,
+                // so one pool serves both. `scale` stays last: RN applies the
+                // array right-to-left, so it scales about the fleck's own
+                // centre before it is moved.
+                //
+                // Every entry here is an `Animated.Value` and §28.13 is why:
+                // one plain number in this array is frozen at its first commit.
                 transform: [
                   { translateX: slot.pos.x },
                   { translateY: slot.pos.y },
