@@ -2269,7 +2269,13 @@ let tickPropName = null;
     const evidence = moving
       ? [...moving.entries()].map(([k, m]) => `${k}=${m ? 'moves' : 'opacity only'}`).join(', ')
       : 'installed interpolators not consulted';
-    ok(`${NAME} — MainTabs.js sets no scene-moving tab animation (installed: ${evidence})`);
+    // Names what was FOUND, not just the verdict. "sets no scene-moving
+    // animation" reads identically whether the file sets nothing or sets
+    // `'fade'`, and those are different facts about the app.
+    const found = named.length
+      ? named.map(({ key, node }) => (node.value?.type === 'StringLiteral' ? `${key}: '${node.value.value}'` : key)).join(', ')
+      : 'none set';
+    ok(`${NAME} — MainTabs.js tab options [${found}]; none moves the scene (installed: ${evidence})`);
   } else {
     bad(NAME, offenders.join('; '));
   }
