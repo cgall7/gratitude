@@ -1191,8 +1191,18 @@ const targetAxisProp = (axis) =>
     const prop = targetAxisProp(axis);
     return prop && /originRef\s*\.\s*current/.test(flyingBeeSource.slice(prop.start, prop.end));
   });
+  // Order matters here, and it is the R73 rule rather than taste. Reading the
+  // cache directly implies "no binding of a measure call", so a freshness-first
+  // ordering reports the general symptom for the one defect this row exists to
+  // catch, and the specific line — the one that names `originRef.current` —
+  // becomes unreachable exactly when it is true. Most specific cause first.
   if (!pollinationTarget) {
     bad(NAME, 'no `const target = { … }` object literal in FlyingBee.js — CANNOT TELL, which is a fail.');
+  } else if (staleAxes.length) {
+    bad(
+      NAME,
+      `the target reads \`originRef.current\` directly on [${staleAxes.join(', ')}]. That is the origin as of the last layout pass — correct until an ancestor transform moves this box without one, and then wrong by the whole delta with nothing to see.`,
+    );
   } else if (freshNames.size === 0) {
     bad(
       NAME,
@@ -1201,9 +1211,7 @@ const targetAxisProp = (axis) =>
   } else if (shared.length === 0) {
     bad(
       NAME,
-      staleAxes.length
-        ? `the target reads \`originRef.current\` directly on [${staleAxes.join(', ')}] — that is the cached origin, correct only until an ancestor transform moves the box without a layout pass.`
-        : `the target subtracts no freshly measured origin on both axes (x: [${[...axisUses.x].join(', ') || 'none'}], y: [${[...axisUses.y].join(', ') || 'none'}]).`,
+      `the target subtracts no freshly measured origin on both axes (x: [${[...axisUses.x].join(', ') || 'none'}], y: [${[...axisUses.y].join(', ') || 'none'}]).`,
     );
   } else {
     ok(`${NAME} — both axes subtract \`${shared.join('`, `')}\`, bound to a call that measures containerRef`);
