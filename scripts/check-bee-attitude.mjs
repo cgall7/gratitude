@@ -1798,6 +1798,223 @@ let tickPropName = null;
   }
 }
 
+// --- H. §28.4 / R89 — the position ref is written by a subscription React
+//     Native will actually call ------------------------------------------
+//
+// F3 above asserts that both plan builders take waypoint 0 from
+// `posRef.current` rather than a constant. That row was GREEN for the entire
+// life of this beat, while `posRef` held `{ x: 0, y: 0 }` from mount to
+// unmount and every flight began in the container's top-left corner. The row
+// was not wrong; it was answering a question one layer above the defect. It
+// asked whether the source NAMES the live ref. Nothing asked whether the ref
+// is live.
+//
+// The mechanism, verified in the installed RN (0.86.2) and then on device:
+//
+//   • `AnimatedWithChildren.__callListeners` (`:72-84`) calls the node's own
+//     listeners, then cascades to children ONLY `if (!this.__isNative)`.
+//   • `__makeNative` (`:24-39`) walks DOWN the chain, so once a value is
+//     driven natively every node derived from it is native too.
+//
+//   ⇒ a listener on `t.interpolate(...)` is registered and then never called.
+//     Measured: 49 callbacks in 800ms on the value; 0 on an interpolation of
+//     it, whether or not that interpolation is attached to a real transform.
+//     The class of the derived node is irrelevant, so "listen on the pair the
+//     render uses" — the obvious fix — is also dead.
+//
+// The guard is correct, not a bug: under the native driver JS has no fresh
+// value for the children, and RN chose frozen over stale. Frozen is also what
+// made this findable, since a bee that teleports to the corner is a bug report
+// and a bee lagging its own trail by two frames is not.
+//
+// So the rows below are about the SHAPE of a subscription, which is the part
+// that is statically decidable. They cannot prove a listener fires — only a
+// device can, and one did. What they can do is make the dead shape impossible
+// to reintroduce, in this file or any other.
+{
+  // H1 — the class rule, enumerated rather than listed. Every `addListener`
+  // in the app, receiver resolved to its declaration; a receiver built from
+  // `.interpolate(...)` (or any other derived node) is a listener that will
+  // go silent the moment its parent goes native, whether or not the file that
+  // wrote it has a native driver in it today.
+  const ANIMATED_DERIVED = /\.interpolate\s*\(|Animated\.(?:add|subtract|multiply|divide|modulo|diffClamp)\s*\(/;
+  const ANIMATED_VALUE = /new\s+Animated\.Value\s*\(/;
+  const sites = [];
+  for (const file of [path.join(ROOT, 'App.js'), ...(await jsFiles(path.join(ROOT, 'src')))]) {
+    const src = await readFile(file, 'utf8');
+    if (!src.includes('.addListener(')) continue;
+    const ast = parseJs(src);
+    const declarators = [];
+    walk(ast.program, (n) => {
+      if (n.type === 'VariableDeclarator' && n.id?.type === 'Identifier') declarators.push(n);
+    });
+    walk(ast.program, (n) => {
+      if (n.type !== 'CallExpression') return;
+      if (n.callee?.type !== 'MemberExpression' || n.callee.property?.name !== 'addListener') return;
+      const recv = n.callee.object;
+      const rel = path.relative(ROOT, file);
+      const name = recv?.type === 'Identifier' ? recv.name : null;
+      const matches = name ? declarators.filter((d) => d.id.name === name) : [];
+      const init = matches.length === 1 && matches[0].init
+        ? src.slice(matches[0].init.start, matches[0].init.end)
+        : null;
+      let verdict;
+      if (init === null) {
+        // Unresolvable receiver. Only a concern in a file that deals in
+        // Animated at all — `navigation.addListener` is a different API that
+        // happens to share a method name.
+        verdict = src.includes("from 'react-native'") && /\bAnimated\b/.test(src) ? 'CANNOT TELL' : 'not an Animated node';
+      } else if (ANIMATED_DERIVED.test(init)) {
+        verdict = 'DERIVED';
+      } else if (ANIMATED_VALUE.test(init)) {
+        verdict = 'AnimatedValue';
+      } else {
+        verdict = 'not an Animated node';
+      }
+      sites.push({ where: `${rel}:${src.slice(0, recv.start).split('\n').length}`, name, verdict, init });
+    });
+  }
+  const derived = sites.filter((s) => s.verdict === 'DERIVED');
+  const unknown = sites.filter((s) => s.verdict === 'CANNOT TELL');
+  const values = sites.filter((s) => s.verdict === 'AnimatedValue');
+  if (sites.length === 0) {
+    bad(
+      'every Animated listener in the app is attached to a value, not to a node derived from one',
+      'found no `addListener` call anywhere — this row enumerates off disk, so zero sites means the walk broke, not that the app stopped listening',
+    );
+  } else if (derived.length === 0 && unknown.length === 0) {
+    ok(
+      `every Animated listener is attached to a value, not to a derived node (${values.length} on an AnimatedValue: ` +
+        `${values.map((s) => `${s.where} \`${s.name}\``).join(', ')}; ${sites.length - values.length} not Animated)`,
+    );
+  } else {
+    bad(
+      'every Animated listener in the app is attached to a value, not to a node derived from one',
+      [
+        ...derived.map((s) => `${s.where} listens on \`${s.name}\` = ${s.init.replace(/\s+/g, ' ').slice(0, 90)} — a derived node. Its listeners stop firing the instant its parent is driven natively, silently, keeping the last value they saw.`),
+        ...unknown.map((s) => `${s.where} listens on \`${s.name}\`, which this row could not resolve to a declaration in the same file — CANNOT TELL, which is a failure, not a pass.`),
+      ].join(' '),
+    );
+  }
+
+  // H2 — the sampler reads the SAME NODES the render puts on screen, not a
+  // second copy built from the same numbers. This is what makes `__getValue`
+  // worth its private-API cost: the same arithmetic can drift behind a
+  // captured `track`; the same node cannot.
+  const beeView = (() => {
+    let found = null;
+    walk(flyingBeeAst.program, (n) => {
+      if (found || n.type !== 'JSXElement') return;
+      const nm = n.openingElement.name;
+      if (nm?.type !== 'JSXMemberExpression' || nm.property?.name !== 'View') return;
+      const style = attrExpr(n.openingElement, 'style');
+      if (style && flyingBeeSource.slice(style.start, style.end).includes('styles.bee')) found = n;
+    });
+    return found;
+  })();
+  const listenerCb = (() => {
+    let found = null;
+    walk(flyingBeeAst.program, (n) => {
+      if (found || n.type !== 'CallExpression') return;
+      if (n.callee?.type !== 'MemberExpression' || n.callee.property?.name !== 'addListener') return;
+      found = n.arguments[0];
+    });
+    return found;
+  })();
+  const readNames = [];
+  walk(listenerCb, (n) => {
+    if (n.type !== 'CallExpression') return;
+    if (n.callee?.type !== 'MemberExpression' || n.callee.property?.name !== '__getValue') return;
+    if (n.callee.object?.type === 'Identifier') readNames.push(n.callee.object.name);
+  });
+  const renderNames = new Set();
+  if (beeView) {
+    const styleExpr = attrExpr(beeView.openingElement, 'style');
+    walk(styleExpr, (n) => {
+      if (n.type === 'Identifier') renderNames.add(n.name);
+    });
+    // One level of aliasing, and exactly one. The bee's opacity is written
+    // `flightOpacity`, declared `presetOpacity ?? 1` — the same node under a
+    // name that says what it is for. Expanding further would let an unrelated
+    // node in through a chain; expanding not at all makes the row fail a
+    // correct file, which is the worse of the two because it teaches people to
+    // edit the gate. This stays sound only because H3 independently pins every
+    // read name to a `useMemo` declarator at component scope, so the alias
+    // cannot resolve to a node built inside the effect — which is precisely the
+    // shape this whole section exists to forbid, and the shape that shipped.
+    for (const name of [...renderNames]) {
+      walk(flyingBeeAst.program, (n) => {
+        if (n.type !== 'VariableDeclarator' || n.id?.name !== name || !n.init) return;
+        walk(n.init, (m) => {
+          if (m.type === 'Identifier') renderNames.add(m.name);
+        });
+      });
+    }
+  }
+  const unread = readNames.filter((n) => !renderNames.has(n));
+  if (!beeView || !listenerCb) {
+    bad(
+      'the position sampler reads the nodes the render draws with',
+      `could not locate ${!beeView ? 'the <Animated.View> carrying styles.bee' : 'an addListener callback in FlyingBee'} — CANNOT TELL`,
+    );
+  } else if (readNames.length === 0) {
+    bad(
+      'the position sampler reads the nodes the render draws with',
+      'the listener callback calls `__getValue()` on nothing. Either it re-derives the interpolation in JS — which can drift from the transform behind a stale captured `track` — or it takes the callback argument, which is `t`, not a position.',
+    );
+  } else if (unread.length === 0) {
+    ok(`the position sampler reads the nodes the render draws with (${[...new Set(readNames)].join(', ')} — all present in the bee's own transform)`);
+  } else {
+    bad(
+      'the position sampler reads the nodes the render draws with',
+      `\`${unread.join('`, `')}\` is read by the sampler but does not appear in the <Animated.View style={[styles.bee, …]}> the user sees. Same numbers is not the same node.`,
+    );
+  }
+
+  // H3 — those nodes are memoised, and the effect depends on their IDENTITY.
+  // Correct-by-dependency-array-coincidence is the failure mode here: rebuild
+  // `translateX` in the render body and the listener holds whichever copy
+  // existed when the effect last ran, which is right only for as long as two
+  // hand-written dep arrays agree. Memoised, the node IS the dependency.
+  const memoised = new Set();
+  walk(flyingBeeAst.program, (n) => {
+    if (n.type !== 'VariableDeclarator' || n.id?.type !== 'Identifier') return;
+    if (n.init?.type === 'CallExpression' && n.init.callee?.name === 'useMemo') memoised.add(n.id.name);
+  });
+  const listenerEffectDeps = (() => {
+    let deps = null;
+    walk(flyingBeeAst.program, (n) => {
+      if (deps || n.type !== 'CallExpression' || n.callee?.name !== 'useEffect') return;
+      const body = n.arguments[0];
+      let hasListen = false;
+      walk(body, (m) => {
+        if (m.type === 'CallExpression' && m.callee?.type === 'MemberExpression' && m.callee.property?.name === 'addListener') hasListen = true;
+      });
+      if (!hasListen) return;
+      const arr = n.arguments[1];
+      deps = arr?.type === 'ArrayExpression' ? arr.elements.filter((e) => e?.type === 'Identifier').map((e) => e.name) : null;
+    });
+    return deps;
+  })();
+  const notMemo = [...new Set(readNames)].filter((n) => !memoised.has(n));
+  const notDep = [...new Set(readNames)].filter((n) => !(listenerEffectDeps ?? []).includes(n));
+  if (readNames.length === 0) {
+    bad('the sampled nodes are memoised and are the effect\'s own dependencies', 'H2 found nothing being read, so this row cannot tell');
+  } else if (listenerEffectDeps === null) {
+    bad('the sampled nodes are memoised and are the effect\'s own dependencies', 'the listening useEffect has no literal dependency array — it re-subscribes every render, which is a different defect with the same symptom');
+  } else if (notMemo.length === 0 && notDep.length === 0) {
+    ok(`the sampled nodes are memoised and are the effect's own dependencies ([${listenerEffectDeps.join(', ')}])`);
+  } else {
+    bad(
+      'the sampled nodes are memoised and are the effect\'s own dependencies',
+      [
+        notMemo.length ? `\`${notMemo.join('`, `')}\` is rebuilt on every render, so the listener holds a copy the render has already replaced.` : '',
+        notDep.length ? `\`${notDep.join('`, `')}\` is not in the effect's deps [${listenerEffectDeps.join(', ')}], so the subscription outlives the node it samples.` : '',
+      ].filter(Boolean).join(' '),
+    );
+  }
+}
+
 console.log(`\ncheck-bee-attitude: ${pass} passed, ${failures.length} failed`);
 if (failures.length) {
   failures.forEach((f) => console.log(`  - ${f}`));
