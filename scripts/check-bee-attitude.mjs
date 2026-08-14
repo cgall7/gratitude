@@ -2212,14 +2212,22 @@ let tickPropName = null;
   // thing. Force the collector to gather nothing and the whole suite still
   // reports 77/0 (Sage) — every line of this predicate lives inside `bad()`,
   // so a passing run has no coverage of it at all. The reachable version of
-  // that is a file with no literal `transform: [...]`, at which point an
-  // absent clause would read as the clean "none of these sit in a transform"
-  // when the honest answer is "this row could not look." R73: the place a
-  // check declines to have an opinion must not look like the place it has a
-  // clean one.
+  // that is a file the collector finds nothing in, at which point an absent
+  // clause would read as the clean "none of these sit in a transform" when the
+  // honest answer is "this row could not look." R73: the place a check
+  // declines to have an opinion must not look like the place it has a clean
+  // one.
+  //
+  // The sentence STATES WHAT THE TEST FOUND, never why (Sage). An earlier
+  // draft said "no literal `transform: [...]` array was found in this file" —
+  // a CAUSE, and only one of the two that produce `size === 0`. Make both
+  // arrays literal-only and it reports no array in a file holding two, so the
+  // verdict is right and the cause is invented. A MESSAGE THAT NAMES THE CAUSE
+  // WILL DRIFT FROM THE PREDICATE; A MESSAGE THAT STATES WHAT THE TEST FOUND
+  // CANNOT. Same words, true under both causes, cannot go stale.
   const arming = notMemo.filter((n) => inTransform.has(n));
   const armingClause = inTransform.size === 0
-    ? ' §28.13 — CANNOT TELL whether memoising is also an arming edit: no literal `transform: [...]` array was found in this file, so the membership test had nothing to read. Check by hand.'
+    ? ' §28.13 — CANNOT TELL whether memoising is also an arming edit: the membership test found no variable reference in any `transform: [...]` array in this file, so it has nothing to match against. Check by hand.'
     : arming.length
       ? ` §28.13 — \`${arming.join('`, `')}\` sits in a \`transform\` array, so memoising is also an ARMING edit: if it leaves EVERY node in a shared \`transform\` array identity-stable, every plain number in that array freezes at its first commit, and those have to become nodes in the same change.`
       : '';
