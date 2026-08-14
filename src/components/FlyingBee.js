@@ -148,11 +148,9 @@ export const FlyingBee = ({
   const trailTimerRef = useRef(null);
   const nextTrailIndexRef = useRef(0);
   const containerRef = useRef(null);
-  // Window origin of this component's own box. Measured once per layout and
-  // then held, which is sound precisely because §28.2's screen-anchoring is
-  // deliberate (`HoneycombTab:358-361`) — this box never scrolls. The thing
-  // that moves is the comb, and that is handled by aborting, not by re-aiming
-  // (§28.9).
+  // Last known window origin of this component's own box (§28.2). Seeded at
+  // layout, refreshed at the moment of use — see `readOrigin` below for why it
+  // is not simply cached.
   const originRef = useRef({ x: 0, y: 0 });
   const pollinateKeyRef = useRef(null);
   // Ref so a new callback identity never restarts an in-progress flight.
@@ -247,15 +245,43 @@ export const FlyingBee = ({
     return slot;
   };
 
-  const onLayout = (e) => {
-    const { width, height } = e.nativeEvent.layout;
-    if (width && height) setLayout({ width, height });
-    // §28.2 — measure the bee's own container, not the target's. Everything
-    // arriving from the comb is in window coordinates and converts through
-    // this one number.
+  // §28.2 — measure the bee's own container, not the target's. Everything
+  // arriving from the comb is in window coordinates and converts through this
+  // one number.
+  //
+  // Measure-on-use, not cache-on-layout, and the difference is a defect class:
+  // `onLayout` is emitted only from a Yoga pass (`ShadowTree.cpp:571-574` ->
+  // `YogaLayoutableShadowNode.cpp:701`) and Yoga does not handle transforms at
+  // all (`YGNode.h:279`), so a container moved by an ancestor *transform*
+  // leaves a cached origin stale with no signature — the miss is small,
+  // silent, and has no sign to spot it by.
+  //
+  // The callback is synchronous on this stack: `NativeDOM.cpp:439-440` calls it
+  // in line, measured `ranBeforeReturn: true` in the running app. That is why
+  // this reads like a getter. If it ever stops being synchronous the write
+  // simply lands late and we return the previous value, which is exactly the
+  // cache-on-layout behaviour this replaces — never worse, so the shape is
+  // safe either way.
+  //
+  // What it does NOT buy is immunity to *why* the box moved. `measureInWindow`
+  // reads the shadow tree (`DOM.cpp:536-539`, `includeTransform: true`), and a
+  // `useNativeDriver: true` transform never reaches it — it is written straight
+  // onto the layer (`RCTMountingManager.mm:316-324`). Measured: 18 samples of
+  // `y = 0` while a natively-driven view slid 200pt. So a natively-animated
+  // ancestor (a collapse-on-scroll header is the obvious one) still lies to
+  // this, and the guarantee that closes it is structural rather than measured:
+  // a pollinate-capable mount must not sit under a native-driven transform.
+  const readOrigin = () => {
     containerRef.current?.measureInWindow?.((x, y) => {
       if (Number.isFinite(x) && Number.isFinite(y)) originRef.current = { x, y };
     });
+    return originRef.current;
+  };
+
+  const onLayout = (e) => {
+    const { width, height } = e.nativeEvent.layout;
+    if (width && height) setLayout({ width, height });
+    readOrigin();
   };
 
   // Live numeric read of the current translated position and of the bee's own
@@ -382,9 +408,13 @@ export const FlyingBee = ({
     // bee lands `size / 2` down and right of the face he came to visit, which
     // on a 7-seat comb is 0.408 of a seat step — most of the way to the
     // neighbour. One place, one expression.
+    // `boxOrigin`, not `origin` — `origin` is already taken in this file by the
+    // pollen emission point, and two different origins one screen apart is how
+    // a later reader subtracts the wrong one.
+    const boxOrigin = readOrigin();
     const target = {
-      x: pollinate.x - originRef.current.x - size / 2,
-      y: pollinate.y - originRef.current.y - size / 2,
+      x: pollinate.x - boxOrigin.x - size / 2,
+      y: pollinate.y - boxOrigin.y - size / 2,
     };
     setPlan({
       ...buildPollinationPlan({

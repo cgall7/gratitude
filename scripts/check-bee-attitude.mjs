@@ -1056,24 +1056,157 @@ if (CRUISE_PATH?.length && CRUISE_LOOP_MS && CELL_SIZE) {
 // character centre are the same point. The row asserts the expression, both
 // axes, and that no other divisor sneaks in — `size / 2` written once per
 // axis is the whole fix and there is nothing else to tune.
-{
-  const halves = [];
-  const others = [];
+//
+// Located by ROLE. The first version of this row found the two properties by
+// grepping their source for `originRef`, and R91 renamed that term to
+// `boxOrigin` for reasons that had nothing to do with the half-box — so the
+// row went red on a file where the correction was still present, on both
+// axes, unchanged. A locator built out of an identifier that merely happens
+// to appear inside the expression fails correct trees, and a row that fails
+// correct trees is a row people learn to edit. `const target = { … }` is what
+// this row is actually about, so that is what it looks for.
+const pollinationTarget = (() => {
+  let found = null;
   walk(flyingBeeAst.program, (n) => {
-    if (n.type !== 'ObjectProperty' || !['x', 'y'].includes(n.key?.name)) return;
-    const src = flyingBeeSource.slice(n.start, n.end);
-    if (!/originRef/.test(src)) return;
-    if (/-\s*size\s*\/\s*2/.test(src)) halves.push(n.key.name);
-    else others.push(`${n.key.name}: ${src.replace(/\s+/g, ' ')}`);
+    if (found || n.type !== 'VariableDeclarator' || n.id?.name !== 'target') return;
+    if (n.init?.type !== 'ObjectExpression') return;
+    found = n.init;
   });
-  if (halves.length === 2 && halves.includes('x') && halves.includes('y') && others.length === 0) {
-    ok('the target is corrected by size / 2 on both axes (§28.3 — the waypoint names a corner, not a bee)');
+  return found;
+})();
+const targetAxisProp = (axis) =>
+  pollinationTarget?.properties?.find(
+    (p) => p.type === 'ObjectProperty' && p.key?.name === axis,
+  ) ?? null;
+{
+  const NAME = 'the target is corrected by size / 2 on both axes (§28.3 — the waypoint names a corner, not a bee)';
+  if (!pollinationTarget) {
+    bad(NAME, 'no `const target = { … }` object literal in FlyingBee.js, so this row could not find the expression it is about — CANNOT TELL, which is a fail.');
   } else {
+    const halves = [];
+    const others = [];
+    for (const axis of ['x', 'y']) {
+      const prop = targetAxisProp(axis);
+      if (!prop) {
+        others.push(`${axis}: absent from the target literal`);
+        continue;
+      }
+      const src = flyingBeeSource.slice(prop.start, prop.end).replace(/\s+/g, ' ');
+      if (/-\s*size\s*\/\s*2/.test(src)) halves.push(axis);
+      else others.push(`${axis}: ${src}`);
+    }
+    if (halves.length === 2 && others.length === 0) {
+      ok(NAME);
+    } else {
+      bad(
+        NAME,
+        `axes corrected: [${halves.join(', ')}]${others.length ? `; uncorrected: ${others.join('; ')}` : ''}. ` +
+          'Uncorrected, the bee lands 0.408 of a seat step down-and-right of the face he came to visit.',
+      );
+    }
+  }
+}
+
+// --- F2b. §28.2 — the origin is measured at the moment of use ------------
+//
+// The other term in that same expression, and the one with no signature when
+// it goes wrong. `originRef` used to be filled once from `onLayout` and then
+// held. That is sound only if the box can move by nothing but a layout pass,
+// and it can: `onLayout` is emitted from `affectedLayoutableNodes`
+// (`ShadowTree.cpp:571-574`), which is filled only under
+// `getHasNewLayout()` (`YogaLayoutableShadowNode.cpp:701`), and Yoga does not
+// handle transforms at all (`YGNode.h:279`). A container moved by an ancestor
+// transform leaves the cached origin stale, silently, by an amount with no
+// sign to spot it by.
+//
+// So the row asserts the TRIGGER, not the call: `measureInWindow` was already
+// in the file — it was simply invoked from the one event a transform does not
+// produce. F3 below has the same shape of history and it is worth stating the
+// pair, because they are the same lesson twice: F3 asked whether the source
+// NAMES the live ref and nothing asked whether the ref was LIVE; this asks
+// whether the origin is measured, and the thing that must be checked is WHEN.
+//
+// What it does not cover, stated so nobody reads coverage into it: a
+// natively-driven ancestor transform is invisible to `measureInWindow` too
+// (it reads the shadow tree — `DOM.cpp:536-539` — and the native driver
+// writes the layer directly, `RCTMountingManager.mm:316-324`; measured, 18
+// samples of y = 0 while the view slid 200pt). Measure-on-use widens the
+// coverage from "layout only" to "layout + JS-driven transform". It does not
+// close the class, and no row here claims it does.
+{
+  const NAME = 'the window origin is measured when the flight is planned, not cached at layout (§28.2)';
+  // A function whose body measures the bee's OWN container. §28.2's whole
+  // point is that the flight's box is the one measured, never the target's,
+  // so the receiver is part of what makes a callee count.
+  const measuresOwnBox = (fnNode) => {
+    let hit = false;
+    walk(fnNode, (n) => {
+      if (hit) return;
+      if (n.type !== 'CallExpression' && n.type !== 'OptionalCallExpression') return;
+      const callee = n.callee;
+      if (callee?.property?.name !== 'measureInWindow') return;
+      let o = callee.object;
+      while (o && (o.type === 'MemberExpression' || o.type === 'OptionalMemberExpression')) o = o.object;
+      if (o?.type === 'Identifier' && o.name === 'containerRef') hit = true;
+    });
+    return hit;
+  };
+  const findFn = (name) => {
+    let found = null;
+    walk(flyingBeeAst.program, (n) => {
+      if (found) return;
+      if (n.type === 'FunctionDeclaration' && n.id?.name === name) found = n;
+      if (
+        n.type === 'VariableDeclarator' &&
+        n.id?.name === name &&
+        (n.init?.type === 'ArrowFunctionExpression' || n.init?.type === 'FunctionExpression')
+      ) found = n.init;
+    });
+    return found;
+  };
+  // Names bound in this file to the RESULT OF CALLING a function that
+  // measures the container. Resolving through the declarator is what makes
+  // the row about freshness rather than about spelling: `readOrigin()` and
+  // `originRef.current` are one character apart at the call site and are the
+  // whole difference between measure-on-use and the defect.
+  const freshNames = new Set();
+  walk(flyingBeeAst.program, (n) => {
+    if (n.type !== 'VariableDeclarator' || n.id?.type !== 'Identifier') return;
+    const init = n.init;
+    if (init?.type !== 'CallExpression' && init?.type !== 'OptionalCallExpression') return;
+    if (init.callee?.type !== 'Identifier') return;
+    const fn = findFn(init.callee.name);
+    if (fn && measuresOwnBox(fn)) freshNames.add(n.id.name);
+  });
+  const axisUses = {};
+  for (const axis of ['x', 'y']) {
+    const prop = targetAxisProp(axis);
+    axisUses[axis] = new Set();
+    walk(prop?.value, (n) => {
+      if (n.type === 'Identifier' && freshNames.has(n.name)) axisUses[axis].add(n.name);
+    });
+  }
+  const shared = [...axisUses.x].filter((n) => axisUses.y.has(n));
+  const staleAxes = ['x', 'y'].filter((axis) => {
+    const prop = targetAxisProp(axis);
+    return prop && /originRef\s*\.\s*current/.test(flyingBeeSource.slice(prop.start, prop.end));
+  });
+  if (!pollinationTarget) {
+    bad(NAME, 'no `const target = { … }` object literal in FlyingBee.js — CANNOT TELL, which is a fail.');
+  } else if (freshNames.size === 0) {
     bad(
-      'the target is corrected by size / 2 on both axes (§28.3 — the waypoint names a corner, not a bee)',
-      `axes corrected: [${halves.join(', ')}]${others.length ? `; uncorrected: ${others.join(', ')}` : ''}. ` +
-        'Uncorrected, the bee lands 0.408 of a seat step down-and-right of the face he came to visit.',
+      NAME,
+      'nothing in this file binds the result of a call that runs `containerRef…measureInWindow`. Either the measure moved off the container the flight is drawn in, or the origin is being read from a cache again.',
     );
+  } else if (shared.length === 0) {
+    bad(
+      NAME,
+      staleAxes.length
+        ? `the target reads \`originRef.current\` directly on [${staleAxes.join(', ')}] — that is the cached origin, correct only until an ancestor transform moves the box without a layout pass.`
+        : `the target subtracts no freshly measured origin on both axes (x: [${[...axisUses.x].join(', ') || 'none'}], y: [${[...axisUses.y].join(', ') || 'none'}]).`,
+    );
+  } else {
+    ok(`${NAME} — both axes subtract \`${shared.join('`, `')}\`, bound to a call that measures containerRef`);
   }
 }
 
