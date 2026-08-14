@@ -1933,18 +1933,27 @@ let tickPropName = null;
     walk(styleExpr, (n) => {
       if (n.type === 'Identifier') renderNames.add(n.name);
     });
-    // One level of aliasing, and exactly one. The bee's opacity is written
-    // `flightOpacity`, declared `presetOpacity ?? 1` — the same node under a
-    // name that says what it is for. Expanding further would let an unrelated
-    // node in through a chain; expanding not at all makes the row fail a
-    // correct file, which is the worse of the two because it teaches people to
-    // edit the gate. This stays sound only because H3 independently pins every
-    // read name to a `useMemo` declarator at component scope, so the alias
-    // cannot resolve to a node built inside the effect — which is precisely the
-    // shape this whole section exists to forbid, and the shape that shipped.
+    // One level of aliasing, and only through a RE-BINDING. The bee's opacity
+    // is written `flightOpacity`, declared `presetOpacity ?? 1` — the same node
+    // under a name that says what it is for, so the row must see through it or
+    // it fails a correct file and teaches people to edit the gate.
+    //
+    // But `rotate` is declared `attitude ? t.interpolate({…}) : '0deg'`, and
+    // expanding through THAT admits `t` — the parent value, which the render
+    // does not draw with. Then a sampler that reads `t.__getValue()` and does
+    // the interpolation arithmetic itself passes a row whose whole point is
+    // that it must not: same numbers, different node, free to drift behind a
+    // stale captured `track`. Found by mutating this row, not by reasoning
+    // about it.
+    //
+    // So: expand only where the init CONSTRUCTS NOTHING. A declarator that
+    // builds a new Animated node names a different node by definition; one
+    // that just passes an identifier along names the same one.
+    const CONSTRUCTS_A_NODE = /\.interpolate\s*\(|new\s+Animated\.|Animated\.(?:add|subtract|multiply|divide|modulo|diffClamp)\s*\(/;
     for (const name of [...renderNames]) {
       walk(flyingBeeAst.program, (n) => {
         if (n.type !== 'VariableDeclarator' || n.id?.name !== name || !n.init) return;
+        if (CONSTRUCTS_A_NODE.test(flyingBeeSource.slice(n.init.start, n.init.end))) return;
         walk(n.init, (m) => {
           if (m.type === 'Identifier') renderNames.add(m.name);
         });
@@ -2008,7 +2017,11 @@ let tickPropName = null;
     bad(
       'the sampled nodes are memoised and are the effect\'s own dependencies',
       [
-        notMemo.length ? `\`${notMemo.join('`, `')}\` is rebuilt on every render, so the listener holds a copy the render has already replaced.` : '',
+        // States what was checked — "is not declared by a useMemo" — never a
+        // consequence. An earlier draft said "is rebuilt on every render",
+        // which is false of a `useRef` and sent a mutation's diagnosis to the
+        // wrong line.
+        notMemo.length ? `\`${notMemo.join('`, `')}\` is not declared by a \`useMemo\` at component scope, so this row cannot show its identity is stable across renders.` : '',
         notDep.length ? `\`${notDep.join('`, `')}\` is not in the effect's deps [${listenerEffectDeps.join(', ')}], so the subscription outlives the node it samples.` : '',
       ].filter(Boolean).join(' '),
     );
