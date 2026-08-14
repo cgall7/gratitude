@@ -178,7 +178,7 @@ if (moduleImports.length === 0) {
 const attitude = await import(
   `data:text/javascript;base64,${Buffer.from(moduleSource).toString('base64')}`
 );
-const { buildAttitude, bankFor, pitchFor, MAX_BANK_DEG, TURN_MS } = attitude;
+const { buildAttitude, bankFor, pitchFor, facingFor, MAX_BANK_DEG, TURN_MS } = attitude;
 
 {
   const samples = [];
@@ -227,6 +227,53 @@ const { buildAttitude, bankFor, pitchFor, MAX_BANK_DEG, TURN_MS } = attitude;
     bad(
       'pitchFor discards the direction of travel and keeps only steepness',
       'pitch differs for mirrored travel, so leftward flight would bank the opposite way from rightward',
+    );
+  }
+
+  // `facingFor` gets the same treatment as `bankFor` and for the same reason:
+  // its two live consumers between them supply about six values of dx, and six
+  // points say nothing about a rule with a threshold in it. Swept with BOTH
+  // incoming facings, because the whole content of the rule is what it does
+  // when it declines to decide.
+  const SIZE = 32;
+  const held = [];
+  const turned = [];
+  for (const h of [1, -1]) {
+    for (let dx = -200; dx <= 200; dx += 0.5) {
+      const f = facingFor(dx, SIZE, h);
+      (Math.abs(dx) / SIZE >= 1 ? turned : held).push({ dx, h, f });
+    }
+  }
+  const heldWrong = held.filter((s) => s.f !== s.h);
+  if (heldWrong.length === 0) {
+    ok(`facingFor holds the incoming facing below one body width (${held.length} samples, size ${SIZE})`);
+  } else {
+    bad(
+      `facingFor holds the incoming facing below one body width (${held.length} samples, size ${SIZE})`,
+      `${heldWrong.length} samples turned anyway, first at dx ${heldWrong[0].dx} holding ${heldWrong[0].h}. ` +
+        'A bare Math.sign fails here and nowhere else — this is the row that separates the rule from the ' +
+        'reflex, and loginArc segment 4 (0.80 body widths) is the live fixture.',
+    );
+  }
+  const turnedWrong = turned.filter((s) => s.f !== Math.sign(s.dx));
+  if (turnedWrong.length === 0) {
+    ok(`facingFor faces its travel at or above one body width (${turned.length} samples, size ${SIZE})`);
+  } else {
+    bad(
+      `facingFor faces its travel at or above one body width (${turned.length} samples, size ${SIZE})`,
+      `${turnedWrong.length} samples kept the old facing, first at dx ${turnedWrong[0].dx}`,
+    );
+  }
+  const scalesWithSize = [13, 16, 22, 32, 44, 64].every(
+    (s) => facingFor(-s * 0.99, s, 1) === 1 && facingFor(-s * 1.01, s, 1) === -1,
+  );
+  if (scalesWithSize) {
+    ok('facingFor threshold scales with size, not with a screen (checked at every live flight size)');
+  } else {
+    bad(
+      'facingFor threshold scales with size, not with a screen (checked at every live flight size)',
+      'the threshold did not track `size`. Whether sideways reads as sideways is a question about the ' +
+        "character's own length; a fixed pixel deadband would be tuned against one container.",
     );
   }
 }
@@ -525,6 +572,175 @@ for (const entry of CALL_SITES) {
       (r) => r.a.windows.every((w) => w.tEnd <= 1 + 1e-12),
       () => 'Animated.loop snaps t back to 0, so a straddling window teleports scaleX mid-turn',
     );
+  }
+}
+
+// =========================================================================
+// D. BeeTransition
+// =========================================================================
+//
+// The other thing that flies the mascot. It has no track and no container —
+// one stretch of translate, authored in points at the call site — so none of
+// section B applies to it, and it was outside this gate entirely until the
+// mascot got a face.
+//
+// What the face exposed: `SHARE_CARRY_PATH` travels 40pt to the LEFT, and the
+// component never mirrored. That flight has been running tail-first on the
+// Hive for as long as it has existed, invisibly, because the drawing it used
+// had no expression to contradict. The row below is the one that catches it,
+// and it catches it by asking the same question section B asks — which way is
+// this bee pointing, given how far it travels — of the component that had
+// never been asked.
+console.log('\nD. BeeTransition paths');
+
+const BEE_TRANSITION = path.join(ROOT, 'src/components/BeeTransition.js');
+const btSource = await readFile(BEE_TRANSITION, 'utf8');
+const btAst = parseJs(btSource);
+
+// A path object as written in source: `{ translateX: [...], rotate: [...] }`.
+const readPathObject = (node) => {
+  if (node?.type !== 'ObjectExpression') return null;
+  const out = {};
+  node.properties.forEach((p) => {
+    if (p.type !== 'ObjectProperty' || p.value?.type !== 'ArrayExpression') return;
+    out[p.key.name] = p.value.elements.map((e) =>
+      e.type === 'UnaryExpression' ? -e.argument.value : e.value,
+    );
+  });
+  return out;
+};
+
+// The default every caller that passes no `path` flies. Read from the
+// component rather than restated here, so the gate cannot disagree with it.
+let DEFAULT_BT_PATH = null;
+walk(btAst.program, (n) => {
+  if (n.type === 'VariableDeclarator' && n.id?.name === 'DEFAULT_PATH') {
+    DEFAULT_BT_PATH = readPathObject(n.init);
+  }
+});
+
+{
+  const importsFacing = btAst.program.body.some(
+    (n) =>
+      n.type === 'ImportDeclaration' &&
+      n.source.value.endsWith('beeAttitude') &&
+      n.specifiers.some((s) => s.imported?.name === 'facingFor'),
+  );
+  let ownSign = 0;
+  walk(btAst.program, (n) => {
+    if (
+      n.type === 'MemberExpression' &&
+      n.object?.name === 'Math' &&
+      n.property?.name === 'sign'
+    ) {
+      ownSign += 1;
+    }
+  });
+  if (importsFacing && ownSign === 0) {
+    ok('BeeTransition takes its facing from facingFor and holds no facing rule of its own');
+  } else {
+    bad(
+      'BeeTransition takes its facing from facingFor and holds no facing rule of its own',
+      `imports facingFor: ${importsFacing}; Math.sign call sites in the file: ${ownSign}. Two copies of ` +
+        'the one-body-width rule is one copy that can drift, and this is the file where drift is invisible.',
+    );
+  }
+
+  // scaleX must be the LAST transform entry, in both render paths. RN folds
+  // the array left to right onto a row vector, so the last entry is applied
+  // first: mirror the drawing, then bank it. The other order banks the drawing
+  // and then mirrors the bank, which climbs where it should dive.
+  const orders = [];
+  walk(btAst.program, (n) => {
+    if (n.type !== 'ObjectProperty' || n.key?.name !== 'transform' || n.value?.type !== 'ArrayExpression') return;
+    orders.push(
+      n.value.elements.map((e) => e?.properties?.[0]?.key?.name ?? '?'),
+    );
+  });
+  const scaleXLast = orders.length > 0 && orders.every((o) => o[o.length - 1] === 'scaleX');
+  if (scaleXLast) {
+    ok(`scaleX is the last transform entry in all ${orders.length} BeeTransition render paths (applied first)`);
+  } else {
+    bad(
+      `scaleX is the last transform entry in all ${orders.length} BeeTransition render paths (applied first)`,
+      orders.map((o) => `[${o.join(', ')}]`).join('; ') || 'no transform arrays found',
+    );
+  }
+}
+
+// Resolve every <BeeTransition> on disk to the path constant it flies and the
+// size it flies at. A site whose path cannot be resolved is a FAILURE: this
+// gate must not be able to shrug.
+{
+  const DEFAULT_SIZE = 32;
+  const sites = [];
+  for (const file of [path.join(ROOT, 'App.js'), ...(await jsFiles(path.join(ROOT, 'src')))]) {
+    if (file === BEE_TRANSITION) continue;
+    const src = await readFile(file, 'utf8');
+    if (!src.includes('<BeeTransition')) continue;
+    const ast = parseJs(src);
+    const consts = new Map();
+    walk(ast.program, (n) => {
+      if (n.type !== 'VariableDeclarator' || n.id?.type !== 'Identifier') return;
+      const obj = readPathObject(n.init);
+      if (obj) consts.set(n.id.name, obj);
+    });
+    walk(ast.program, (n) => {
+      if (n.type !== 'JSXOpeningElement' || n.name.name !== 'BeeTransition') return;
+      const props = {};
+      n.attributes.forEach((a) => {
+        if (a.type !== 'JSXAttribute') return;
+        props[a.name.name] = a.value?.expression ?? a.value;
+      });
+      // Three cases, and keeping them apart is the point. No `path` prop at
+      // all means the component's own default, which this gate has read. A
+      // named constant resolves in the file that declares it. An inline
+      // object resolves directly. Anything else — an import, a call, a
+      // ternary — is UNRESOLVED, and unresolved must not fall back to the
+      // default: that would check a flight this call site does not fly, and
+      // report it as a clean pass. This gate's own header says the place it
+      // declines to have an opinion must not look like the place it has one,
+      // and the first draft of this block did exactly that.
+      let pathName = '(default path)';
+      let def = DEFAULT_BT_PATH;
+      if (props.path) {
+        if (props.path.type === 'Identifier') {
+          pathName = props.path.name;
+          def = consts.get(pathName) ?? null;
+        } else if (props.path.type === 'ObjectExpression') {
+          pathName = '(inline)';
+          def = readPathObject(props.path);
+        } else {
+          pathName = `(${props.path.type})`;
+          def = null;
+        }
+      }
+      sites.push({ file: path.relative(ROOT, file), line: n.loc.start.line, pathName, def, size: props.size?.value ?? DEFAULT_SIZE });
+    });
+  }
+
+  const unresolved = sites.filter((s) => !s.def || !Array.isArray(s.def.translateX) || !Array.isArray(s.def.rotate));
+  if (unresolved.length === 0) {
+    ok(`every <BeeTransition> call site resolves to a path this gate can read (${sites.length} found)`);
+  } else {
+    bad(
+      `every <BeeTransition> call site resolves to a path this gate can read (${sites.length} found)`,
+      unresolved.map((s) => `${s.file}:${s.line} path=${s.pathName}`).join('; ') +
+        ' — a flight this gate cannot read is a flight it is not checking, and that must not look like a pass.',
+    );
+  }
+
+  for (const s of sites.filter((x) => x.def?.translateX && x.def?.rotate)) {
+    const dx = s.def.translateX[s.def.translateX.length - 1] - s.def.translateX[0];
+    const facing = facingFor(dx, s.size, 1);
+    const banks = s.def.rotate.map((r) => parseFloat(r) * facing);
+    const worst = banks.reduce((a, b) => (Math.abs(b) > Math.abs(a) ? b : a));
+    const label =
+      `${s.file}:${s.line} ${s.pathName ?? '(default path)'} @ size ${s.size} — ` +
+      `travels ${dx.toFixed(0)}pt (${(Math.abs(dx) / s.size).toFixed(2)} body widths), ` +
+      `faces ${facing > 0 ? 'right' : 'left'}, bank within ±${MAX_BANK_DEG}°`;
+    if (Math.abs(worst) <= MAX_BANK_DEG + 1e-9) ok(label);
+    else bad(label, `worst rendered bank ${worst.toFixed(1)}°`);
   }
 }
 

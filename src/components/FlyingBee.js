@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, StyleSheet, View } from 'react-native';
-import { StripedBee } from './StripedBee';
+import { MascotBee } from './MascotBee';
 import { buildAttitude } from './beeAttitude';
 import { theme } from '../constants/theme';
 import { DURATIONS, MAX_TRAIL_PARTICLES, useReducedMotion } from '../constants/motion';
@@ -24,10 +24,13 @@ import { DURATIONS, MAX_TRAIL_PARTICLES, useReducedMotion } from '../constants/m
 // slowed. Until this preset existed the Welcome call site silently fell
 // through to the cruise loop and circled the wordmark forever.
 //
-// §17.3 flight ruling — flown as `StripedBee` with `bandColor={accent}`
-// (the host under a cruising bee is never a known field, so a `fieldColor`
-// knockout would paint an opaque band over whatever it's crossing) and
-// `flutter` (airborne render path only — never on the parked/RM pose).
+// §19.5 / R79 — flown as `MascotBee`, the ratified render itself, with
+// `flutter` on the airborne path only (never on the parked/RM pose). The
+// §17.3 flight ruling this replaces chose `StripedBee` with
+// `bandColor={accent}` so a cruising bee never knocked an opaque band out of
+// unknown content; a raster has no colour props at all, so the question
+// retires rather than being answered differently. `StripedBee` survives on
+// the keepsake card, where the field *is* known.
 //
 // The *path* is still a first engine pass (loose 5-point loop, eased
 // timing driver) — Deezine owns cruise posture/wing-flutter/glow-particle
@@ -282,7 +285,7 @@ export const FlyingBee = ({ active = true, size = DEFAULT_SIZE, style, preset, o
     return (
       <View style={[styles.parkedAnchor, style]} pointerEvents="none">
         <Animated.View style={{ opacity }}>
-          <StripedBee size={size} bandColor={theme.colors.accent} />
+          <MascotBee size={size} />
         </Animated.View>
       </View>
     );
@@ -338,7 +341,7 @@ export const FlyingBee = ({ active = true, size = DEFAULT_SIZE, style, preset, o
             },
           ]}
         >
-          <StripedBee size={size} bandColor={theme.colors.accent} flutter />
+          <MascotBee size={size} flutter />
         </Animated.View>
       )}
     </View>

@@ -85,6 +85,27 @@ export const pitchFor = (dxPx, dyPx) => Math.atan2(dyPx, Math.abs(dxPx)) * DEG;
 // values, which is a heading in a bound's clothing.
 export const bankFor = (pitchDeg) => (MAX_BANK_DEG * pitchDeg) / 90;
 
+// Which way the bee points, given one stretch of horizontal travel and the
+// facing it is already holding. Facing holds through travel too vertical to
+// read a direction from — including, deliberately, the loginArc settle, whose
+// last segment is 0.80 body widths. A pixel deadband would have been tuned
+// against one container and an angle deadband fails outright (that settle is
+// 22.7° off vertical and clears any threshold you would write for
+// "near-vertical"), so the measure is the character's own length: whether
+// sideways reads as sideways is a question about how long the bee is.
+//
+// Two consumers, same question: `buildAttitude` walks a track's segments, and
+// `BeeTransition` has one stretch of travel and no track at all. The rule is
+// here rather than duplicated because those are the same question, not two
+// questions with the same answer.
+//
+// The first segment of a track has nothing to hold, so callers seed `held`
+// from its own travel whatever the magnitude; `check-bee-attitude` asserts
+// separately that every track's first segment clears the threshold on its
+// own, because that fallback is a base case and not a licence.
+export const facingFor = (dxPx, size, held) =>
+  (Math.abs(dxPx) / size >= 1 ? Math.sign(dxPx) || held : held);
+
 // Numeric inverse of a monotonic easing. Bisection rather than an
 // analytic inverse so this works for whatever easing a track is actually
 // flown with, including one it hasn't been given yet.
@@ -145,15 +166,9 @@ export const buildAttitude = (
     return { dx, dy, pitch, bank: bankFor(pitch), bodyWidths: Math.abs(dx) / size };
   });
 
-  // Facing holds through travel too vertical to read a direction from —
-  // including, deliberately, the loginArc settle. Segment 0 has nothing to
-  // hold, so it takes the sign of its own travel whatever the magnitude;
-  // `check-bee-attitude` asserts separately that every track's first
-  // segment clears the threshold on its own, because that fallback is a
-  // base case and not a licence.
   let held = Math.sign(segments[0].dx) || 1;
   segments.forEach((seg) => {
-    if (seg.bodyWidths >= 1) held = Math.sign(seg.dx) || held;
+    held = facingFor(seg.dx, size, held);
     seg.facing = held;
   });
 
