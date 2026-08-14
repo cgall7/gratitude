@@ -2169,7 +2169,7 @@ let tickPropName = null;
   // of scoping; the NAME is, because `notMemo` is a list whose members do not
   // share a hazard.
   //
-  // REFERENCE POSITIONS ONLY. A property key and a member-expression property
+  // Reference positions only. A property key and a member-expression property
   // are `Identifier` nodes that name nothing: `{ scale: slot.scale }` holds
   // three Identifiers and exactly one of them is a variable. Collecting all
   // three is R85's "prose about a variable is not the variable" one layer in
@@ -2177,7 +2177,21 @@ let tickPropName = null;
   // `pos`, `x`, `y`, `scale`, `driftX`, `driftY` off the particle array, and
   // a sampled node named any of those would take the clause without ever
   // being in a transform. Shorthand is safe either way: `{ rotate }` parses
-  // key and value as distinct nodes, so dropping the key keeps the reference.
+  // key and value as distinct nodes (verified: 25 shorthand properties in this
+  // file, `key === value` in none of them), so dropping the key keeps the
+  // reference — which the bee's own array at the render depends on, since it
+  // is 100% shorthand.
+  //
+  // WHAT THIS DOES NOT DO, because the caps above used to claim more than the
+  // code performs (Sage): membership is matched BY NAME, NOT BY BINDING. No
+  // scope resolution happens. `slot` is in the resulting set and it is the
+  // `trailPool.map((slot, i) =>` PARAMETER at `:603`, not a component-scope
+  // node — so a sampled node named `slot` would take the clause off a
+  // different binding wearing the same name. Right role, wrong binding: one
+  // step in from the role confusion this walk fixes. Left unresolved on
+  // purpose — a parent-aware walk for a collision that needs somebody to name
+  // a sampled node after a callback parameter is not worth the machinery, and
+  // §28.12's precedent is to name residue rather than promise immunity.
   const inTransform = new Set();
   walk(flyingBeeAst.program, (n) => {
     if (n.type !== 'ObjectProperty') return;
@@ -2194,6 +2208,21 @@ let tickPropName = null;
   });
   const notMemo = [...new Set(readNames)].filter((n) => !memoised.has(n));
   const notDep = [...new Set(readNames)].filter((n) => !(listenerEffectDeps ?? []).includes(n));
+  // The arming clause, and its CANNOT-TELL case. Silence has to mean one
+  // thing. Force the collector to gather nothing and the whole suite still
+  // reports 77/0 (Sage) — every line of this predicate lives inside `bad()`,
+  // so a passing run has no coverage of it at all. The reachable version of
+  // that is a file with no literal `transform: [...]`, at which point an
+  // absent clause would read as the clean "none of these sit in a transform"
+  // when the honest answer is "this row could not look." R73: the place a
+  // check declines to have an opinion must not look like the place it has a
+  // clean one.
+  const arming = notMemo.filter((n) => inTransform.has(n));
+  const armingClause = inTransform.size === 0
+    ? ' §28.13 — CANNOT TELL whether memoising is also an arming edit: no literal `transform: [...]` array was found in this file, so the membership test had nothing to read. Check by hand.'
+    : arming.length
+      ? ` §28.13 — \`${arming.join('`, `')}\` sits in a \`transform\` array, so memoising is also an ARMING edit: if it leaves EVERY node in a shared \`transform\` array identity-stable, every plain number in that array freezes at its first commit, and those have to become nodes in the same change.`
+      : '';
   if (readNames.length === 0) {
     bad('the sampled nodes are memoised and are the effect\'s own dependencies', 'H2 found nothing being read, so this row cannot tell');
   } else if (listenerEffectDeps === null) {
@@ -2212,7 +2241,7 @@ let tickPropName = null;
         // about this tree — "here `rotate` is rebuilt per render so you are
         // fine" would be a sentence that goes false the day somebody memoises
         // `rotate`, in the message that told them to.
-        notMemo.length ? `\`${notMemo.join('`, `')}\` is not declared by a \`useMemo\` at component scope, so this row cannot show its identity is stable across renders.` + (notMemo.filter((n) => inTransform.has(n)).length ? ` §28.13 — \`${notMemo.filter((n) => inTransform.has(n)).join('`, `')}\` sits in a \`transform\` array, so memoising is also an ARMING edit: if it leaves EVERY node in a shared \`transform\` array identity-stable, every plain number in that array freezes at its first commit, and those have to become nodes in the same change.` : '') : '',
+        notMemo.length ? `\`${notMemo.join('`, `')}\` is not declared by a \`useMemo\` at component scope, so this row cannot show its identity is stable across renders.${armingClause}` : '',
         notDep.length ? `\`${notDep.join('`, `')}\` is not in the effect's deps [${listenerEffectDeps.join(', ')}], so the subscription outlives the node it samples.` : '',
       ].filter(Boolean).join(' '),
     );
