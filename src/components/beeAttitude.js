@@ -91,8 +91,18 @@ export const bankFor = (pitchDeg) => (MAX_BANK_DEG * pitchDeg) / 90;
 // last segment is 0.80 body widths. A pixel deadband would have been tuned
 // against one container and an angle deadband fails outright (that settle is
 // 22.7° off vertical and clears any threshold you would write for
-// "near-vertical"), so the measure is the character's own length: whether
-// sideways reads as sideways is a question about how long the bee is.
+// "near-vertical"), so the measure is the bee's own BOX — `size`, the prop
+// every call site already passes.
+//
+// The word matters and this comment had it wrong. It used to say "the
+// character's own length," and the code divides by `size` (44) while the
+// character is drawn at MASCOT_WIDTH_FRACTION of it (30.07) — a quantity
+// 1.46x smaller than the rule uses. Nothing ratified moves: every published
+// body-width figure was computed as `dx / size` (R81's cruise table
+// 3.39/3.04/3.93/2.50, loginArc's 0.80 settle), so the arithmetic was always
+// self-consistent and only the justification was false. Fifth outing of
+// right-measurement-wrong-name, and the first with the name inside a comment
+// justifying a constant — a justification comment is a dependency (R83).
 //
 // Two consumers, same question: `buildAttitude` walks a track's segments, and
 // `BeeTransition` has one stretch of travel and no track at all. The rule is
