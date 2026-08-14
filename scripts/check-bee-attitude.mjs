@@ -2369,6 +2369,32 @@ let tickPropName = null;
       declInit.set(n.id.name, prev === undefined ? src.slice(n.init.start, n.init.end) : null);
     });
 
+    // Every dotted property path in this file that is declared holding an
+    // Animated node, e.g. `pos.x` from `pos: { x: new Animated.Value(0) }`.
+    //
+    // The first draft of this row resolved a member expression through its
+    // ROOT identifier's declarator, and `const slot = takeSlot()` appears
+    // twice, so `slot` was ambiguous, nothing in the particle array resolved,
+    // and the array was skipped as "contains no Animated node". The row then
+    // reported a clean pass about an array it could not see — which is the
+    // shape R73 named: the place a check declines to have an opinion must not
+    // look like the place it has a clean one. Found by mutation: restoring the
+    // exact defect this row exists for left it GREEN.
+    const nodePaths = new Set();
+    const collect = (obj, prefix) => {
+      for (const p of obj.properties) {
+        if (p.type !== 'ObjectProperty') continue;
+        const key = p.key?.name ?? p.key?.value;
+        if (key == null) continue;
+        const dotted = prefix ? `${prefix}.${key}` : key;
+        if (p.value?.type === 'ObjectExpression') collect(p.value, dotted);
+        else if (NODE_INIT.test(src.slice(p.value.start, p.value.end))) nodePaths.add(dotted);
+      }
+    };
+    walk(ast.program, (n) => {
+      if (n.type === 'ObjectExpression') collect(n, '');
+    });
+
     const isNode = (v) => {
       const text = src.slice(v.start, v.end);
       if (NODE_INIT.test(text)) return true;
@@ -2377,15 +2403,15 @@ let tickPropName = null;
         return typeof init === 'string' && NODE_INIT.test(init);
       }
       if (v.type === 'MemberExpression') {
-        // `slot.opacity` — resolve through the object's declarator, which is
-        // where a pool declares what its slots hold.
-        let root = v;
-        while (root.type === 'MemberExpression') root = root.object;
-        if (root.type !== 'Identifier') return false;
-        const init = declInit.get(root.name);
-        if (typeof init !== 'string') return false;
-        const prop = v.property?.name;
-        return prop ? new RegExp(`${prop}\\s*:\\s*new\\s+Animated\\.Value`).test(init) : false;
+        // Match the longest property-path suffix, so `slot.pos.x` resolves
+        // against `pos.x` without needing to know what `slot` is. The object
+        // a pool hands out is described by the pool's own declaration, and
+        // that is the thing worth reading.
+        const parts = text.replace(/\s+/g, '').split('.');
+        for (let i = 1; i < parts.length; i += 1) {
+          if (nodePaths.has(parts.slice(i).join('.'))) return true;
+        }
+        return false;
       }
       return false;
     };
