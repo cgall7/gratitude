@@ -886,9 +886,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   wordmarkArcBee: {
-    // FlyingBee's `fill` style is absoluteFillObject by default — override
-    // just enough here that "fill" means "fill the anchor," not the
-    // Welcome screen's centerFill parent.
+    // Belt-and-braces only. FlyingBee's own `fill` style is
+    // `StyleSheet.absoluteFill`, which already carries `position:
+    // 'absolute'`, so this sets a property to the value it already has.
+    //
+    // Kept, but corrected, because the old wording here was wrong about
+    // exactly the thing that matters: it said the style prop is what makes
+    // "fill" mean "fill the anchor." It isn't. An absolutely-positioned
+    // view fills its *parent*, so the box the bee's fractional path
+    // resolves against is set by `wordmarkArcAnchor` above — 220×100 — and
+    // nothing a caller writes here changes it. (It also named
+    // `absoluteFillObject`, the API that does not exist in RN 0.86.2 and
+    // made this bee invisible until d0def1c.)
     position: 'absolute',
   },
   h1: {
