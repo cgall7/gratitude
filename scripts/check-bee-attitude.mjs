@@ -1686,11 +1686,13 @@ let tickPropName = null;
         ? 'no useEffect in HoneycombGrid.js calls shouldAbortPollination — the predicate is dead code'
         : !deps
           ? 'the abort effect has no dependency array — it re-runs on every render, which passes the aim point but makes the trigger set unreadable'
-          : !watchesLayout
-            ? `\`layout\` is not in [${deps.join(', ')}] — a re-seat emits no scroll event, so the case the row-7 fixtures pin is evaluated by nothing`
-            : !watchesTick
-              ? `the scroll tick (\`${tickPropName ?? '?'}\`) is not in [${deps.join(', ')}] — scrolling moves the target and nothing re-checks it`
-              : `layout re-memoizes on [${memoDeps.join(', ')}] — "complete by construction" holds only while that list IS the definition of what can re-seat`,
+          : !tickPropName
+            ? `G3 could not name the tick prop, so this row cannot tell whether [${deps.join(', ')}] contains it — and CANNOT TELL is a failure, not a clean NO`
+            : !watchesLayout
+              ? `\`layout\` is not in [${deps.join(', ')}] — a re-seat emits no scroll event, so the case the row-7 fixtures pin is evaluated by nothing`
+              : !watchesTick
+                ? `the scroll tick (\`${tickPropName}\`) is not in [${deps.join(', ')}] — scrolling moves the target and nothing re-checks it`
+                : `layout re-memoizes on [${memoDeps.join(', ')}] — "complete by construction" holds only while that list IS the definition of what can re-seat`,
     );
   }
 }
@@ -1729,7 +1731,9 @@ let tickPropName = null;
         ? 'shouldAbortPollination is not called anywhere in HoneycombGrid.js'
         : !readerName
           ? `its third argument is \`${sliceOf(gridSource)(third)}\` — not a call, so it cannot be a live read. If it is the seeded offset, drift is identically zero and the predicate can never fire.`
-          : `\`${readerName}\` does not read ${refPropName ?? '(the ref prop)'}.current — the drift is measured against something other than the live scroll offset`,
+          : !refPropName
+            ? `G3 could not name the ref prop, so this row cannot tell what \`${readerName}\` ought to read — and CANNOT TELL is a failure, not a clean NO`
+            : `\`${readerName}\` does not read ${refPropName}.current — the drift is measured against something other than the live scroll offset`,
     );
   }
 }
