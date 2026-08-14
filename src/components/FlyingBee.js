@@ -29,8 +29,9 @@ import { DURATIONS, MAX_TRAIL_PARTICLES, useReducedMotion } from '../constants/m
 // §17.3 flight ruling this replaces chose `StripedBee` with
 // `bandColor={accent}` so a cruising bee never knocked an opaque band out of
 // unknown content; a raster has no colour props at all, so the question
-// retires rather than being answered differently. `StripedBee` survives on
-// the keepsake card, where the field *is* known.
+// retires rather than being answered differently. R83: `StripedBee` no longer
+// survives anywhere — the keepsake register it was held for is `KeepsakeBee`,
+// the same character with the ink/yellow partition inverted.
 //
 // The *path* is still a first engine pass (loose 5-point loop, eased
 // timing driver) — Deezine owns cruise posture/wing-flutter/glow-particle

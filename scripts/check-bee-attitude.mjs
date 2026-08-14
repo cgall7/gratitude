@@ -68,6 +68,7 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readFile, readdir } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { parse } from '@babel/parser';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -741,6 +742,183 @@ walk(btAst.program, (n) => {
       `faces ${facing > 0 ? 'right' : 'left'}, bank within ±${MAX_BANK_DEG}°`;
     if (Math.abs(worst) <= MAX_BANK_DEG + 1e-9) ok(label);
     else bad(label, `worst rendered bank ${worst.toFixed(1)}°`);
+  }
+}
+
+// =========================================================================
+// E. One bee
+// =========================================================================
+//
+// Colin, verbatim: *"never have any other bee than our mascot."* Until this
+// section that rule was enforced by a conversation and nothing else — the
+// gate above holds the mascot at a readable attitude and says nothing about
+// whether the thing being held is the mascot.
+//
+// The obvious shape is an exemption list: no bee but the mascot, *unless*
+// declared here with a reason. I am not writing that, and the reason is a
+// rule I have been on the wrong side of before — **an `unless` clause is
+// self-issued unless you check who granted it.** A list of permitted
+// exceptions is a place for the next exception to go, and the register that
+// was going to be its first entry (the keepsake, ink-on-gold, which a raster
+// cannot recolour) turned out not to need one: the mascot inverts which
+// element carries the form, so undoing that inversion *is* the knockout.
+// R83. Both registers are now the same drawing, so the exemption list would
+// have been an empty list with a door in it.
+//
+// So the rule is enforced by absence. There is one drawing of the bee, it
+// ships as `mascot-*.png`, and the component that drew the other one does not
+// exist. A gate cannot check that a PNG is on-brand, but it can check that no
+// second bee has been *drawn* — which is the form every previous non-mascot
+// bee took, including the two redraws this project rejected.
+console.log('\nE. One bee');
+
+{
+  const beeSources = (await jsFiles(path.join(ROOT, 'src'))).concat(path.join(ROOT, 'App.js'));
+
+  // 1. The component that drew the old bee is gone, not deprecated. A file
+  //    still on disk is a file an import can find.
+  const stripedBee = path.join(ROOT, 'src/components/StripedBee.js');
+  if (!existsSync(stripedBee)) {
+    ok('src/components/StripedBee.js does not exist (the second drawing is deleted, not deprecated)');
+  } else {
+    bad(
+      'src/components/StripedBee.js does not exist (the second drawing is deleted, not deprecated)',
+      'it is still on disk, so an import can still find it',
+    );
+  }
+
+  // 2. `StripedBee` survives only as prose. Several headers name it to record
+  //    why it went — naming a thing to explain its removal is the opposite of
+  //    keeping it, and a reader who finds no trace re-derives the same wrong
+  //    turn. What must not survive is an *identifier*: an import, a render, a
+  //    reference of any kind the parser can see.
+  //
+  //    The distinction is computed, not declared. An allow-list of files
+  //    permitted to mention it would be an exemption list wearing a different
+  //    hat, and it would have to be edited every time a header is written.
+  const identifiers = [];
+  let mentions = 0;
+  for (const file of beeSources) {
+    const src = await readFile(file, 'utf8');
+    if (!src.includes('StripedBee')) continue;
+    mentions += 1;
+    walk(parseJs(src).program, (n) => {
+      const hit =
+        (n.type === 'Identifier' && n.name === 'StripedBee') ||
+        (n.type === 'JSXIdentifier' && n.name === 'StripedBee');
+      if (hit) identifiers.push(`${path.relative(ROOT, file)}:${n.loc.start.line}`);
+    });
+  }
+  if (identifiers.length === 0) {
+    ok(`StripedBee survives only in comments (${mentions} files mention it, 0 identifiers)`);
+  } else {
+    bad(
+      'StripedBee survives only in comments',
+      `${identifiers.join(', ')} — a live reference to a component that no longer exists`,
+    );
+  }
+
+  // 3. Every bee actually rendered is one of the two mascot components.
+  //    Enumerated off disk, so a third one added tomorrow fails without
+  //    anyone remembering this rule — which is the only kind of rule that
+  //    survives the thread it was agreed in.
+  //    "Is this the mascot" is answered by REACHABILITY, not by a list. The
+  //    two components that draw `mascot-*.png` seed the set; anything whose
+  //    own file renders a member joins it, to a fixpoint. So a wrapper that
+  //    adds a rhythm to the mascot (`WelcomeBee`, the 132pt held pose) passes
+  //    by construction, and a new bee that draws its own shapes fails by
+  //    construction — neither needs an entry anywhere.
+  //
+  //    A hardcoded permitted-set is the version of this row that has the hole
+  //    it exists to close: the first draft was one, and adding `WelcomeBee` to
+  //    it by hand is exactly the edit that makes the next bee's entry routine.
+  //
+  //    TWO CORRECTIONS, both found by mutating this row rather than reading it:
+  //
+  //    (a) The seeds were the hardcoded pair `MascotBee`/`KeepsakeBee` — the
+  //        same list one level down, since a third register would have to be
+  //        added by hand. A seed is now anything that `require`s an
+  //        `assets/mascot-*.png`, so a register that draws the shipped asset
+  //        joins on its own and one that draws a *different* asset does not.
+  //
+  //    (b) Membership was EXISTENTIAL where the rule is UNIVERSAL: "renders a
+  //        mascot somewhere in its file." A component that draws its own bee
+  //        on one branch and delegates to `MascotBee` on another satisfied
+  //        that and passed — verified, it goes green. And that is not a
+  //        hypothetical shape: it is `WelcomeBee` as it stood this morning,
+  //        one `<MascotBee>` away from being invisible to the row written to
+  //        find it. So a wrapper joins only if it renders a member AND draws
+  //        no vectors of its own. Scope stated plainly: "draws its own" means
+  //        it imports `react-native-svg`, which is how every bee this project
+  //        has ever drawn was drawn. A bee assembled from rounded `View`s
+  //        would still walk through, and no row here claims otherwise.
+  const draws = new Map();
+  const renders = new Map();
+  const seeds = new Set();
+  const vector = new Set();
+  for (const file of beeSources) {
+    const src = await readFile(file, 'utf8');
+    if (!src.includes('Bee')) continue;
+    const rel = path.relative(ROOT, file);
+    if (/require\(\s*['"][^'"]*assets\/mascot-[^'"]*\.png['"]\s*\)/.test(src)) seeds.add(path.basename(rel, '.js'));
+    walk(parseJs(src).program, (n) => {
+      if (n.type === 'ImportDeclaration' && n.source.value === 'react-native-svg') vector.add(rel);
+      if (n.type === 'JSXOpeningElement' && typeof n.name.name === 'string' && /Bee$/.test(n.name.name)) {
+        renders.set(`${rel}:${n.loc.start.line}`, n.name.name);
+        (draws.get(rel) ?? draws.set(rel, new Set()).get(rel)).add(n.name.name);
+      }
+    });
+  }
+  const componentFile = (name) => `src/components/${name}.js`;
+  const mascotSet = new Set(seeds);
+  for (let grew = true; grew; ) {
+    grew = false;
+    for (const [rel, children] of draws) {
+      const name = path.basename(rel, '.js');
+      if (mascotSet.has(name) || rel !== componentFile(name) || vector.has(rel)) continue;
+      if ([...children].some((c) => mascotSet.has(c))) {
+        mascotSet.add(name);
+        grew = true;
+      }
+    }
+  }
+  const strangers = [...renders].filter(([, name]) => !mascotSet.has(name));
+  if (strangers.length === 0) {
+    ok(`every rendered <*Bee> draws the mascot (${mascotSet.size} components reach mascot-*.png: ${[...mascotSet].sort().join(', ')})`);
+  } else {
+    // The two ways in are different defects and the line has to say which,
+    // or a red on the hybrid reads as a red on a missing import.
+    bad(
+      'every rendered <*Bee> draws the mascot',
+      strangers
+        .map(([at, name]) =>
+          vector.has(componentFile(name))
+            ? `${at} <${name}> — renders the mascot but imports react-native-svg, so it also draws a bee of its own`
+            : `${at} <${name}> — does not reach mascot-*.png by any render path`)
+        .join('; ') + ' — Colin: "never have any other bee than our mascot."',
+    );
+  }
+
+  // 4. The two registers draw the same character. Not a colour check — the
+  //    assets are rasters and this gate cannot see inside them — but they are
+  //    exported onto one character box, and `constants/mascot.js` states that
+  //    box. Two components sharing one geometry module is what makes a swap
+  //    between registers keep its footprint; if one grows its own numbers,
+  //    that has silently stopped being true.
+  const registers = ['src/components/MascotBee.js', 'src/components/KeepsakeBee.js'];
+  const strays = [];
+  for (const rel of registers) {
+    const src = await readFile(path.join(ROOT, rel), 'utf8');
+    if (!/from '\.\.\/constants\/mascot'/.test(src)) strays.push(`${rel} does not import constants/mascot`);
+    walk(parseJs(src).program, (n) => {
+      if (n.type !== 'VariableDeclarator' || n.init?.type !== 'NumericLiteral') return;
+      strays.push(`${rel} declares a bare geometry number ${n.id.name} = ${n.init.value}`);
+    });
+  }
+  if (strays.length === 0) {
+    ok('both registers take their geometry from constants/mascot (one character box, so a register swap keeps its footprint)');
+  } else {
+    bad('both registers take their geometry from constants/mascot', strays.join('; '));
   }
 }
 

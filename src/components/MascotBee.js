@@ -53,20 +53,28 @@ import {
 const WING = require('../../assets/mascot-wing.png');
 const BODY = require('../../assets/mascot-body.png');
 
-export const MascotBee = ({ size = 44, flutter = false, wingStyle }) => {
-  const beat = useRef(new Animated.Value(0)).current;
+// `beat` lets a caller drive the wing itself with an Animated.Value in [0,1].
+// The component owns the beat's GEOMETRY — where the hinge is, how far the
+// wing swings — and the caller may own its RHYTHM, which is the same split
+// §12.5.1b makes for springs: a named curve fixes shape, not duration. The
+// hero pose needs it: a held bee flicks twice and rests, and a bee that
+// buzzes continuously at 148pt reads like a loading spinner rather than a
+// character. `flutter` is the built-in loop for everything that is in transit.
+export const MascotBee = ({ size = 44, flutter = false, beat: driven, wingStyle }) => {
+  const own = useRef(new Animated.Value(0)).current;
+  const beat = driven ?? own;
 
   useEffect(() => {
-    if (!flutter) return undefined;
+    if (!flutter || driven) return undefined;
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(beat, { toValue: 1, duration: WING_BEAT_MS, useNativeDriver: true }),
-        Animated.timing(beat, { toValue: 0, duration: WING_BEAT_MS, useNativeDriver: true }),
+        Animated.timing(own, { toValue: 1, duration: WING_BEAT_MS, useNativeDriver: true }),
+        Animated.timing(own, { toValue: 0, duration: WING_BEAT_MS, useNativeDriver: true }),
       ])
     );
     loop.start();
     return () => loop.stop();
-  }, [flutter, beat]);
+  }, [flutter, driven, own]);
 
   const width = size * MASCOT_WIDTH_FRACTION;
   const height = width / MASCOT_ASPECT;
@@ -81,7 +89,7 @@ export const MascotBee = ({ size = 44, flutter = false, wingStyle }) => {
   // this way carries no assumption about how it is plumbed on either platform.
   const offsetX = (HINGE.x - 0.5) * width;
   const offsetY = (HINGE.y - 0.5) * height;
-  const beatStyle = flutter
+  const beatStyle = flutter || driven
     ? {
         transform: [
           { translateX: offsetX },
