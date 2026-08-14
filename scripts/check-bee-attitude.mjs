@@ -2169,6 +2169,112 @@ let tickPropName = null;
   }
 }
 
+// --- H4. §28.2 — no tab-level scene transform over the pollinate mount ---
+//
+// The half of the origin residue that is opt-in, and therefore gateable.
+//
+// Measure-on-use (F2b) fixes a stale origin for anything Yoga can see. It
+// cannot fix a NATIVELY DRIVEN ancestor transform, because `measureInWindow`
+// reads the shadow tree and the native driver writes the layer — measured, 18
+// samples of `y = 0` while a view slid 200pt. There are exactly two navigators
+// over `HoneycombTab`'s `<FlyingBee>`:
+//
+//   * the ROOT stack (`App.js`, `@react-navigation/stack`). Its unfocused card
+//     carries `translateUnfocused`, 0 -> `screen.width * -0.3`
+//     (`CardStyleInterpolators.tsx:29-37`), driven with
+//     `useNativeDriver: Platform.OS !== 'web'` (`Card.tsx:79`, `:251`). That is
+//     UNCONDITIONAL and is what a stack is for — not gateable, and recorded in
+//     §28.11 with its bound instead.
+//   * this one, `MainTabs.js`. `hasAnimation` gates the whole tab transition on
+//     `options.animation` / `options.transitionSpec`
+//     (`BottomTabView.tsx:60-67`), and neither is set — so today there is no
+//     second transform. It is one word away from there being one, on a
+//     navigator the user crosses dozens of times a session rather than
+//     occasionally, and that FREQUENCY is why this row is worth having while
+//     the root stack's identical mechanism is only worth writing down.
+//
+// It asserts the BOUND, not the token. `animation: 'fade'` is opacity-only and
+// cannot move this box; `'shift'` carries `translateX` ±50. A row that reds on
+// both would be red about something it has no opinion on, and rows that fail
+// correct trees teach people to edit the gate. So the row resolves the name
+// through the INSTALLED library and CALLS the interpolator, rather than
+// trusting a list typed here — which also means a library upgrade that gives
+// `forFade` a transform turns this red on its own.
+{
+  const NAME = 'no tab-level scene transform over the pollinate mount (§28.2)';
+  const MAIN_TABS = path.join(ROOT, 'src/navigation/MainTabs.js');
+  const tabsSource = await readFile(MAIN_TABS, 'utf8');
+  const tabsAst = parseJs(tabsSource);
+  const named = [];
+  walk(tabsAst.program, (n) => {
+    if (n.type !== 'ObjectProperty' || !n.key) return;
+    const k = n.key.name ?? n.key.value;
+    if (!['animation', 'transitionSpec', 'sceneStyleInterpolator'].includes(k)) return;
+    named.push({ key: k, node: n });
+  });
+  // Which named animations actually move the scene — asked of the installed
+  // module by calling it, with `interpolate` stubbed so the returned style is
+  // the shape the library would build.
+  let moving = null;
+  let interpolatorError = null;
+  try {
+    const mod = await import(
+      path.join(ROOT, 'node_modules/@react-navigation/bottom-tabs/lib/module/TransitionConfigs/SceneStyleInterpolators.js')
+    );
+    const stub = { current: { progress: { interpolate: () => 'ANIMATED_NODE' } } };
+    moving = new Map();
+    for (const [exported, fn] of Object.entries(mod)) {
+      if (typeof fn !== 'function' || !exported.startsWith('for')) continue;
+      const style = fn(stub)?.sceneStyle ?? {};
+      const preset = exported.slice(3).toLowerCase();
+      moving.set(preset, Object.prototype.hasOwnProperty.call(style, 'transform'));
+    }
+  } catch (e) {
+    interpolatorError = e.message;
+  }
+  const offenders = [];
+  for (const { key, node } of named) {
+    if (key === 'transitionSpec') {
+      // `transitionSpec` alone turns `hasAnimation` on but leaves
+      // `sceneStyleInterpolator` at the `none` preset's `undefined`
+      // (`BottomTabView.tsx:292-294`), so it animates a value no scene style
+      // reads. Harmless for the origin — and stated rather than skipped,
+      // because "the gate ignored it" and "the gate cleared it" must not
+      // look the same.
+      continue;
+    }
+    if (key === 'sceneStyleInterpolator') {
+      offenders.push('`sceneStyleInterpolator` is set here, and this row cannot evaluate a function it did not resolve — CANNOT TELL, which is a fail');
+      continue;
+    }
+    const v = node.value;
+    if (v?.type !== 'StringLiteral') {
+      offenders.push(`\`animation\` is set to a non-literal (${tabsSource.slice(v.start, v.end).replace(/\s+/g, ' ').slice(0, 60)}), so this row cannot resolve which interpolator runs — CANNOT TELL, which is a fail`);
+      continue;
+    }
+    if (v.value === 'none') continue;
+    if (!moving) {
+      offenders.push(`\`animation: '${v.value}'\` is set and the installed interpolators could not be loaded (${interpolatorError}) — CANNOT TELL, which is a fail`);
+      continue;
+    }
+    if (!moving.has(v.value)) {
+      offenders.push(`\`animation: '${v.value}'\` does not resolve to an installed \`for${v.value.charAt(0).toUpperCase()}${v.value.slice(1)}\` interpolator, so this row cannot say whether it moves the scene — CANNOT TELL, which is a fail`);
+      continue;
+    }
+    if (moving.get(v.value)) {
+      offenders.push(`\`animation: '${v.value}'\` resolves to an interpolator that returns a \`transform\`, so every tab switch moves the bee's container by a transform the native driver writes straight to the layer — \`measureInWindow\` cannot see it and the origin is stale for the length of the transition (§28.11)`);
+    }
+  }
+  if (offenders.length === 0) {
+    const evidence = moving
+      ? [...moving.entries()].map(([k, m]) => `${k}=${m ? 'moves' : 'opacity only'}`).join(', ')
+      : 'installed interpolators not consulted';
+    ok(`${NAME} — MainTabs.js sets no scene-moving tab animation (installed: ${evidence})`);
+  } else {
+    bad(NAME, offenders.join('; '));
+  }
+}
+
 console.log(`\ncheck-bee-attitude: ${pass} passed, ${failures.length} failed`);
 if (failures.length) {
   failures.forEach((f) => console.log(`  - ${f}`));
