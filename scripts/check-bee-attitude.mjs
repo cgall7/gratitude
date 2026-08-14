@@ -2467,11 +2467,29 @@ let tickPropName = null;
   const src = await readFile(FLYING_BEE, 'utf8');
   const ast = parseJs(src);
 
-  let poolInit = null;
+  // What a slot holds, as dotted leaf paths, read off the pool declaration's
+  // own object literal rather than by regex over its text. The first draft
+  // matched `/new Animated.Value/` against the whole `pos: { … }` fragment,
+  // so `pos: { x: 0, y: new Animated.Value(0) }` passed on the strength of
+  // `y` — membership existential where the rule is universal, which is the
+  // hole R83 already named once. Found by mutating half the defect in.
+  let poolPaths = null;
   walk(ast.program, (n) => {
-    if (n.type === 'VariableDeclarator' && n.id?.name === 'trailPool' && n.init) {
-      poolInit = src.slice(n.init.start, n.init.end);
-    }
+    if (n.type !== 'VariableDeclarator' || n.id?.name !== 'trailPool' || !n.init) return;
+    poolPaths = new Set();
+    const collect = (obj, prefix) => {
+      for (const p of obj.properties) {
+        if (p.type !== 'ObjectProperty') continue;
+        const key = p.key?.name ?? p.key?.value;
+        if (key == null) continue;
+        const dotted = prefix ? `${prefix}.${key}` : key;
+        if (p.value?.type === 'ObjectExpression') collect(p.value, dotted);
+        else if (/new\s+Animated\.Value\s*\(/.test(src.slice(p.value.start, p.value.end))) poolPaths.add(dotted);
+      }
+    };
+    walk(n.init, (m) => {
+      if (m.type === 'ObjectExpression') collect(m, '');
+    });
   });
 
   const arrays = [];
@@ -2495,7 +2513,7 @@ let tickPropName = null;
     }
   });
 
-  if (poolInit === null) {
+  if (poolPaths === null) {
     bad(NAME, 'no `trailPool` declarator found in FlyingBee.js, so this row cannot resolve what a slot holds — CANNOT TELL, which is a fail');
   } else if (arrays.length !== 1) {
     bad(
@@ -2504,17 +2522,9 @@ let tickPropName = null;
     );
   } else {
     const [{ line, entries }] = arrays;
-    const notNodes = entries.filter((e) => {
-      const prop = e.text.split('.').slice(1);
-      // `slot.pos.x` -> the pool must declare `pos:` holding Animated.Values;
-      // `slot.opacity` -> the pool must declare `opacity: new Animated.Value`.
-      const key = prop[0];
-      const idx = poolInit.indexOf(`${key}:`);
-      if (idx === -1) return true;
-      const tail = poolInit.slice(idx, idx + 140);
-      const decl = prop.length > 1 ? tail.slice(0, tail.indexOf('}') + 1) : tail.slice(0, tail.indexOf(','));
-      return !/new\s+Animated\.Value/.test(prop.length > 1 ? decl : decl);
-    });
+    // `slot.pos.x` must be declared at the leaf `pos.x`, not merely somewhere
+    // under `pos`.
+    const notNodes = entries.filter((e) => !poolPaths.has(e.text.split('.').slice(1).join('.')));
     if (notNodes.length) {
       bad(
         NAME,
