@@ -89,6 +89,14 @@ export const MascotBee = ({ size = 44, flutter = false, beat: driven, wingStyle 
   // this way carries no assumption about how it is plumbed on either platform.
   const offsetX = (HINGE.x - 0.5) * width;
   const offsetY = (HINGE.y - 0.5) * height;
+  // §28.13 correction 1: the four offsets below are plain numbers sharing a
+  // natively driven transform array, which is the frozen-at-first-commit shape.
+  // They are live only because the `rotate` entry builds a NEW interpolation on
+  // every render: a new node identity changes the memo hook's composite key, so
+  // the props node is rebuilt and the offsets are re-read. **Hoisting that
+  // interpolate into a `useMemo` — the R89 pattern — silently freezes the wing
+  // hinge at whatever `size` was on first commit.** If it ever needs
+  // memoising, the offsets have to become nodes in the same change.
   const beatStyle = flutter || driven
     ? {
         transform: [
