@@ -1756,11 +1756,31 @@ let tickPropName = null;
 //     `ReactAndroid/src/main/java`. Probe scope stated: that directory, that
 //     method name.
 //
+// THE FOLK CLAIM ABOUT THIS PROP IS WRITTEN DOWN TWICE AND IMPLEMENTED ZERO
+// TIMES. `RCTScrollView.m:708` (a TODO) and `RCTScrollViewComponentView.mm:378`
+// ("Zero means 'send value only once per significant logical event'") say the
+// same false thing, in two architectures, and the second is a from-scratch
+// reimplementation that carried the sentence forward — contradicted by `:744`,
+// eleven lines below it. So the usual tell for a stale comment (one file
+// disagreeing with everything else) is unavailable: a reader who distrusts one
+// and checks the other finds corroboration.
+//
+// And the third source is the one that makes the bound below defensible.
+// `ScrollView.js:580-583` and `ScrollView.d.ts` — the only two a JS developer
+// reads — are CORRECT and SILENT: "Values <= `16` will disable throttling,
+// regardless of the refresh rate of the device", with no statement of the
+// default. THE DOCUMENTED SURFACE IS SILENT EXACTLY WHERE THE BEHAVIOUR IS
+// SURPRISING, WHICH IS WHAT LETS A FALSE COMMENT IN THE IMPLEMENTATION READ AS
+// AUTHORITATIVE.
+//
 // So the row does not assert the PROP, which would be asserting a token that
 // governs nothing on this version. It asserts the PROPERTY: absent is fine,
-// present must be ≤ 16. The value stays in the source anyway, because a
-// default of 0 meaning "every frame" is behaviour this beat depends on and
-// does not own.
+// present must be ≤ 16 — and that 16 is the DOCUMENTED GUARANTEE, not the
+// implementation constant (Fabric's internal threshold is 1/60 s = 16.67ms;
+// binding the row to the documented number is what keeps it true if the
+// implementation moves inside its own promise). The value stays in the source
+// anyway, because a default of 0 meaning "every frame" is behaviour this beat
+// depends on and does not own.
 {
   const expr = scrollView ? attrExpr(scrollView.openingElement, 'scrollEventThrottle') : null;
   const value = expr?.type === 'NumericLiteral' ? expr.value : null;
