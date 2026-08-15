@@ -1372,8 +1372,17 @@ const targetAxisProp = (axis) =>
 // back** — the same forward/backward pair F8 uses for the abort. A number can
 // be re-picked; this cannot be satisfied by picking one.
 //
-// Second half of the row: the DESCENT leg is that offset, measured out of a
-// real plan rather than assumed from the constant. `DESCENT_MS` is the
+// And the point it hit-tests is read back out of a REAL PLAN, not recomputed
+// from `stagingOffsetFor`. A first draft did recompute it, and mutation 1 —
+// revert `buildPollinationPlan` to `target.y - ringStep`, the exact R87
+// defect — left this row GREEN, because a row that calls the offset function
+// itself is true of the offset function whatever the plan does with it. R85,
+// the same hole this gate has now grown twice: **a gate asserts a property of
+// whatever it can import, and the defect lives at the call site it couldn't.**
+// `buildPollinationPlan` is importable, so the call site is reachable, so the
+// row has no excuse for asserting one step short of it.
+//
+// Second half of the row: the DESCENT leg is that offset. `DESCENT_MS` is the
 // duration of a distance, and §28.5 quotes a speed — if the plan's last leg
 // and `stagingOffsetFor` ever disagree, that published speed is fiction.
 {
@@ -1392,11 +1401,28 @@ const targetAxisProp = (axis) =>
         'three inputs did not resolve, so this row has no fixture — not a clean pass.',
     );
   } else {
+    // One plan per seat, flown in the cluster's own box so the plan's
+    // fractions invert back to the coordinates the hit-test speaks.
+    const planFor = (centre) =>
+      flight.buildPollinationPlan({
+        from: { x: 0, y: 0 },
+        target: centre,
+        ringStep: lattice.ringStepFor(CELL),
+        bodyLengthPx: BODY,
+        width: layout.width,
+        height: layout.height,
+        approachSpeedPxS: 375.18,
+        easeApproach: (w) => w,
+        easeDescent: (w) => w,
+      });
+
     const strays = [];
     for (const cell of layout.cells) {
       // Cell centres sit at (x + cellSize, y + cellSize) in cluster space.
       const centre = { x: cell.x + CELL, y: cell.y + CELL };
-      const hit = layout.hitTest(centre.x, centre.y - offset);
+      const wp = planFor(centre).path[1];
+      const staging = { x: wp.x * layout.width, y: wp.y * layout.height };
+      const hit = layout.hitTest(staging.x, staging.y);
       const who = lattice.personKey(hit?.member) ?? 'off-comb';
       if (who !== lattice.personKey(cell.member)) strays.push(`${cell.member.name} stages on ${who}`);
     }
@@ -1411,20 +1437,10 @@ const targetAxisProp = (axis) =>
       );
     }
 
-    const plan = flight.buildPollinationPlan({
-      from: { x: 0, y: 0 },
-      target: { x: 200, y: 300 },
-      ringStep: lattice.ringStepFor(CELL),
-      bodyLengthPx: BODY,
-      width: 393,
-      height: 852,
-      approachSpeedPxS: 375.18,
-      easeApproach: (w) => w,
-      easeDescent: (w) => w,
-    });
+    const plan = planFor({ x: layout.width / 2, y: layout.height / 2 });
     const legPx = Math.hypot(
-      (plan.path[2].x - plan.path[1].x) * 393,
-      (plan.path[2].y - plan.path[1].y) * 852,
+      (plan.path[2].x - plan.path[1].x) * layout.width,
+      (plan.path[2].y - plan.path[1].y) * layout.height,
     );
     if (Math.abs(legPx - offset) < 1e-9) {
       ok(`the descent leg IS the staging offset (${legPx.toFixed(2)}pt in ${plan.descentMs}ms = ${((legPx / plan.descentMs) * 1000).toFixed(1)} px/s)`);
