@@ -203,7 +203,7 @@ const EmptyCell = ({ size }) => {
   const points = useMemo(() => hexPoints(size), [size]);
 
   return (
-    <View>
+    <View accessibilityLabel="a seat for someone">
       <Svg width={size * 2} height={size * 2}>
         <Polygon
           points={points}
