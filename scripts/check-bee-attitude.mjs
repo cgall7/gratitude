@@ -950,15 +950,18 @@ console.log('\nF. the pollination tap');
 const FLIGHT_MODULE = path.join(ROOT, 'src/components/pollinationFlight.js');
 const LATTICE_MODULE = path.join(ROOT, 'src/components/combLattice.js');
 const HONEYCOMB_GRID = path.join(ROOT, 'src/components/HoneycombGrid.js');
+const MASCOT_CONSTANTS = path.join(ROOT, 'src/constants/mascot.js');
 
 const flightSource = await readFile(FLIGHT_MODULE, 'utf8');
 const latticeSource = await readFile(LATTICE_MODULE, 'utf8');
 const gridSource = await readFile(HONEYCOMB_GRID, 'utf8');
+const mascotSource = await readFile(MASCOT_CONSTANTS, 'utf8');
 
 // --- F0. both modules are loadable, which is what every row below rests on
 for (const [label, src] of [
   ['pollinationFlight.js', flightSource],
   ['combLattice.js', latticeSource],
+  ['constants/mascot.js', mascotSource],
 ]) {
   const imports = parseJs(src).program.body.filter((n) => n.type === 'ImportDeclaration');
   if (imports.length === 0) {
@@ -967,13 +970,14 @@ for (const [label, src] of [
     bad(
       `${label} declares no imports, so this gate can load it as a module`,
       `found ${imports.length}: ${imports.map((n) => n.source.value).join(', ')}. The rows below ` +
-        'import and sample these functions; one dependency and they degrade to string-matching.',
+        'import and sample these modules; one dependency and they degrade to string-matching.',
     );
   }
 }
 
 const flight = await import(`data:text/javascript;base64,${Buffer.from(flightSource).toString('base64')}`);
 const lattice = await import(`data:text/javascript;base64,${Buffer.from(latticeSource).toString('base64')}`);
+const mascot = await import(`data:text/javascript;base64,${Buffer.from(mascotSource).toString('base64')}`);
 
 // --- the module's own numbers, read rather than retyped. Every row below
 //     that quotes a figure derives it from these, so the "should pass"
@@ -999,10 +1003,20 @@ const CELL_SIZE = (() => {
   const m = gridSource.match(/cellSize\s*=\s*(\d+(?:\.\d+)?)/);
   return m ? Number(m[1]) : null;
 })();
-if (CRUISE_PATH?.length && CRUISE_LOOP_MS && CELL_SIZE) {
-  ok(`the gate reads its inputs off the source (PATH ${CRUISE_PATH.length} waypoints, LOOP_MS ${CRUISE_LOOP_MS}, cellSize ${CELL_SIZE})`);
+// The bee's own box, from the prop default the pollination call site relies
+// on. Paired with `MASCOT_WIDTH_FRACTION` off the constants module, this is
+// the C′ staging offset's whole input, and both halves are read rather than
+// retyped for the same reason `CELL_SIZE` is.
+const BEE_SIZE = (() => {
+  const d = flyingBeeAst.program.body
+    .flatMap((n) => (n.type === 'VariableDeclaration' ? n.declarations : []))
+    .find((x) => x.id?.name === 'DEFAULT_SIZE');
+  return d?.init?.value ?? null;
+})();
+if (CRUISE_PATH?.length && CRUISE_LOOP_MS && CELL_SIZE && BEE_SIZE) {
+  ok(`the gate reads its inputs off the source (PATH ${CRUISE_PATH.length} waypoints, LOOP_MS ${CRUISE_LOOP_MS}, cellSize ${CELL_SIZE}, beeSize ${BEE_SIZE})`);
 } else {
-  bad('the gate reads its inputs off the source', `PATH=${JSON.stringify(CRUISE_PATH)} LOOP_MS=${CRUISE_LOOP_MS} cellSize=${CELL_SIZE} — a null here means a row below is about to assert against a default it invented.`);
+  bad('the gate reads its inputs off the source', `PATH=${JSON.stringify(CRUISE_PATH)} LOOP_MS=${CRUISE_LOOP_MS} cellSize=${CELL_SIZE} beeSize=${BEE_SIZE} — a null here means a row below is about to assert against a default it invented.`);
 }
 
 // --- F1. §28.7 row 1 — no pixel constant crosses the two boxes -----------
@@ -1341,6 +1355,214 @@ const targetAxisProp = (axis) =>
       `second difference ${worstBend.toExponential(2)}ms at ${bendAt}px. A bend means the speed changes with ` +
         'distance, which is a clamp or an ease-by-length wearing a division.',
     );
+  }
+}
+
+// --- F5b. §28.11 / C′ — the staging point is on the face he came to -------
+//
+// R87's defect, and the row that would have caught it. The staging point was
+// ONE RING STEP above the cell, and a ring step is the lattice's own pitch,
+// so "one step above the cell" IS "the seat above it": four of seven seats
+// staged on another member's face, and the approach eases out into the phase
+// split, so the one moment the bee is stationary in the whole beat happened
+// over the wrong person.
+//
+// The assertion is not "the offset is 30.07". It is **run the comb's own
+// hit-test on the staging point of every seat and get that seat's own member
+// back** — the same forward/backward pair F8 uses for the abort. A number can
+// be re-picked; this cannot be satisfied by picking one.
+//
+// Second half of the row: the DESCENT leg is that offset, measured out of a
+// real plan rather than assumed from the constant. `DESCENT_MS` is the
+// duration of a distance, and §28.5 quotes a speed — if the plan's last leg
+// and `stagingOffsetFor` ever disagree, that published speed is fiction.
+{
+  const CELL = CELL_SIZE;
+  const FRACTION = mascot.MASCOT_WIDTH_FRACTION;
+  const BODY = FRACTION * BEE_SIZE;
+  const person = (n) => ({ authorId: `person-${n}`, id: `share-${n}`, name: `P${n}` });
+  const members = Array.from({ length: 7 }, (_, i) => person(i));
+  const layout = lattice.buildCombLayout(members, CELL, lattice.hexSpiral(1));
+  const offset = flight.stagingOffsetFor({ bodyLengthPx: BODY, ringStep: lattice.ringStepFor(CELL) });
+
+  if (!(FRACTION > 0) || !(BEE_SIZE > 0) || !(CELL > 0)) {
+    bad(
+      'every seat stages inside its own hexagon',
+      `cannot tell: MASCOT_WIDTH_FRACTION=${FRACTION}, beeSize=${BEE_SIZE}, cellSize=${CELL}. One of the ` +
+        'three inputs did not resolve, so this row has no fixture — not a clean pass.',
+    );
+  } else {
+    const strays = [];
+    for (const cell of layout.cells) {
+      // Cell centres sit at (x + cellSize, y + cellSize) in cluster space.
+      const centre = { x: cell.x + CELL, y: cell.y + CELL };
+      const hit = layout.hitTest(centre.x, centre.y - offset);
+      const who = lattice.personKey(hit?.member) ?? 'off-comb';
+      if (who !== lattice.personKey(cell.member)) strays.push(`${cell.member.name} stages on ${who}`);
+    }
+    if (strays.length === 0) {
+      ok(`every seat stages inside its own hexagon (${layout.cells.length}/${layout.cells.length}; offset ${offset.toFixed(2)}pt against an apothem of ${(lattice.ringStepFor(CELL) / 2).toFixed(3)}pt)`);
+    } else {
+      bad(
+        'every seat stages inside its own hexagon',
+        `${strays.length} of ${layout.cells.length} do not: ${strays.join(', ')}. The offset (${offset.toFixed(2)}pt) ` +
+          `crosses the apothem (${(lattice.ringStepFor(CELL) / 2).toFixed(3)}pt), so the bee's one stationary ` +
+          'moment is spent hovering over somebody the user did not tap.',
+      );
+    }
+
+    const plan = flight.buildPollinationPlan({
+      from: { x: 0, y: 0 },
+      target: { x: 200, y: 300 },
+      ringStep: lattice.ringStepFor(CELL),
+      bodyLengthPx: BODY,
+      width: 393,
+      height: 852,
+      approachSpeedPxS: 375.18,
+      easeApproach: (w) => w,
+      easeDescent: (w) => w,
+    });
+    const legPx = Math.hypot(
+      (plan.path[2].x - plan.path[1].x) * 393,
+      (plan.path[2].y - plan.path[1].y) * 852,
+    );
+    if (Math.abs(legPx - offset) < 1e-9) {
+      ok(`the descent leg IS the staging offset (${legPx.toFixed(2)}pt in ${plan.descentMs}ms = ${((legPx / plan.descentMs) * 1000).toFixed(1)} px/s)`);
+    } else {
+      bad(
+        'the descent leg IS the staging offset',
+        `plan's last leg is ${legPx.toFixed(3)}pt, stagingOffsetFor says ${offset.toFixed(3)}pt. DESCENT_MS is the ` +
+          'duration OF that distance; if they disagree, §28.5\'s published descent speed describes no flight.',
+      );
+    }
+  }
+}
+
+// --- F5c. §28.11 / C′ — the bound holds for every pair, not just ours -----
+//
+// `beeSize` and `cellSize` are independent props on two different components.
+// Nothing structural relates them — unlike R81's bank, where |pitch| ≤ 90 out
+// of `atan2` made the ±22° bound true by construction with no clamp to route
+// around. Here the guarantee has to be IN the function, and the only way to
+// know it is is to sweep the two axes independently: a fixture at 44/44 says
+// nothing about 44/16, which is the pair a denser comb would produce.
+//
+// Strictly less than the apothem, and strictly greater than zero. Zero is the
+// other failure: an offset of 0 puts the staging point ON the cell centre, at
+// which point there is no descent, no landing gesture, and §28.4's "the final
+// leg is always a descent whatever direction he came from" is false.
+{
+  const FRACTION = mascot.MASCOT_WIDTH_FRACTION;
+  const violations = [];
+  const samples = [];
+  for (let bee = 8; bee <= 200; bee += 2) {
+    for (let cell = 12; cell <= 120; cell += 1) {
+      const ringStep = lattice.ringStepFor(cell);
+      const apothem = ringStep / 2;
+      const off = flight.stagingOffsetFor({ bodyLengthPx: FRACTION * bee, ringStep });
+      samples.push(1);
+      if (!(off > 0) || !(off < apothem)) violations.push({ bee, cell, off, apothem });
+    }
+  }
+  if (violations.length === 0) {
+    ok(`stagingOffsetFor stays inside the target's own hexagon for every beeSize x cellSize pair (${samples.length} samples, bee 8..200 x cell 12..120, both swept independently)`);
+  } else {
+    const w = violations[0];
+    bad(
+      "stagingOffsetFor stays inside the target's own hexagon for every beeSize x cellSize pair",
+      `${violations.length} of ${samples.length} pairs escape it, first at beeSize ${w.bee} / cellSize ${w.cell}: ` +
+        `offset ${w.off.toFixed(3)}pt against an apothem of ${w.apothem.toFixed(3)}pt. At or past the apothem the ` +
+        'staging point is in the seat above, which is R87\'s defect with different numbers in it.',
+    );
+  }
+}
+
+// --- F5d. §28.11 / C′ — the bound is a backstop, and stays one -----------
+//
+// The `min` in `stagingOffsetFor` is exactly the shape §28.5 killed on the
+// approach: a guard that binds most of the time is the mechanism wearing a
+// guard's name. It is legitimate here only because at the shipped pair the
+// NOUN decides — he hangs his own length above the face, and the bound is
+// inert. That is a property a retune can quietly destroy: raise `beeSize`
+// past 1.141 x `cellSize` and the bee stops hanging a body length above
+// anything, without a single line of this file changing.
+//
+// So the row asserts both directions. Inert where we ship (or F5c is passing
+// because the clamp swallowed the design), and LIVE somewhere (or the clamp
+// is dead code and F5c is passing for free).
+{
+  const FRACTION = mascot.MASCOT_WIDTH_FRACTION;
+  const body = FRACTION * BEE_SIZE;
+  const shipped = flight.stagingOffsetFor({ bodyLengthPx: body, ringStep: lattice.ringStepFor(CELL_SIZE) });
+  if (Math.abs(shipped - body) < 1e-9) {
+    ok(`the staging offset is the bee's own length at the shipped pair (beeSize ${BEE_SIZE} / cellSize ${CELL_SIZE} -> ${shipped.toFixed(2)}pt, the bound inert at ${((flight.STAGING_SAFETY * lattice.ringStepFor(CELL_SIZE)) / 2).toFixed(2)}pt)`);
+  } else {
+    bad(
+      "the staging offset is the bee's own length at the shipped pair",
+      `stagingOffsetFor returns ${shipped.toFixed(3)}pt where the drawn character is ${body.toFixed(3)}pt long. ` +
+        'The bound is binding at the configuration we ship, so the comb is choosing the offset and the bee is ' +
+        'not hanging its own length above anything — F5c would still be green.',
+    );
+  }
+  // The clamp must be reachable, or F5c proves nothing about it.
+  const tight = flight.stagingOffsetFor({ bodyLengthPx: FRACTION * 200, ringStep: lattice.ringStepFor(12) });
+  if (tight < FRACTION * 200 - 1e-9) {
+    ok(`the bound is live where a bee is large against its comb (beeSize 200 / cellSize 12 -> ${tight.toFixed(2)}pt, not ${(FRACTION * 200).toFixed(2)})`);
+  } else {
+    bad(
+      'the bound is live where a bee is large against its comb',
+      `beeSize 200 on cellSize 12 returns ${tight.toFixed(3)}pt, the full body length. Nothing bounds the offset, ` +
+        'so F5c is green on the shipped ratio rather than on a guarantee.',
+    );
+  }
+}
+
+// --- F5e. §28.11 / C′ — the length the call site passes is the bee's ------
+//
+// R85(e), the hole a mutation found in this gate's own return-leg row: **a
+// gate asserts a property of whatever it can import, and the defect lives at
+// the call site it couldn't.** F5b/c/d sample `stagingOffsetFor`, which is
+// true of any `bodyLengthPx` it is handed — including `size`, the BOX, which
+// is 44 against a bound of 34.29 and would put the staging point back in the
+// seat above with every row above it still green.
+//
+// So this reads the argument at the call site and requires it to resolve to
+// the drawn character: the mascot's width fraction times the bee's own size
+// prop. Order-insensitive, because `size * MASCOT_WIDTH_FRACTION` is the same
+// length.
+{
+  const NAME = 'the call site passes the DRAWN length, not the box';
+  let call = null;
+  walk(flyingBeeAst, (n) => {
+    if (n.type !== 'CallExpression' || n.callee?.name !== 'buildPollinationPlan') return;
+    call = n;
+  });
+  const arg = call?.arguments?.[0]?.properties?.find((p) => p.key?.name === 'bodyLengthPx');
+  if (!arg) {
+    bad(
+      NAME,
+      call
+        ? 'buildPollinationPlan is called without a `bodyLengthPx` property, so the staging offset falls to ' +
+          '`Math.min(undefined, bound)` = NaN and the plan has no waypoint 1.'
+        : 'no buildPollinationPlan call site found in FlyingBee.js — this row could not locate what it checks, ' +
+          'which is a fail, not a pass.',
+    );
+  } else {
+    const v = arg.value;
+    const names = v?.type === 'BinaryExpression' && v.operator === '*'
+      ? [v.left, v.right].map((s) => (s.type === 'Identifier' ? s.name : `<${s.type}>`))
+      : [v?.type === 'Identifier' ? v.name : `<${v?.type}>`];
+    const wanted = ['MASCOT_WIDTH_FRACTION', 'size'];
+    if (wanted.every((w) => names.includes(w))) {
+      ok(`${NAME} (bodyLengthPx: ${names.join(' * ')})`);
+    } else {
+      bad(
+        NAME,
+        `bodyLengthPx resolves to \`${names.join(' * ')}\`; expected the product of ${wanted.join(' and ')}. ` +
+          `\`size\` alone is the BOX (${BEE_SIZE}pt against an apothem of ${(lattice.ringStepFor(CELL_SIZE) / 2).toFixed(2)}pt), ` +
+          'which is R87\'s defect arriving through the argument instead of through the constant.',
+      );
+    }
   }
 }
 
