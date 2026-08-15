@@ -2,6 +2,7 @@
   "expo": {
     "name": "Pollinate",
     "slug": "pollinate",
+    "scheme": "pollinate",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
