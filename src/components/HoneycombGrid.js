@@ -1,46 +1,26 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, Animated, StyleSheet, Pressable, Easing } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import Svg, { Polygon, Path, Line, G, Defs, ClipPath, Image as SvgImage } from 'react-native-svg';
 import { theme } from '../constants/theme';
 import { hexTintFor } from './Avatar';
 import { hexPoints, hexEdgeMarks, hexSealPath } from './HexShape';
 import { useSvgId } from '../utils/svgId';
 import { DURATIONS, STAGGER_MS, useReducedMotion } from '../constants/motion';
+import {
+  buildCombLayout,
+  hexSpiral,
+  personKey,
+  ringStepFor,
+  shouldAbortPollination,
+} from './combLattice';
+
+// Re-exported because the comb's identity rule is one expression and this is
+// where the rest of the app already reaches for it. `combLattice` owns it —
+// it has to be importable by a gate, and a component file is not.
+export { personKey };
 
 const AnimatedG = Animated.createAnimatedComponent(G);
-
-// Cube-direction walk around a hex ring, center-out — gives us the classic
-// "spiral" fill order (1, 6, 12, 18…) that a honeycomb actually grows in,
-// and doubles as the stagger order for the zoom-in animation below.
-const AXIAL_DIRS = [
-  { q: 1, r: 0 },
-  { q: 1, r: -1 },
-  { q: 0, r: -1 },
-  { q: -1, r: 0 },
-  { q: -1, r: 1 },
-  { q: 0, r: 1 },
-];
-
-const hexRing = (radius) => {
-  if (radius === 0) return [{ q: 0, r: 0 }];
-  const cells = [];
-  let hex = { q: AXIAL_DIRS[4].q * radius, r: AXIAL_DIRS[4].r * radius };
-  for (let side = 0; side < 6; side += 1) {
-    for (let step = 0; step < radius; step += 1) {
-      cells.push(hex);
-      hex = { q: hex.q + AXIAL_DIRS[side].q, r: hex.r + AXIAL_DIRS[side].r };
-    }
-  }
-  return cells;
-};
-
-const hexSpiral = (maxRadius) => {
-  let cells = [];
-  for (let radius = 0; radius <= maxRadius; radius += 1) {
-    cells = cells.concat(hexRing(radius));
-  }
-  return cells;
-};
 
 // ONE ring around one centre. A hex spiral only closes at 1, 7, 19 — at any
 // other count the outer ring is part-built and the whole cluster hangs off
@@ -48,41 +28,14 @@ const hexSpiral = (maxRadius) => {
 // twelfths filled, so the shape's centre of area sat 29.4pt below "You".
 // Seven is the first count that closes, and it is also an honest size for a
 // gratitude circle.
+//
+// It stays declared HERE, not in `combLattice`, and deliberately:
+// `check-demo-hive.mjs:74` reads this file by path and unwraps a regex match
+// for it with no null guard, so moving the declaration fails that gate as a
+// TypeError rather than as a diagnosis. The geometry moved; the number
+// another gate reads off this file did not.
 export const HIVE_SLOTS = 7;
 const SPIRAL = hexSpiral(1);
-
-// Flat-top axial -> pixel, matches the flat-top polygon points in HexShape.
-const axialToPixel = (q, r, size) => ({
-  x: size * 1.5 * q,
-  y: size * ((Math.sqrt(3) / 2) * q + Math.sqrt(3) * r),
-});
-
-// Inverse of axialToPixel (flat-top), pre-round — see Red Blob Games'
-// pixel_to_hex. Used by the single hit-test overlay below instead of
-// per-cell Pressables, which is what R25/R34 replaced.
-const pixelToAxialRaw = (x, y, size) => ({
-  q: ((2 / 3) * x) / size,
-  r: ((-1 / 3) * x + (Math.sqrt(3) / 3) * y) / size,
-});
-
-// Cube rounding: nearest-hex-center is exact for a tessellation (the
-// Voronoi region of a hex center is the hexagon itself), so this is the
-// correct hit-test, not an approximation.
-const axialRound = (q, r) => {
-  const x = q;
-  const z = r;
-  const y = -x - z;
-  let rx = Math.round(x);
-  let ry = Math.round(y);
-  let rz = Math.round(z);
-  const xDiff = Math.abs(rx - x);
-  const yDiff = Math.abs(ry - y);
-  const zDiff = Math.abs(rz - z);
-  if (xDiff > yDiff && xDiff > zDiff) rx = -ry - rz;
-  else if (yDiff > zDiff) ry = -rx - rz;
-  else rz = -rx - ry;
-  return { q: rx, r: rz };
-};
 
 const initialsFor = (name) => {
   const parts = (name || '?').trim().split(/\s+/);
@@ -308,8 +261,36 @@ const HexCell = ({ member, size, x, y, delay, selected, reduced }) => {
 // The hive's Today view: who in your circle has shared today. Seven seats,
 // you in the middle, one ring around you. Tap a face to read what they
 // wrote; tap a gap to invite someone into it.
-export const HoneycombGrid = ({ members, cellSize = 44, onInvitePress }) => {
-  const [selected, setSelected] = useState(null);
+export const HoneycombGrid = ({
+  members,
+  cellSize = 44,
+  onInvitePress,
+  // §28.9 — the two triggers, and the shape they come in is the ruling.
+  // `scrollYRef` is read BY VALUE (the aim point moved); `scrollTick` carries
+  // no information at all and exists only to re-run the check. **Put
+  // completeness in the trigger and correctness in the predicate: an
+  // over-firing trigger with a by-value predicate is safe; an exact trigger
+  // with a reference predicate is not.**
+  scrollYRef,
+  scrollTick = 0,
+  onPollinate,
+  onPollinateCancel,
+  activePollinationKey = null,
+}) => {
+  // HOLD THE KEY, DERIVE THE MEMBER (§28.9 correction 3, Sage's find). The
+  // old shape put the whole member object in state at tap time and never
+  // refreshed it, so the ring compared a captured share id against a live one
+  // while the card rendered the captured name and quote. Two readings of the
+  // same selection, one live and one frozen, kept in step by nothing.
+  //
+  // Deriving makes their agreement structural: ring and card read the same
+  // member out of the same list on the same render. It also closes the case
+  // that is reachable in today's build — the demo set fills all seven seats,
+  // so the first real share of the day evicts the seventh member; if that is
+  // who you tapped, `selected` goes null and the card closes instead of
+  // hanging there quoting someone with no cell.
+  const [selectedId, setSelectedId] = useState(null);
+  const selected = selectedId === null ? null : members.find((m) => personKey(m) === selectedId) ?? null;
   const reduced = useReducedMotion();
   const cameraProgress = useRef(new Animated.Value(0)).current;
   const revealProgress = useRef(new Animated.Value(0)).current;
@@ -323,54 +304,103 @@ export const HoneycombGrid = ({ members, cellSize = 44, onInvitePress }) => {
     }).start();
   }, [cameraProgress, reduced]);
 
-  const layout = useMemo(() => {
-    // Always seven slots. Members fill them centre-out; the rest stay empty
-    // rather than being padded with people who don't exist.
-    const seated = members.slice(0, HIVE_SLOTS);
-    const positions = SPIRAL.map((axial) => axialToPixel(axial.q, axial.r, cellSize));
-    const minX = Math.min(...positions.map((p) => p.x));
-    const minY = Math.min(...positions.map((p) => p.y));
-    const width = Math.max(...positions.map((p) => p.x)) - minX + cellSize * 2;
-    const height = Math.max(...positions.map((p) => p.y)) - minY + cellSize * 2;
+  // Seating and the hit-test are `combLattice`'s (one implementation, and an
+  // importable one — §28.9 gate row 8). This memo is only the binding.
+  const layout = useMemo(
+    () => buildCombLayout(members.slice(0, HIVE_SLOTS), cellSize, SPIRAL),
+    [members, cellSize]
+  );
 
-    const byAxial = new Map();
-    const cells = SPIRAL.map((axial, index) => {
-      const member = seated[index] ?? null;
-      byAxial.set(`${axial.q},${axial.r}`, member);
-      return {
-        key: member?.id ?? `empty-${axial.q},${axial.r}`,
-        member,
-        x: positions[index].x - minX,
-        y: positions[index].y - minY,
-        delay: index * STAGGER_MS,
-      };
-    });
+  // A selection that stops resolving is dropped, not kept. Without this the
+  // key survives the member: tap someone, a refresh evicts them (card closes,
+  // correctly), a later refresh brings them back — and the card would reopen
+  // on its own, asserting a selection the user never made twice.
+  useEffect(() => {
+    if (selectedId !== null && selected === null) setSelectedId(null);
+  }, [selectedId, selected]);
 
-    // Single hit-test for the whole cluster (R25/R34): a tap lands on the
-    // hexagon whose center it's nearest to, not on whichever cell's box
-    // happened to paint last. Cell centers sit at (x + cellSize, y + cellSize)
-    // in this same cluster space, so undo that offset before inverting.
-    // A tap outside the seven slots returns undefined and is ignored.
-    const hitTest = (tapX, tapY) => {
-      const raw = pixelToAxialRaw(tapX + minX - cellSize, tapY + minY - cellSize, cellSize);
-      const { q, r } = axialRound(raw.q, raw.r);
-      const key = `${q},${r}`;
-      return byAxial.has(key) ? { seat: key, member: byAxial.get(key) } : null;
-    };
+  // §28.9 — the flight in the air, from the comb's side: which person it was
+  // aimed at, and where the aim point sat in cluster space when the tap
+  // happened. Held in a ref because nothing renders from it.
+  const aimRef = useRef(null);
+  const pollinationKeyRef = useRef(0);
+  const readScrollY = () => scrollYRef?.current ?? 0;
 
-    return { cells, width, height, hitTest };
-  }, [members, cellSize]);
-
-  const handleSelect = (member) => {
+  const handleSelect = (member, tap) => {
     revealProgress.setValue(0);
-    setSelected(member);
+    setSelectedId(personKey(member));
+    // §28.1 — the CELL answers at t=0. The stroke was already here; the
+    // haptic is new, and it is what makes the acknowledgement independent of
+    // the bee. Everything the beat asserts is carried by the stroke, the
+    // haptic and the card, which is why §28.6 owes accessibility nothing
+    // extra: a user who never perceives the flight loses nothing.
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     Animated.timing(revealProgress, {
       toValue: 1,
       duration: reduced ? DURATIONS.reducedMotionFade : 260,
       easing: reduced ? Easing.linear : Easing.out(Easing.cubic),
       useNativeDriver: true,
     }).start();
+    requestPollination(member, tap);
   };
+
+  const requestPollination = (member, tap) => {
+    // Under Reduce Motion there is no bee to break from — `FlyingBee` renders
+    // the parked breathing pose — so the beat collapses to what the cell does
+    // (§28.6). Not a special case: a property of the rig.
+    if (!onPollinate || reduced) return;
+    const cell = layout.cells.find((c) => c.member && personKey(c.member) === personKey(member));
+    if (!cell) return;
+    // Cell centres sit at (x + cellSize, y + cellSize) in cluster space — the
+    // same offset `hitTest` undoes before inverting, stated once in
+    // `combLattice`.
+    const centre = { x: cell.x + cellSize, y: cell.y + cellSize };
+    // The tap hands us BOTH coordinate systems for one physical point:
+    // `locationX/Y` in cluster space (what `hitTest` reads) and `pageX/Y` in
+    // window space (what the flight needs). Subtracting gives the cluster's
+    // window origin with no `measureInWindow` and no extra frame.
+    //
+    // Exact once the camera dive has settled. During its first 600ms the
+    // cluster is scaled, so a translation derived at the tap point drifts by
+    // (scale − 1) × (centre − tapPoint) elsewhere — bounded by one cell, and
+    // the flight is ~1s long, so the camera has settled well before touchdown
+    // either way. Named rather than assumed, per §28.2.
+    const origin = { x: tap.pageX - tap.locationX, y: tap.pageY - tap.locationY };
+    pollinationKeyRef.current += 1;
+    const key = pollinationKeyRef.current;
+    aimRef.current = {
+      key,
+      personId: personKey(member),
+      localX: centre.x,
+      localY: centre.y,
+      scrollY: readScrollY(),
+    };
+    onPollinate({
+      key,
+      x: origin.x + centre.x,
+      y: origin.y + centre.y,
+      ringStep: ringStepFor(cellSize),
+    });
+  };
+
+  // §28.9 correction 1 + 2 — **abort when the point the bee is aimed at would
+  // no longer resolve, under the comb's OWN hit-test, to the PERSON the user
+  // tapped.** The predicate itself lives in `combLattice` beside the
+  // hit-test, because gate row 8 asserts they are one thing and not two.
+  //
+  // `hitTest` has two inputs, so the trigger set is the union of what can
+  // change either — the aim point (scroll) and the seating (`layout`
+  // identity, memoized on the definition of what can re-seat). Both are here.
+  // `layout`'s identity changes on every parent render, which is fine: it is
+  // the trigger, and the decision is the by-value person check.
+  useEffect(() => {
+    const aim = aimRef.current;
+    if (!aim || aim.key !== activePollinationKey) return;
+    if (shouldAbortPollination(layout, aim, readScrollY())) {
+      aimRef.current = null;
+      onPollinateCancel?.();
+    }
+  }, [layout, scrollTick, activePollinationKey]);
 
   // The camera dive-in is the screen's signature move, but it's also pure
   // travel — under Reduce Motion the cluster simply fades up in place.
@@ -388,25 +418,25 @@ export const HoneycombGrid = ({ members, cellSize = 44, onInvitePress }) => {
             opacity: cameraProgress,
           }}
         >
-          {layout.cells.map(({ key, member, x, y, delay }) => (
+          {layout.cells.map(({ key, member, x, y, index }) => (
             <HexCell
               key={key}
               member={member}
               size={cellSize}
               x={x}
               y={y}
-              delay={delay}
-              selected={!!member && selected?.id === member.id}
+              delay={index * STAGGER_MS}
+              selected={!!member && selectedId !== null && personKey(member) === selectedId}
               reduced={reduced}
             />
           ))}
           <Pressable
             style={StyleSheet.absoluteFill}
             onPress={(e) => {
-              const { locationX, locationY } = e.nativeEvent;
+              const { locationX, locationY, pageX, pageY } = e.nativeEvent;
               const hit = layout.hitTest(locationX, locationY);
               if (!hit) return;
-              if (hit.member) handleSelect(hit.member);
+              if (hit.member) handleSelect(hit.member, { locationX, locationY, pageX, pageY });
               else onInvitePress?.();
             }}
             accessible={false}

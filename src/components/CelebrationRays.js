@@ -71,6 +71,14 @@ const Ray = ({ index, angle }) => {
         styles.ray,
         {
           opacity: progress,
+          // §28.13 correction 1: this is the one transform array in the app
+          // whose entries really are frozen. `progress` is the array's only
+          // node and it is a `useRef` value, so its identity never changes and
+          // the props node is never rebuilt — which bakes `rotate` and
+          // `translateY` into the native config at first commit. Both are
+          // constant (`angle` is fixed per ray, `RADIUS` is a module const), so
+          // the freeze is invisible and correct. It stops being either if a
+          // caller ever animates `angle`.
           transform: [{ rotate: `${angle}deg` }, { translateY: -RADIUS }, { scaleY: progress }],
         },
       ]}

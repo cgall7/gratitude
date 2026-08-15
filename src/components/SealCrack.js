@@ -4,7 +4,7 @@ import * as Haptics from 'expo-haptics';
 import { theme } from '../constants/theme';
 import { SPRINGS, DURATIONS, useReducedMotion } from '../constants/motion';
 import { BeeTransition } from './BeeTransition';
-import { StripedBee } from './StripedBee';
+import { MascotBee } from './MascotBee';
 import { CelebrationRays } from './CelebrationRays';
 
 // §14.2 Beat 0 — The Seal. Full gold field, spiral mark static, the bee
@@ -132,14 +132,17 @@ export const SealCrack = ({ onCracked }) => {
           // the same spot BeeTransition's flight was already ending at.
           //
           // §17.3 correction: this bee is not a standing/keepsake bee — it
-          // is the last frame of a BeeTransition flight, crossfading from
-          // the `StripedBee` that BeeTransition renders internally. Register
-          // follows provenance: a bee that flew in stays in flight register
-          // (painted `bandColor={accent}`) even standing on gold, so props
-          // here are prop-identical to BeeTransition's internal render —
-          // same size, same bandColor — and the crossfade never pops.
+          // is the last frame of a BeeTransition flight, crossfading from the
+          // bee that BeeTransition renders internally. Register follows
+          // provenance: a bee that flew in stays in flight register even
+          // standing on gold, so this must stay prop-identical to
+          // BeeTransition's internal render or the crossfade pops.
+          //
+          // R83: that render is now `MascotBee`, so this is too. The contract
+          // this comment states is exactly what a swap on one side of it would
+          // have broken — dormantly, since SealCrack has no importers yet.
           <Animated.View pointerEvents="none" style={[styles.beeAnchor, { opacity: staticBeeOpacity }]}>
-            <StripedBee size={22} bandColor={theme.colors.accent} />
+            <MascotBee size={22} />
           </Animated.View>
         )}
         <Image
@@ -187,7 +190,7 @@ const styles = StyleSheet.create({
     left: EYE_LEFT,
     marginTop: -11,
     marginLeft: -11,
-    // R22 (Pixel): the landed static <StripedBee> is an earlier sibling than
+    // R22 (Pixel): the landed static bee is an earlier sibling than
     // <Image> with no zIndex of its own — RN paints in tree order
     // regardless of position:absolute. It was invisible only because its
     // footprint fell entirely inside the mark's transparent eye; matches

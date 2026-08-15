@@ -1,7 +1,7 @@
 import React from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
 import { theme } from '../constants/theme';
-import { StripedBee } from './StripedBee';
+import { KeepsakeBee } from './KeepsakeBee';
 
 // §14.4 Beat 6 "The Year Card" — the static shareable keepsake the burst
 // resolves into. Deliberately motionless: "motion sells the ceremony;
@@ -44,8 +44,9 @@ export const YearCard = ({
       <View style={styles.bee}>
         {/* 30, not the old 22: it stands beside a 44pt spiral mark on the
             year's keepsake, and a bee that has to be looked for isn't proud.
-            Band knocked out to the card's own gold. */}
-        <StripedBee size={30} fieldColor={theme.colors.goldField} />
+            Band knocked out — R83 puts the cut in the asset's alpha, so this
+            no longer names the field it is cut against. */}
+        <KeepsakeBee size={30} />
       </View>
     </View>
 

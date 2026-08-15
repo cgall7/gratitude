@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, StyleSheet } from 'react-native';
-import { StripedBee } from './StripedBee';
-import { theme } from '../constants/theme';
+import { MascotBee } from './MascotBee';
+import { facingFor } from './beeAttitude';
 import { useReducedMotion } from '../constants/motion';
 
 // Per PLANS/HONEYCOMB_DESIGN.md §3 / §9.4: the bee arcs in and lifts off
@@ -24,12 +24,23 @@ const DEFAULT_PATH = {
   rotate: ['-4deg', '-18deg'],
 };
 
-// §17.3 flight ruling: a bee mid-transition crosses arbitrary content, so
-// it renders `StripedBee` with `bandColor={accent}` (painted, field-
-// independent) hardcoded internally rather than as a forwarded prop — no
-// call site has ever needed to vary it, and hardcoding keeps the engine
-// signature frozen per R16. `flutter` is on for the live flight only; the
-// reduced-motion fade stays a static pose, same as FlyingBee's parked path.
+// §19.5 / R79: the bee here is `MascotBee`, the ratified render. The §17.3
+// ruling this replaces picked `StripedBee` with `bandColor={accent}` so a bee
+// crossing arbitrary content never knocked an opaque band out of it; a raster
+// has no colour props, so that question retires. `flutter` is on for the live
+// flight only; the reduced-motion fade stays a static pose, same as
+// FlyingBee's parked path.
+//
+// **Facing.** The mascot has a face, so which way it points is now legible,
+// and `SHARE_CARRY_PATH` travels 40pt to the *left* — a bee that has always
+// flown that leg tail-first, invisibly, because the drawing it replaced had
+// no expression to contradict it. Facing comes from `facingFor`, the same
+// one-body-width rule the cruise rig uses, applied to this flight's net
+// horizontal travel. It is constant for the whole flight — one stretch of
+// travel has nothing to turn between — so there is no through-zero wheel
+// here, only a mirror. The path's own bank is signed by it for R81's reason:
+// scaleX is applied before rotate, so a mirrored bee rotated +θ tips its nose
+// up, and these numbers were authored for the unmirrored drawing.
 // Default size 20 → 32 — the claim arc crosses text, and 32 reads as a
 // character without going cartoon (44 is the ambient cruiser's register).
 export const BeeTransition = ({ triggerKey, path = DEFAULT_PATH, anchorStyle, size = 32 }) => {
@@ -63,26 +74,38 @@ export const BeeTransition = ({ triggerKey, path = DEFAULT_PATH, anchorStyle, si
 
   if (!flying) return null;
 
+  const facing = facingFor(path.translateX[path.translateX.length - 1] - path.translateX[0], size, 1);
+
   if (reduced) {
     const opacity = progress.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, 1, 0] });
     return (
-      <Animated.View pointerEvents="none" style={[styles.wrap, anchorStyle, { opacity }]}>
-        <StripedBee size={size} bandColor={theme.colors.accent} />
+      <Animated.View
+        pointerEvents="none"
+        style={[styles.wrap, anchorStyle, { opacity, transform: [{ scaleX: facing }] }]}
+      >
+        <MascotBee size={size} />
       </Animated.View>
     );
   }
 
   const translateX = progress.interpolate({ inputRange: [0, 1], outputRange: path.translateX });
   const translateY = progress.interpolate({ inputRange: [0, 0.5, 1], outputRange: path.translateY });
-  const rotate = progress.interpolate({ inputRange: [0, 1], outputRange: path.rotate });
+  const rotate = progress.interpolate({
+    inputRange: [0, 1],
+    outputRange: path.rotate.map((deg) => `${parseFloat(deg) * facing}deg`),
+  });
   const opacity = progress.interpolate({ inputRange: [0, 0.12, 0.85, 1], outputRange: [0, 1, 1, 0] });
 
   return (
     <Animated.View
       pointerEvents="none"
-      style={[styles.wrap, anchorStyle, { opacity, transform: [{ translateX }, { translateY }, { rotate }] }]}
+      style={[
+        styles.wrap,
+        anchorStyle,
+        { opacity, transform: [{ translateX }, { translateY }, { rotate }, { scaleX: facing }] },
+      ]}
     >
-      <StripedBee size={size} bandColor={theme.colors.accent} flutter />
+      <MascotBee size={size} flutter />
     </Animated.View>
   );
 };
