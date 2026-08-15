@@ -35,7 +35,13 @@ import { PressableScale } from './PressableScale';
 // The §23.1 decision itself lives in `utils/loadState.js` — plain JS, no JSX,
 // so `check-load-state.mjs` can execute it instead of reading it. Re-exported
 // here so a consumer still has one import for the rule and the pixels.
-export { LOAD_STATES, resolveListView } from '../utils/loadState';
+//
+// Imported (not just re-exported) because this file uses LOAD_STATES itself
+// below — `export { X } from 'y'` forwards X to importers but creates no
+// local binding, so every reference to LOAD_STATES in this module threw
+// `ReferenceError` at render time until this import existed.
+import { LOAD_STATES, resolveListView } from '../utils/loadState';
+export { LOAD_STATES, resolveListView };
 
 export const LoadState = ({
   state,
