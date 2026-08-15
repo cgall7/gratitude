@@ -1424,16 +1424,22 @@ const targetAxisProp = (axis) =>
       const staging = { x: wp.x * layout.width, y: wp.y * layout.height };
       const hit = layout.hitTest(staging.x, staging.y);
       const who = lattice.personKey(hit?.member) ?? 'off-comb';
-      if (who !== lattice.personKey(cell.member)) strays.push(`${cell.member.name} stages on ${who}`);
+      // State what the plan did, never why. A message that names a cause
+      // invents one: the first draft's read "the offset crosses the apothem",
+      // which is false under the mutation that matters — there the offset is
+      // fine and the PLAN is not using it.
+      if (who !== lattice.personKey(cell.member)) {
+        strays.push(`${cell.member.name} stages ${Math.hypot(staging.x - centre.x, staging.y - centre.y).toFixed(2)}pt away, on ${who}`);
+      }
     }
     if (strays.length === 0) {
       ok(`every seat stages inside its own hexagon (${layout.cells.length}/${layout.cells.length}; offset ${offset.toFixed(2)}pt against an apothem of ${(lattice.ringStepFor(CELL) / 2).toFixed(3)}pt)`);
     } else {
       bad(
         'every seat stages inside its own hexagon',
-        `${strays.length} of ${layout.cells.length} do not: ${strays.join(', ')}. The offset (${offset.toFixed(2)}pt) ` +
-          `crosses the apothem (${(lattice.ringStepFor(CELL) / 2).toFixed(3)}pt), so the bee's one stationary ` +
-          'moment is spent hovering over somebody the user did not tap.',
+        `${strays.length} of ${layout.cells.length} do not: ${strays.join('; ')}. stagingOffsetFor says ` +
+          `${offset.toFixed(2)}pt against an apothem of ${(lattice.ringStepFor(CELL) / 2).toFixed(3)}pt. ` +
+          "The bee's one stationary moment is spent hovering over somebody the user did not tap.",
       );
     }
 
