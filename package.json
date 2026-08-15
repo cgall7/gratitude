@@ -24,6 +24,7 @@
     "check:legacy-journal-identity": "node scripts/check-legacy-journal-identity.mjs",
     "check:bee-attitude": "node scripts/check-bee-attitude.mjs",
     "check:type-floor": "node scripts/check-type-floor.mjs",
+    "check:type-floor-derived": "node scripts/check-type-floor-derived.mjs",
     "check:reexport-bindings": "node scripts/check-reexport-bindings.mjs",
     "check:demo-mode-env": "node scripts/check-demo-mode-env.mjs",
     "check:demo-content-callsites": "node scripts/check-demo-content-callsites.mjs",
