@@ -3,7 +3,7 @@
 **What changed:** Instead of a single Phase 1 MVP, we're slicing the work into two delivery milestones:
 
 1. **Slice 1: Demo Mode** — Full product works end-to-end for friends & family testing. No paywall. Every feature is free. No money — wallet is a shell, no payments, no tips. Distributed via TestFlight / internal track. Goal: validate the core loop with real users.
-2. **Slice 2: Public Launch** — After testing validates the loop, ship to App Store / Play Store with a freemium model. Free tier with limited features, paid tier "Pollinate Plus" ($2.99/month or $29.99/year). Cash App gifting via iMessage links. Monetization layers turn on.
+2. **Slice 2: Public Launch** — After testing validates the loop, ship to App Store / Play Store with a freemium model. Free tier with limited features, paid tier "Pollinate Plus" ($2.99/month or $29.99/year). Nectar wallet via Spark protocol (self-custodial Bitcoin L2). Cash App deposits/withdrawals via Lightning. P2P nectar transfers (Spark-to-Spark, zero-fee). Monetization layers turn on.
 
 ---
 
@@ -35,7 +35,7 @@
 - [ ] Qualitative: NPS: 30+
 - [ ] No critical data loss (entries, friendships, seeds, hives): 0 incidents
 
-> ⚠️ **Wallet & money deferred to Slice 2.** The Wallet tab exists as a shell in Slice 1 — showing a "Coming Soon" message. There is **no MDK integration, no funding flows, no tips, no Cash App gifting** in Slice 1. This is intentional: Slice 1 validates the social-gratitude loop (journaling, friendships, seeds, private hives, blooms, feed) **without money**. Cash App gifting, Lightning, tipping, and escrow all move to Slice 2 or later.
+> ⚠️ **Wallet & money deferred to Slice 2.** The Wallet tab exists as a shell in Slice 1 — showing a "Coming Soon" message. There is **no Spark integration, no wallet creation, no Cash App deposits, no nectar transfers** in Slice 1. This is intentional: Slice 1 validates the social-gratitude loop (journaling, friendships, seeds, private hives, blooms, feed) **without money**. The nectar wallet (Spark protocol), Cash App deposits/withdrawals, P2P nectar transfers, and all wallet functionality move to Slice 2.
 
 ---
 
@@ -236,9 +236,9 @@
 
 
 
-## SLICE 2: PUBLIC LAUNCH (Freemium + Cash App Gifting)
+## SLICE 2: PUBLIC LAUNCH (Freemium + Nectar Wallet)
 
-**Goal:** After demo testing validates the loop, ship to App Store / Play Store with a freemium model. Free tier with limited features; paid tier "Pollinate Plus" unlocks unlimited usage. Cash App gifting via iMessage links enables gratitude-with-money without Pollinate being a money transmitter.
+**Goal:** After demo testing validates the loop, ship to App Store / Play Store with a freemium model. Free tier with limited features; paid tier "Pollinate Plus" unlocks unlimited usage. Nectar wallet via Spark protocol enables self-custodial wallets, Cash App or Strike deposits/withdrawals via Lightning, and P2P nectar transfers (Spark-to-Spark, instant, zero-fee). Pollinate is NOT a money transmitter — Spark is self-custodial (users hold their own keys).
 
 **Prerequisite:** Demo Mode success criteria met (see above).
 
@@ -248,22 +248,28 @@
 
 
 
-### Project 15: Cash App Gifting via iMessage (NEW)
+### Project 15: Nectar Wallet — Spark Protocol + Cash App / Strike Integration (REWRITTEN)
 
-> **Concept (PRD v3.1):** Users can attach a Cash App payment link to a gratitude note. Pollinate generates the link and stores the note — it does NOT touch the money. The recipient reads the gratitude note in Pollinate, then taps the Cash App link to claim the payment in Cash App. Pollinate is NOT a money transmitter.
+> **Concept (PRD v3.1):** Pollinate uses **Spark protocol** (Lightspark's Bitcoin L2) for the nectar wallet. Spark uses Statechains + FROST threshold signatures — self-custodial (users hold their own keys), not a money transmitter. **Privy** integration provides email/social login for MPC wallet creation (no seed phrases for users). Wallets are NOT created at signup — only when the user first taps "Send Nectar" or the Wallet tab, with explicit consent (Apple compliance). Deposits use Lightning invoices opened via Cash App deep link (`https://cash.app/launch/lightning/<invoice>`) or Strike. Withdrawals send to saved `cashtag@cash.app` or `username@strike.me` (one-tap). P2P nectar transfers are Spark-to-Spark (instant, zero-fee). All amounts shown in USD — users never see crypto terminology. NO Lightspark Grid — skipped.
 
 | #    | Issue                          | Description                                                                                                | Est | Labels                |
 | ---- | ------------------------------ | ---------------------------------------------------------------------------------------------------------- | --- | --------------------- |
-| 15.1 | Gift model & API               | `gifts` table: sender_id, recipient_identifier, note_text, cashapp_link, status, created_at. CRUD. Pollinate stores the link reference, NOT the money. | S   | backend, db           |
-| 15.2 | Cash App link generation       | Generate Cash App payment links ($cashtag URL format). User specifies amount + recipient $cashtag. Returns a shareable link. | S   | backend               |
-| 15.3 | Gift composition screen        | User writes gratitude note, enters Cash App amount + recipient $cashtag, generates link. Note + link stored in Pollinate. | M   | ios, android, design  |
-| 15.4 | Share via iMessage / share sheet | Share gratitude note + Cash App link via iMessage extension (iOS) or system share sheet (cross-platform). Recipient receives a link. | L   | ios, android          |
-| 15.5 | Recipient opens gift           | Recipient taps link → opens Pollinate → sees gratitude note with bloom animation → taps Cash App link to claim payment in Cash App. | M   | ios, android, design  |
-| 15.6 | Wallet tab → Gifting hub       | Replace "Coming Soon" shell with gifting entry point. Show sent/received gifts history. Quick action: "Send a gift." | M   | ios, android, design  |
-| 15.7 | Gift feed event                | Privacy-respecting feed event: "Colin sent gratitude to [Name]" (no amounts revealed). Appears in honeycomb feed. | S   | backend, ios, android |
+| ENG-35 | Spark SDK integration         | Integrate Spark SDK (Breez Rust SDK with Swift FFI or orklabs Swift SDK). Wallet initialization, balance queries, transfer functions. | L   | spark, wallet, ios, android, backend |
+| ENG-36 | Privy MPC wallet creation    | Privy integration for email-based MPC wallet creation. Wallet creation flow with explicit consent screen (Apple compliance). User taps "Create My Wallet" → Privy creates MPC wallet → Spark wallet initialized. | M   | spark, privy, apple-compliance, ios, android |
+| ENG-37 | Cash App / Strike deposit flow  | Generate Lightning invoice → open Cash App or Strike via deep link (`https://cash.app/launch/lightning/<invoice>` for Cash App) → receive payment → update balance. First-time: ask user to select payment app (Cash App or Strike) and enter $cashtag or Strike username (saved for withdrawals). | M   | cash-app, spark, ios, android |
+| ENG-38 | Cash App / Strike withdrawal flow | Send Lightning payment to saved `cashtag@cash.app` or `username@strike.me`. One-tap after payment app saved. Fallback: QR scan flow for users without Lightning Address enabled. | M   | cash-app, spark, ios, android |
+| ENG-39 | P2P nectar transfers          | Spark-to-Spark transfer between Pollinate users. Instant, zero-fee. Friend selection → amount → send → "Sent $5 of nectar to Sarah! 🌸" | M   | spark, ios, android |
+| ENG-40 | Dollar-denominated display    | Real-time BTC/USD conversion. Users see USD amounts, never Bitcoin/sats. | S   | spark, ios, android |
+| DES-12 | Wallet onboarding UX          | Consent screen design ("Pollinate uses Spark, a self-custodial Bitcoin wallet..."). Progressive disclosure. "Add Nectar" flow. "Withdraw" flow. Advanced settings (custom Lightning address). | M   | design, spark, apple-compliance |
+| DES-13 | Nectar visual design          | Nectar balance display, transaction animations, honey-themed wallet UI. Make it fun and on-brand. | M   | design, spark |
 
+**Dependencies:** Spark SDK v0.9.0+, Privy SDK, Cash App / Strike deep link integration. Apple Organization developer account required.
 
-> **Legal note:** Pollinate generates and shares Cash App payment links. It does not custody, transmit, or hold funds. The payment happens entirely within Cash App's infrastructure. This keeps Pollinate out of money transmitter regulations.
+> **Strike API integration note:** While Cash App supports deep links only, Strike offers a comprehensive REST API with OAuth 2.0 authentication and webhooks. This is a potential advantage — Strike's API could enable automated payment tracking, webhook notifications when deposits complete, and programmatic withdrawal flows without requiring the user to manually confirm in the Strike app. This deeper integration path can be explored as a future enhancement. Strike is also available internationally (US/EU/UK/AU), providing broader coverage than Cash App (US/UK) for future expansion.
+
+> **Apple compliance note:** Self-custodial wallet permitted (3.1.5(i)). P2P gifts exempt from IAP (3.2.1(vii)). Wallet creation requires explicit consent (2.3.1(a)). Lifestyle category. Organization account required. Cannot use crypto to unlock features. Cannot offer sats as rewards for journaling. NO Lightspark Grid — skipped.
+
+> **SDK note:** Breez SDK is a founding Spark Operator — same protocol. Breez = Rust SDK with FFI bindings for Swift/Kotlin. Spark SDK = TypeScript-first with Privy integration. For iOS native, use Breez Rust FFI or orklabs Swift SDK.
 
 ---
 
@@ -278,8 +284,8 @@
 | 12.2 | Paywall screen                   | Beautiful paywall: what you get, pricing ($2.99/month or $29.99/year), "Upgrade to Pollinate Plus." Shown when user hits a free-tier limit. | M   | ios, android, design  |
 | 12.3 | Freemium free tier               | New users automatically get free tier. No trial period, no card required. Free tier: 1 hive, 1 friend, 1 seed, daily journal (full), yearly review only, 1 package/hive/year, full feed access, receive unlimited. | M   | ios, android, backend |
 | 12.4 | Upgrade prompts & limits         | When free user hits a limit (e.g., tries to create 2nd hive, add 2nd friend), show paywall. Free tier remains functional within limits. Soft gates, not hard walls. | M   | backend, ios, android |
-| 12.5 | Feature gating logic             | Free = receive unlimited, 1 hive, 1 friend, 1 seed, daily journal (full), yearly review only, 1 package/hive/year, full feed access. Paid (Pollinate Plus) = unlimited hives, friends, seeds, monthly/yearly/manual reviews, unlimited packages, Cash App gifting, premium themes. | S   | backend, ios, android |
-| 12.6 | Demo mode → production migration | Flip `demo_mode = false`. Enable paywall. Enable Cash App gifting. Remove demo flags.                                      | S   | backend               |
+| 12.5 | Feature gating logic             | Free = receive unlimited, 1 hive, 1 friend, 1 seed, daily journal (full), yearly review only, 1 package/hive/year, full feed access. Paid (Pollinate Plus) = unlimited hives, friends, seeds, monthly/yearly/manual reviews, unlimited packages, nectar wallet (send nectar to friends), premium themes. | S   | backend, ios, android |
+| 12.6 | Demo mode → production migration | Flip `demo_mode = false`. Enable paywall. Enable nectar wallet (Spark). Remove demo flags.                                      | S   | backend               |
 | 12.7 | Subscription management          | Settings: view plan, manage subscription, cancel, restore purchases.                                                       | S   | ios, android, backend |
 | 12.8 | Revenue tracking                 | Track: free → paid conversions, churn, MRR, ARPU, gift attach rate.                                                        | M   | backend, analytics    |
 
@@ -288,9 +294,9 @@
 >
 > - **Freemium subscription.** Free tier with limited features. Paid tier "Pollinate Plus" at $2.99/month or $29.99/year.
 > - **Free tier:** Receive unlimited, 1 hive, 1 friend, 1 seed, daily journal (full), yearly review only, 1 package/hive/year, full feed access.
-> - **Paid tier (Pollinate Plus):** Unlimited hives, friends, seeds, monthly/yearly/manual reviews, unlimited packages, Cash App gifting, premium themes.
-> - **Cash App gifting:** Users generate gratitude notes with Cash App payment links, shared via iMessage. Pollinate is NOT a money transmitter — it generates links, doesn't handle funds.
-> - **Transaction fees (MDK/Lightning):** Deferred to Slice 3+ pending legal research. Not part of Slice 2 launch.
+> - **Paid tier (Pollinate Plus):** Unlimited hives, friends, seeds, monthly/yearly/manual reviews, unlimited packages, nectar wallet (send nectar to friends), premium themes.
+> - **Nectar wallet (Spark):** Self-custodial Bitcoin L2 wallet via Spark protocol. Cash App deposits/withdrawals via Lightning deep links. P2P nectar transfers (Spark-to-Spark, instant, zero-fee). Pollinate is NOT a money transmitter — Spark is self-custodial (users hold their own keys).
+> - **No MDK/Lightning needed:** Spark replaces MDK. No Coinbase Onramp needed (Cash App handles deposits/withdrawals). No Lightspark Grid (explicitly skipped).
 
 ---
 
@@ -306,7 +312,7 @@
 | 13.3 | Landing page                | pollinateapp.xyz marketing site. App download links, hero, features, FAQ.                          | M   | web, design           |
 | 13.4 | Onboarding for public users | Polish onboarding for cold users (no friend group waiting). "Add your first friend" → invite flow. | M   | ios, android, design  |
 | 13.5 | Bug bash                    | Final QA pass. Fix all P0/P1 bugs from demo testing.                                               | M   | qa, ios, android      |
-| 13.6 | Privacy policy & terms      | Legal docs for public launch. Cover data handling, Cash App gifting disclosures (not a money transmitter). | S   | legal, launch         |
+| 13.6 | Privacy policy & terms      | Legal docs for public launch. Cover data handling, Spark wallet disclosures (self-custodial, not a money transmitter). | S   | legal, launch         |
 | 13.7 | Support channel             | In-app help / FAQ. Contact form. Bug reporting.                                                    | S   | ios, android, backend |
 
 
@@ -314,49 +320,23 @@
 
 
 
-### Projects 3, 4, 5: Wallet & Funding Infrastructure (MOVED FROM SLICE 1 — DEFERRED TO SLICE 3+)
+### Projects 3, 4, 5: Wallet & Funding Infrastructure (SUPERSEDED BY PROJECT 15)
 
-> ⚠️ **These projects were originally in Slice 1 but have been moved out.** Per PRD v3.1, transaction fee infrastructure (MDK/Lightning wallets, Lightning funding flows, card onramps) is **deferred to Slice 3+ pending legal research**. They are documented here for reference and future planning. **Do not build these in Slice 2 unless legal counsel confirms viability.**
+> ⚠️ **These projects were originally in Slice 1 but have been superseded by Project 15 (Nectar Wallet — Spark Protocol).** The wallet is now built using **Spark protocol** — no separate MDK, Lightning funding, or Coinbase Onramp work is needed. Spark + Cash App covers deposits, withdrawals, and P2P transfers. These are documented here for historical reference only.
 
-#### Project 3: MDK Wallet Integration (DEFERRED — Slice 3+)
+#### Project 3: MDK Wallet Integration (SUPERSEDED — see Project 15)
 
+> **No longer needed.** Spark SDK IS the wallet integration (Project 15, ENG-35). No separate MDK integration required. Spark provides self-custodial wallets with Statechains + FROST threshold signatures, plus Privy for MPC key management (no seed phrases). All wallet functionality (init, balance, transfers) is handled by Spark.
 
-| #   | Issue                      | Description                                                                        | Est | Labels          |
-| --- | -------------------------- | ---------------------------------------------------------------------------------- | --- | --------------- |
-| 3.1 | MDK SDK integration        | Integrate SDK into backend. Per-user wallet. Key management.                       | L   | backend, wallet |
-| 3.2 | Generate Lightning invoice | API endpoint: generate BOLT11 invoice for amount. Return invoice string + QR data. | M   | backend, wallet |
-| 3.3 | Receive payment detection  | Webhook/polling for paid invoices. Update balance. Fire real-time event.           | M   | backend, wallet |
-| 3.4 | Send Lightning payment     | API endpoint: pay a given invoice. Handle routing failures, retries.               | M   | backend, wallet |
-| 3.5 | Balance + USD conversion   | API: return balance in sats + USD. Integrate price API (CoinGecko).                | S   | backend, wallet |
-| 3.6 | Transaction history        | API: list all incoming/outgoing transactions with metadata.                        | S   | backend, wallet |
-| 3.7 | Wallet UI — balance        | Show balance (sats + USD) on home/wallet screen. Real-time updates.                | M   | ios, android    |
-| 3.8 | Wallet UI — transactions   | List of transactions. Tap for detail.                                              | S   | ios, android    |
-| 3.9 | Escrow for seed tips       | Hold invoice / time-locked payment for seed-attached tips. Release on bloom.       | L   | backend, wallet |
+#### Project 4: Cash App Lightning Funding Flow (SUPERSEDED — see Project 15)
 
+> **Now part of Project 15 (ENG-37, ENG-38).** Cash App deposits use Lightning invoices opened via deep link (`https://cash.app/launch/lightning/<invoice>`). Cash App withdrawals send to saved `cashtag@cash.app` (one-tap after setup, with QR fallback). No separate funding flow project needed.
 
-#### Project 4: Cash App Lightning Funding Flow (DEFERRED — Slice 3+)
+#### Project 5: Apple Pay / Card Fallback (Coinbase Onramp) (NOT NEEDED)
 
+> **Cash App handles deposit/withdrawal.** No Coinbase Onramp needed. If we need additional funding methods in the future, evaluate then.
 
-| #   | Issue                       | Description                                                                                                | Est | Labels                |
-| --- | --------------------------- | ---------------------------------------------------------------------------------------------------------- | --- | --------------------- |
-| 4.1 | "Add Funds" screen          | Cash App highlighted as recommended. Other options below.                                                  | S   | ios, android, design  |
-| 4.2 | Invoice generation          | Generate Lightning invoice for user-specified dollar amount. Convert to sats.                              | S   | backend, wallet       |
-| 4.3 | QR code rendering           | Render invoice as large scannable QR. Copyable invoice string.                                             | S   | ios, android          |
-| 4.4 | Payment detection + success | On payment arrival: update balance, success animation, haptic.                                             | S   | ios, android, backend |
-| 4.5 | Funding instructions        | Visual guide: "1. Open Cash App → 2. Money → 3. Bitcoin → 4. Scan QR"                                      | S   | ios, android, design  |
-
-
-#### Project 5: Apple Pay / Card Fallback (Coinbase Onramp) (DEFERRED — Slice 3+)
-
-> *This is still an idea. Do not build this yet.*
-
-| #   | Issue                        | Description                                                 | Est | Labels                |
-| --- | ---------------------------- | ----------------------------------------------------------- | --- | --------------------- |
-| 5.1 | Coinbase Onramp SDK          | Embedded widget. Stays in-app. No browser redirect.         | M   | ios, android, backend |
-| 5.2 | Apple Pay flow               | Apple Pay sheet → Face ID → confirm. Min $10.               | M   | ios, backend          |
-| 5.3 | KYC handling                 | First-time KYC via Coinbase SDK. Track status.              | S   | backend               |
-| 5.4 | Payment confirmation webhook | Coinbase webhook → confirm → credit wallet with sats.       | S   | backend, wallet       |
-| 5.5 | Funding options UI           | Cash App (default) → Apple Pay/Card → Any Lightning wallet. | S   | ios, android, design  |
+> **Note:** Lightspark Grid is NOT recommended. Cash App + Lightning is sufficient for deposits and withdrawals.
 
 
 ---
@@ -368,13 +348,13 @@
 
 | Metric        | Value                                                                     |
 | ------------- | ------------------------------------------------------------------------- |
-| Projects      | 3 active build (Projects 12, 13, 15) + 3 deferred to Slice 3+ (Projects 3, 4, 5) |
-| Issues        | ~22 active build + ~25 deferred                                           |
+| Projects      | 3 active build (Projects 12, 13, 15). Projects 3, 4, 5 superseded by Project 15. |
+| Issues        | ~22 active build (ENG-35–40, DES-12–13, plus paywall/launch issues)      |
 | Timeline      | 3–4 weeks build, then public launch                                       |
-| Critical path | 15.4 (iMessage/share integration), 12.1 (Subscription engine), 12.5 (Feature gating) |
+| Critical path | ENG-35 (Spark SDK integration), ENG-36 (Privy MPC wallet), 12.1 (Subscription engine), 12.5 (Feature gating) |
 | Distribution  | App Store + Play Store (public)                                           |
-| Monetization  | Freemium: Free tier (limited) + Pollinate Plus ($2.99/mo or $29.99/yr). Cash App gifting via iMessage links (not a money transmitter). |
-| Success gate  | 20%+ free→paid conversion, $1K+ MRR within 60 days of launch, 10%+ of gratitude notes include a Cash App gift |
+| Monetization  | Freemium: Free tier (limited) + Pollinate Plus ($2.99/mo or $29.99/yr). Nectar wallet via Spark (self-custodial, not a money transmitter). Cash App or Strike deposits/withdrawals via Lightning. P2P nectar transfers (Spark-to-Spark, zero-fee). |
+| Success gate  | 20%+ free→paid conversion, $1K+ MRR within 60 days of launch, 10%+ of users send nectar to a friend |
 
 
 ---
@@ -383,10 +363,10 @@
 
 ## WHAT COMES AFTER (Future Slices)
 
-After public launch with freemium paywall:
+After public launch with freemium paywall and nectar wallet:
 
-- **Slice 3 (Transaction Fees — IF viable):** MDK/Lightning wallet integration, Lightning funding flows, card onramps. Requires legal counsel to confirm money transmitter status and regulatory compliance. Only proceeds if legal research is favorable. (Projects 3, 4, 5 above.)
-- **Slice 4 (Growth):** Collective seeds, pay-it-forward chains, advanced seed types, cash-out flow (if Slice 3 proceeds), feed comments
+- **Slice 3 (Wallet Enhancements):** Stablecoin support via BTKN token standard (if dollar peg needed). Spark SDK v1.0 migration (when released). Potential additional withdrawal methods (Strike, other Lightning wallets). NOT Lightspark Grid (explicitly skipped).
+- **Slice 4 (Growth):** Collective seeds, pay-it-forward chains, advanced seed types, feed comments
 - **Slice 5 (Moat):** The Garden, Annual Harvest, seed rituals, hexagon state polish
 - **Slice 6 (Scale):** Public API, badges, charity flow, Gratitude Pass subscription
 
@@ -415,7 +395,7 @@ Week 6-10:  SLICE 1 TEST
             └── Demo success gate check
 
 Week 10-14: SLICE 2 BUILD
-            ├── Cash App gifting via iMessage (Project 15)
+            ├── Nectar wallet — Spark + Cash App (Project 15)
             ├── Freemium paywall (Project 12)
             ├── Public launch prep (Project 13)
             └── Bug bash + polish
@@ -424,8 +404,8 @@ Week 14+:   SLICE 2 LAUNCH
             ├── App Store + Play Store submission
             ├── Public launch
             ├── Freemium paywall active
-            ├── Cash App gifting live
-            └── Begin transaction fee legal research (Slice 3)
+            ├── Nectar wallet live (Spark, Cash App deposits/withdrawals, P2P transfers)
+            └── Evaluate Spark SDK v1.0 + stablecoin support (Slice 3)
 ```
 
 ---
@@ -443,9 +423,9 @@ Week 14+:   SLICE 2 LAUNCH
 | 4        | 6.3 Hexagon grid component | Most complex frontend component. Blocks Hive UI.               | High — custom layout, dynamic positioning, performance    |
 | 5        | 8b.4 / 8b.6 Bloom animations | Emotional payoff of private hives (author review + recipient package-open). Can't ship private hives without it. | Medium — animation complexity, but lower risk than wallet |
 | 6        | 12.1 Subscription engine   | Blocks paywall. Can't launch publicly without it.              | Medium — StoreKit/Billing are well-documented             |
-| 7        | 15.4 iMessage / share integration | Blocks Cash App gifting. Most complex Slice 2 feature.   | Medium — iMessage extension complexity, cross-platform share sheet |
+| 7        | ENG-35 Spark SDK integration | Blocks nectar wallet (Project 15). Most complex Slice 2 feature — Spark SDK, Privy MPC, Cash App deep links. | High — new protocol, FFI bindings, threshold signatures |
 
-**Recommendation:** Start database setup (1.4), hexagon grid (6.3), and private hive model (8b.1) on day 1. These are the longest poles. Everything else can flow around them. Bloom animations (8b.4/8b.6) can begin once the private hive data model is in place.
+**Recommendation:** Start database setup (1.4), hexagon grid (6.3), and private hive model (8b.1) on day 1. These are the longest poles. Everything else can flow around them. Bloom animations (8b.4/8b.6) can begin once the private hive data model is in place. For Slice 2, start Spark SDK evaluation (ENG-35) early — it's the longest pole for the nectar wallet.
 
 ---
 
@@ -470,13 +450,13 @@ Week 14+:   SLICE 2 LAUNCH
 
 
 
-### Slice 2 Team (Paywall + Gifting + Launch)
+### Slice 2 Team (Paywall + Nectar Wallet + Launch)
 
 
 | Role             | Owns                                                        | Key Projects |
 | ---------------- | ----------------------------------------------------------- | ------------ |
-| Mobile Engineers | Cash App gifting UI, paywall, feature gating, iMessage integration | 12, 15   |
-| Backend Engineer | Subscription backend, Cash App link generation, gifting API, revenue tracking, demo→prod migration | 12, 15, 13 |
-| Designer         | Paywall design, gifting flow, App Store screenshots, landing page | 12, 15, 13 |
+| Mobile Engineers | Spark SDK integration, nectar wallet UI, Cash App deep links, paywall, feature gating | 12, 15   |
+| Backend Engineer | Subscription backend, Spark wallet init, Privy MPC integration, revenue tracking, demo→prod migration | 12, 15, 13 |
+| Designer         | Paywall design, wallet onboarding/consent screen, nectar visual design, App Store screenshots, landing page | 12, 15, 13 |
 | Growth/Community | App Store submission, landing page, public launch           | 13           |
 
