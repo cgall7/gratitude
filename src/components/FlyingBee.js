@@ -12,6 +12,7 @@ import {
   pollenFlecks,
 } from './pollinationFlight';
 import { theme } from '../constants/theme';
+import { MASCOT_WIDTH_FRACTION } from '../constants/mascot';
 import { DURATIONS, MAX_TRAIL_PARTICLES, useReducedMotion } from '../constants/motion';
 
 // Sunbeam §12.2 — the marquee motion. Distinct from BeeTransition (a scarce
@@ -442,6 +443,12 @@ export const FlyingBee = ({
         from: { ...posRef.current },
         target,
         ringStep: pollinate.ringStep,
+        // C′ — the staging offset is the bee's own drawn length, so it is
+        // measured here, in the box that owns the bee, and never inferred
+        // from the comb. `size` is the BOX; the character inside it spans
+        // `MASCOT_WIDTH_FRACTION` of that, and it is the character the eye
+        // reads a length off.
+        bodyLengthPx: MASCOT_WIDTH_FRACTION * size,
         width: layout.width,
         height: layout.height,
         approachSpeedPxS: cruiseSpeed * APPROACH_SPEED_RATIO,

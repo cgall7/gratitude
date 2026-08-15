@@ -31,16 +31,59 @@
 export const APPROACH_SPEED_RATIO = 2;
 
 // §28.5 — the descent is a GESTURE, not a traverse, so it is specified as a
-// duration. Its distance is one lattice step by construction (see
-// `buildPollinationPlan`), so fixing the duration fixes the speed: 76.21pt in
-// 240ms = 317.5 px/s at cellSize 44, which sits between cruise (187.59) and
-// approach (375.18). Flown on `Easing.out(cubic)` so he lands rather than
+// duration. Its distance is the staging offset by construction (see
+// `buildPollinationPlan`), so fixing the duration fixes the speed: 30.07pt in
+// 160ms = 187.9 px/s at beeSize 44, which is cruise speed (187.59) — he
+// settles onto the face at the pace he was already flying, rather than
+// dropping onto it. Flown on `Easing.out(cubic)` so he lands rather than
 // arrives.
-export const DESCENT_MS = 240;
+//
+// §28.11 / C′ — this was 240ms when the drop was a full ring step (76.21pt).
+// Shortening the drop without shortening the duration would have made the
+// settle a crawl at 125 px/s, two thirds of cruise; the dial moved with the
+// distance it is the duration of.
+export const DESCENT_MS = 160;
 
-// §28.3 — pollen scatter radius, as a fraction of the lattice step the
-// descent covers. A quarter of a step is 19.05pt at cellSize 44, comfortably
-// inside the cell's own half-width across flats (38.105pt), so the burst
+// §28.4 / C′ — how far above the face he hangs before he settles onto it.
+//
+// R87 measured the defect this replaces. The staging point used to be ONE
+// RING STEP above the cell, and a ring step is the lattice's own pitch, so
+// "one step above the cell" IS "the seat above it" wherever one exists: four
+// of seven seats staged on another member's face, and the approach eases out
+// into the phase split, so the slowest moment of the whole beat — a full
+// stop — happened over the wrong person. R88: **a quantity borrowed from a
+// lattice inherits the lattice's occupancy.** "Not a new number" justifies a
+// SCALE; it never justifies a POSITION.
+//
+// So the offset is the BEE's dimension, not the comb's: he hangs his own
+// length above the face he came to. §28.3's noun rule, again — the number is
+// a length either way, and which noun it is a length OF decides where he
+// stops. It moves with the character now, not with the lattice.
+//
+// The bound is the target cell's apothem, `ringStep / 2` (38.105pt at
+// cellSize 44). Past it the staging point crosses the Voronoi boundary into
+// the seat above and the defect is back. `STAGING_SAFETY` keeps it off the
+// boundary itself, because at exactly half a step the hit-test is an exact
+// tie and float noise picks the side (R88).
+//
+// **The `min` is a backstop, not the mechanism, and the gate proves it.** The
+// approach clamp was killed in §28.5 because it bound on most taps — at which
+// point it is not a guard, it is the mechanism wearing a guard's name. This
+// one is the opposite: at the shipped pair (beeSize 44, cellSize 44) the body
+// length is 30.07pt against a bound of 34.29, so the noun decides and the
+// bound never binds. It only engages where a caller draws the bee large
+// against the comb — `beeSize > 1.141 x cellSize` — and there the invariant
+// matters more than the noun does. Rows 5c/5d sweep both halves of that: the
+// bound holds for every pair, and the noun still decides at the shipped one.
+export const STAGING_SAFETY = 0.9;
+
+export const stagingOffsetFor = ({ bodyLengthPx, ringStep }) =>
+  Math.min(bodyLengthPx, (STAGING_SAFETY * ringStep) / 2);
+
+// §28.3 — pollen scatter radius, as a fraction of the lattice step. This one
+// stays on the comb: the burst is a property of the FACE it lands on, not of
+// the bee that dropped it. A quarter of a step is 19.05pt at cellSize 44,
+// comfortably inside the cell's own half-width across flats (38.105pt), so it
 // reads as landing ON the face rather than around it.
 export const POLLEN_RADIUS_FRACTION = 0.25;
 
@@ -136,7 +179,12 @@ export const composePhaseEasing = (split, easeA, easeB) => (w) => {
  *                  you say what it is the position OF)
  * @param ringStep  one lattice step, px. Travels WITH the target because it
  *                  is a measured property of the comb; `FlyingBee` must not
- *                  know `cellSize`.
+ *                  know `cellSize`. The apothem the staging offset is bounded
+ *                  by is half of it, so nothing new has to cross the boundary
+ *                  for C′ — the bound is expressible in what already came.
+ * @param bodyLengthPx  the DRAWN character's own length, px. Travels with the
+ *                  bee for the same reason `ringStep` travels with the
+ *                  target: each box owns its own measurements (§28.2).
  * @param width/height  the flight container, px
  * @param approachSpeedPxS  cruise speed x APPROACH_SPEED_RATIO
  * @param easeApproach/easeDescent  the two phase easings
@@ -145,17 +193,21 @@ export const buildPollinationPlan = ({
   from,
   target,
   ringStep,
+  bodyLengthPx,
   width,
   height,
   approachSpeedPxS,
   easeApproach,
   easeDescent,
 }) => {
-  // §28.4 waypoint 1: one ring step DIRECTLY ABOVE the cell centre. A bee
-  // approaching from below sweeps up and over it, so the final leg is always
-  // a descent whatever direction he came from — which is what makes the
-  // landing read as a landing rather than as an arrival from the side.
-  const staging = { x: target.x, y: target.y - ringStep };
+  // §28.4 waypoint 1: DIRECTLY ABOVE the cell centre, by the bee's own length
+  // (C′ — see `stagingOffsetFor`). A bee approaching from below sweeps up and
+  // over it, so the final leg is always a descent whatever direction he came
+  // from — which is what makes the landing read as a landing rather than as
+  // an arrival from the side. And because the offset is inside the target's
+  // own hexagon, the one moment he is stationary is the moment he is hanging
+  // over the face the user tapped.
+  const staging = { x: target.x, y: target.y - stagingOffsetFor({ bodyLengthPx, ringStep }) };
   const approachMs = approachDurationMs(distancePx(from, staging), approachSpeedPxS);
   const durationMs = approachMs + DESCENT_MS;
   const split = durationMs > 0 ? approachMs / durationMs : 0;
