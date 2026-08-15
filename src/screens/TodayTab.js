@@ -3,11 +3,14 @@ import { StyleSheet, View, Text, ActivityIndicator, ScrollView } from 'react-nat
 import { useFocusEffect } from '@react-navigation/native';
 import { theme } from '../constants/theme';
 import { EntryStore } from '../services/EntryStore';
+import { HoneycombStore } from '../services/HoneycombStore';
 import { FlyingBee } from '../components/FlyingBee';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { StreakBadge } from '../components/StreakBadge';
 import { StaggeredItem } from '../components/StaggeredItem';
+import { HiveCard } from '../components/HiveCard';
+import { StartHiveDoorCard } from '../components/StartHiveDoorCard';
 import { currentStreak, nextMilestone, startOfYear, endOfYear } from '../utils/dateRanges';
 import { TAB_CLEARANCE } from '../navigation/tabBarLayout';
 
@@ -35,20 +38,23 @@ export const TodayTab = ({ navigation }) => {
   const [entry, setEntry] = useState(null);
   const [streak, setStreak] = useState(0);
   const [total, setTotal] = useState(0);
+  const [hives, setHives] = useState([]);
 
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
       (async () => {
         const now = new Date();
-        const [today, yearEntries] = await Promise.all([
+        const [today, yearEntries, connections] = await Promise.all([
           EntryStore.getEntry(now),
           EntryStore.getEntriesBetween(startOfYear(now), endOfYear(now)),
+          HoneycombStore.listConnections(),
         ]);
         if (cancelled) return;
         setEntry(today);
         setStreak(currentStreak(yearEntries, now));
         setTotal(yearEntries.length);
+        setHives(connections || []);
         setLoading(false);
       })();
       return () => {
@@ -80,6 +86,9 @@ export const TodayTab = ({ navigation }) => {
           title={greeting(now)}
           right={<StreakBadge streak={streak} />}
         />
+
+        {/* Shelf 1: My Journal */}
+        <Text style={styles.shelfHeader}>MY JOURNAL</Text>
 
         <StaggeredItem index={0}>
           <View style={styles.streakCard}>
@@ -124,6 +133,26 @@ export const TodayTab = ({ navigation }) => {
             </Text>
           </StaggeredItem>
         )}
+
+        {/* Shelf 2: Hives I Keep */}
+        <Text style={styles.shelfHeader}>HIVES I KEEP</Text>
+
+        <StaggeredItem index={3}>
+          <View>
+            {hives.map((hive, idx) => (
+              <HiveCard
+                key={hive.id}
+                name={hive.display_name}
+                avatarUrl={hive.avatar_url}
+                isPackaged={false}
+                onPress={() => navigation.getParent()?.navigate('Honeycomb')}
+              />
+            ))}
+            <StartHiveDoorCard
+              onPress={() => navigation.getParent()?.navigate('Honeycomb')}
+            />
+          </View>
+        </StaggeredItem>
       </ScrollView>
     </View>
   );
@@ -142,6 +171,15 @@ const styles = StyleSheet.create({
     padding: 24,
     paddingTop: 72,
     paddingBottom: TAB_CLEARANCE,
+  },
+  shelfHeader: {
+    ...theme.type.label,
+    color: theme.colors.inkSoft,
+    textTransform: 'uppercase',
+    marginTop: 32,
+    marginBottom: 16,
+    fontSize: 11,
+    letterSpacing: 0.5,
   },
   streakCard: {
     backgroundColor: theme.colors.washYellow,
