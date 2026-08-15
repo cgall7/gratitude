@@ -62,9 +62,16 @@ export const LockScreen = ({ onOpen }) => {
           Begin
         </PrimaryButton>
 
-        <PressableScale onPress={handleLoadDemoData} style={styles.demoDataLink}>
-          <Text style={styles.demoDataLinkText}>Load demo data</Text>
-        </PressableScale>
+        {/* Lumen's design assessment (thread 37fb8ef6, WP-10a): a dev
+            affordance sitting on the ritual gate ships to every tester.
+            Colin's 2026-08-10 note ("wants a real button, not the old
+            hidden 5-tap gesture") was about discoverability during
+            development, not about shipping it past __DEV__. */}
+        {__DEV__ && (
+          <PressableScale onPress={handleLoadDemoData} style={styles.demoDataLink}>
+            <Text style={styles.demoDataLinkText}>Load demo data</Text>
+          </PressableScale>
+        )}
       </View>
     </View>
   );

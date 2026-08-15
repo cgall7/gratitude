@@ -588,7 +588,7 @@ const styles = StyleSheet.create({
   },
   revealTheme: {
     ...theme.type.label,
-    fontSize: 10,
+    fontSize: 11,
     letterSpacing: 1.4,
     color: theme.colors.inkSoft,
     marginTop: 8,

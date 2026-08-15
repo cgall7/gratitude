@@ -22,6 +22,7 @@
     "check:legacy-journal": "node scripts/check-legacy-journal.mjs",
     "check:legacy-journal-identity": "node scripts/check-legacy-journal-identity.mjs",
     "check:bee-attitude": "node scripts/check-bee-attitude.mjs",
+    "check:type-floor": "node scripts/check-type-floor.mjs",
     "test": "node scripts/run-checks.mjs",
     "deploy:migrations": "bash scripts/deploy-migrations.sh"
   },

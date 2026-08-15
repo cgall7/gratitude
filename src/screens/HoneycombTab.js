@@ -98,7 +98,11 @@ const toGridMember = (share) => ({
 // answer a duplicate with the wrong seat. Feed order is newest-first, so
 // keeping the first occurrence keeps the person's most recent share.
 const partitionHive = (weekFeed, now = new Date()) => {
-  const merged = weekFeed.concat(demoHiveShares(now));
+  // __DEV__-gated per Lumen's design assessment (thread 37fb8ef6, WP-10a):
+  // a real tester's honeycomb should show their own quiet-hive door
+  // (WP-4's EmptyCell), not fabricated strangers. check:demo-hive still
+  // exercises demoHiveShares directly, unaffected by this call site.
+  const merged = __DEV__ ? weekFeed.concat(demoHiveShares(now)) : weekFeed;
   const todayISO = toISODate(now);
   const seen = new Set();
   return {
