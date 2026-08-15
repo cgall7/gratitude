@@ -117,7 +117,7 @@ export const InputScreen = ({ onUnlock }) => {
           // Promise.resolve wraps the demo-mode caller too (Onboarding.js's
           // LockDemoStep.onSave is synchronous), so this is safe either way.
           Promise.resolve(onUnlock(text)).catch(() => {
-            Alert.alert("Couldn't unlock", "Your entry didn't save — try again.");
+            Alert.alert("Couldn't save", "Your entry didn't save — try again.");
             Animated.parallel([
               Animated.timing(overlayOpacity, {
                 toValue: 0,
@@ -150,7 +150,7 @@ export const InputScreen = ({ onUnlock }) => {
             <CelebrationRays />
             <CelebrationBadge />
           </View>
-          <Text style={styles.unlockingText}>Unlocked. Enjoy your day.</Text>
+          <Text style={styles.unlockingText}>Your day is open. Enjoy it.</Text>
         </Animated.View>
       )}
 
@@ -179,7 +179,7 @@ export const InputScreen = ({ onUnlock }) => {
         </View>
 
         <PrimaryButton onPress={handleSave} disabled={!text.trim() || unlocking}>
-          Unlock my apps
+          Open my day
         </PrimaryButton>
       </Animated.View>
     </KeyboardAvoidingView>

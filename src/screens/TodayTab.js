@@ -162,7 +162,7 @@ export const TodayTab = ({ navigation }) => {
             <View style={styles.emptyCard}>
               <Text style={styles.emptyTitle}>Today's page is blank.</Text>
               <Text style={styles.emptyBody}>
-                One line is enough. Write it, and your apps unlock for the day.
+                One line is enough. Write it, and your day opens.
               </Text>
               <PrimaryButton onPress={() => navigation.getParent()?.navigate('Lock')}>
                 Write today's entry
@@ -174,7 +174,7 @@ export const TodayTab = ({ navigation }) => {
         {entry && (
           <StaggeredItem index={2}>
             <Text style={styles.footerText}>
-              Saved and unlocked. Share it with your hive, or come back tomorrow.
+              Saved. Your day is open. Share it with your hive, or come back tomorrow.
             </Text>
           </StaggeredItem>
         )}
