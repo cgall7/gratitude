@@ -20,6 +20,18 @@
 // to an existing one, with an unsealed-hive control alongside so the
 // negative isn't just "the whole table is now unwritable."
 //
+// Second follow-up from Pixel, running this exact gate at a250309 with two
+// probes appended: 000005 only added the seal check to WITH CHECK, so
+// reparenting an entry OUT of a sealed hive (`hive_id = null`, which lands
+// in the always-legal branch) and deleting it outright (entries_delete_own
+// never mentioned seal state) both survived RLS. WITH CHECK constrains the
+// row you land; USING constrains the row you touch, so a removal spelled
+// UPDATE was never checked at all. 000006 adds the same clause to USING on
+// entries_update_own and entries_delete_own. Under RLS, a USING failure on
+// UPDATE/DELETE doesn't raise -- the row is invisible to the statement, so
+// it silently matches zero rows -- so these assertions check rowCount, not
+// a caught exception, unlike the WITH CHECK cases above.
+//
 // Modeled on check-hive-state-rls.mjs/check-seeds-rls.mjs for the harness
 // shape: real migrations off disk, mutations run as `authenticated` (never
 // the table owner), and the trigger's refusal is checked by catching the
@@ -76,6 +88,7 @@ const APPLY = [
   '20260815000003_private_hives_sealed_at.sql',
   '20260815000004_private_hives_sealed_at_guard.sql',
   '20260815000005_private_hives_sealed_entries_readonly.sql',
+  '20260815000006_private_hives_sealed_entries_immutable.sql',
 ];
 
 const OWNER = '11111111-1111-1111-1111-111111111111';
@@ -284,22 +297,26 @@ async function main() {
     // 8. Owner CANNOT edit an existing entry that belongs to a sealed hive.
     // Seed the row as postgres first (bypassing RLS, same as the hive setup
     // above) so this isolates the update policy from the insert policy.
+    // Since 000006, USING excludes the pre-update row outright (it's sealed),
+    // so this is filtered before WITH CHECK ever runs -- zero rows matched,
+    // not an exception. Before 000006 this path raised on WITH CHECK instead;
+    // both are "the edit didn't happen," so this checks rowCount, not a catch.
     const { rows: sealedEntryRows } = await client.query(
       "insert into public.entries (user_id, content, entry_date, hive_id) values ($1, 'pre-seal entry', current_date - 1, $2) returning id",
       [OWNER, hiveId]
     );
     const sealedEntryId = sealedEntryRows[0].id;
     try {
-      await asUser(OWNER, () =>
+      const result = await asUser(OWNER, () =>
         client.query('update public.entries set content = $1 where id = $2', ['edited after seal', sealedEntryId])
       );
-      bad('owner may not edit an entry in a sealed hive', 'update succeeded');
-    } catch (e) {
-      if (/row-level security/.test(e.message)) {
+      if (result.rowCount === 0) {
         ok('owner may not edit an entry in a sealed hive');
       } else {
-        bad('owner may not edit an entry in a sealed hive', `wrong error: ${firstLine(e)}`);
+        bad('owner may not edit an entry in a sealed hive', `update matched ${result.rowCount} row(s); USING did not filter it`);
       }
+    } catch (e) {
+      bad('owner may not edit an entry in a sealed hive', firstLine(e));
     }
 
     // 9. Control: owner CAN edit an entry in a hive that isn't sealed.
@@ -310,6 +327,91 @@ async function main() {
       ok('owner may edit an entry in an unsealed hive (control)');
     } catch (e) {
       bad('owner may edit an entry in an unsealed hive (control)', firstLine(e));
+    }
+
+    // 10. Owner CANNOT reparent an entry OUT of a sealed hive. The landing
+    // row (hive_id null) is legal on its own, so this only fails if USING
+    // excludes the pre-update row -- no exception, the UPDATE just matches
+    // zero rows.
+    try {
+      const result = await asUser(OWNER, () =>
+        client.query('update public.entries set hive_id = null where id = $1', [sealedEntryId])
+      );
+      if (result.rowCount === 0) {
+        ok('owner may not reparent an entry out of a sealed hive');
+      } else {
+        bad(
+          'owner may not reparent an entry out of a sealed hive',
+          `update matched ${result.rowCount} row(s); USING did not filter it`
+        );
+      }
+    } catch (e) {
+      bad('owner may not reparent an entry out of a sealed hive', firstLine(e));
+    }
+
+    // 11. Owner CANNOT delete an entry that belongs to a sealed hive. Same
+    // shape: USING exclusion means zero rows matched, not an exception.
+    try {
+      const result = await asUser(OWNER, () => client.query('delete from public.entries where id = $1', [sealedEntryId]));
+      if (result.rowCount === 0) {
+        ok('owner may not delete an entry in a sealed hive');
+      } else {
+        bad('owner may not delete an entry in a sealed hive', `delete matched ${result.rowCount} row(s); USING did not filter it`);
+      }
+    } catch (e) {
+      bad('owner may not delete an entry in a sealed hive', firstLine(e));
+    }
+
+    // 12. Direct check on the property tests 10-11 exist for: the sealed
+    // hive still holds its one entry. This is the assertion Pixel's probe
+    // failed against 000005 alone ("entries remaining in the sealed hive: 0").
+    const { rows: countRows } = await client.query(
+      'select count(*)::int as n from public.entries where hive_id = $1',
+      [hiveId]
+    );
+    if (countRows[0].n === 1) {
+      ok('sealed hive still holds its one entry after both removal attempts');
+    } else {
+      bad(
+        'sealed hive still holds its one entry after both removal attempts',
+        `hive_id ${hiveId} has ${countRows[0].n} entries, expected 1`
+      );
+    }
+
+    // 13. Control: owner CAN reparent an entry out of an unsealed hive.
+    try {
+      const result = await asUser(OWNER, () =>
+        client.query('update public.entries set hive_id = null where id = $1', [openEntryId])
+      );
+      if (result.rowCount === 1) {
+        ok('owner may reparent an entry out of an unsealed hive (control)');
+      } else {
+        bad(
+          'owner may reparent an entry out of an unsealed hive (control)',
+          `update matched ${result.rowCount} row(s), expected 1`
+        );
+      }
+    } catch (e) {
+      bad('owner may reparent an entry out of an unsealed hive (control)', firstLine(e));
+    }
+
+    // 14. Control: owner CAN delete an entry that belongs to an unsealed hive.
+    const { rows: deleteControlRows } = await client.query(
+      "insert into public.entries (user_id, content, entry_date, hive_id) values ($1, 'delete-control entry', current_date - 2, $2) returning id",
+      [OWNER, openHiveId]
+    );
+    const deleteControlEntryId = deleteControlRows[0].id;
+    try {
+      const result = await asUser(OWNER, () =>
+        client.query('delete from public.entries where id = $1', [deleteControlEntryId])
+      );
+      if (result.rowCount === 1) {
+        ok('owner may delete an entry in an unsealed hive (control)');
+      } else {
+        bad('owner may delete an entry in an unsealed hive (control)', `delete matched ${result.rowCount} row(s), expected 1`);
+      }
+    } catch (e) {
+      bad('owner may delete an entry in an unsealed hive (control)', firstLine(e));
     }
 
     console.log(`\ncheck-private-hives-seal: ${pass} passed, ${failures.length} failed`);
