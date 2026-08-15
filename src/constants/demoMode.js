@@ -23,4 +23,12 @@ export const DEMO_MODE = true;
 // checking `__DEV__` directly: dev builds get it from `__DEV__`, pitch/demo
 // builds get it from `DEMO_MODE`, and a real release build (both off) is
 // the only state where it's false.
+//
+// This two-input disjunction can only distinguish two build shapes (demo-on
+// vs. demo-off) and is safe only as long as those are the only two shapes
+// that exist. A TestFlight/store-bound build also has `__DEV__` false, so
+// it collapses onto the same branch as the pitch build and inherits demo
+// content it shouldn't have. Once a distribution profile exists, DEMO_MODE
+// needs to come from a build-profile env var (defaulting to false) rather
+// than this literal, so a tester build can express as its own third state.
 export const DEMO_CONTENT = __DEV__ || DEMO_MODE;
