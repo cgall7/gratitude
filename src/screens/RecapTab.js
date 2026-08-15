@@ -240,7 +240,7 @@ export const RecapTab = () => {
           monthly recap is still what the screen opens on — the month pager
           below names each month itself. */}
       <ScreenHeader
-        eyebrow="YOUR PROGRESS"
+        eyebrow={unknown ? null : months[activeIndex]?.label}
         title="Garden"
         // §23.1 — the badge is an assertion about the user's practice, and on a
         // read that did not return there is nothing to make it from. Omit the
