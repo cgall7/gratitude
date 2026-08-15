@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { StyleSheet, View, Text, ScrollView, ActivityIndicator } from 'react-native';
+import { StyleSheet, View, Text, ScrollView, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { theme } from '../constants/theme';
@@ -7,6 +7,9 @@ import { NotesStore } from '../services/NotesStore';
 import { PressableScale } from '../components/PressableScale';
 import { Avatar } from '../components/Avatar';
 import { ScreenHeader } from '../components/ScreenHeader';
+
+// 26pt glyph + 12pt slop each side = a 50pt target, over the 44pt floor.
+const DISMISS_HIT_SLOP = { top: 12, bottom: 12, left: 12, right: 12 };
 
 const formatTimestamp = (isoString) => {
   const date = new Date(isoString);
@@ -105,6 +108,21 @@ export const NotesInbox = ({ navigation }) => {
         <ScreenHeader
           eyebrow="GRATITUDE NOTES"
           title="Notes"
+          left={
+            // This screen is a modal over the tab bar with headerShown:false
+            // global — this chevron is its only exit (check-modal-dismiss).
+            // chevron-down because that is the way the card will go; an X
+            // would read as cancel, and putting an inbox away discards
+            // nothing. Idiom promoted from Account.js.
+            <TouchableOpacity
+              onPress={() => navigation.goBack()}
+              hitSlop={DISMISS_HIT_SLOP}
+              accessibilityRole="button"
+              accessibilityLabel="Close"
+            >
+              <Ionicons name="chevron-down" size={26} color={theme.colors.ink} />
+            </TouchableOpacity>
+          }
           right={
             <PressableScale onPress={() => navigation.navigate('ComposeNote')} haptic={null}>
               <Ionicons name="add-circle" size={28} color={theme.colors.ink} />

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { StyleSheet, View, Text, ScrollView, ActivityIndicator } from 'react-native';
+import { StyleSheet, View, Text, ScrollView, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { theme } from '../constants/theme';
@@ -43,6 +43,9 @@ import { LoadState, LOAD_STATES, resolveListView } from '../components/LoadState
 // moment the refetch lands.
 
 const DIRECTIONS = { RECEIVED: 'received', SENT: 'sent' };
+
+// 26pt glyph + 12pt slop each side = a 50pt target, over the 44pt floor.
+const DISMISS_HIT_SLOP = { top: 12, bottom: 12, left: 12, right: 12 };
 
 // One row in either list. `direction` picks whose name shows — a sent seed's
 // "other person" is the recipient — and, separately, whether text in hand is
@@ -223,6 +226,21 @@ export const SeedsInbox = ({ navigation }) => {
         <ScreenHeader
           eyebrow="SEEDS"
           title="Seeds"
+          left={
+            // This screen is a modal over the tab bar with headerShown:false
+            // global — this chevron is its only exit (check-modal-dismiss).
+            // chevron-down because that is the way the card will go; an X
+            // would read as cancel, and putting an inbox away discards
+            // nothing. Idiom promoted from Account.js.
+            <TouchableOpacity
+              onPress={() => navigation.goBack()}
+              hitSlop={DISMISS_HIT_SLOP}
+              accessibilityRole="button"
+              accessibilityLabel="Close"
+            >
+              <Ionicons name="chevron-down" size={26} color={theme.colors.ink} />
+            </TouchableOpacity>
+          }
           right={
             <PressableScale
               onPress={() => navigation.navigate('PlantSeed')}

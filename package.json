@@ -17,6 +17,7 @@
     "check:hive-state-rls": "node scripts/check-hive-state-rls.mjs",
     "check:streaks": "node scripts/check-streaks.mjs",
     "check:share-visibility": "node scripts/check-share-visibility.mjs",
+    "check:modal-dismiss": "node scripts/check-modal-dismiss.mjs",
     "check:nav-depth": "node scripts/check-nav-depth.mjs",
     "check:entry-writes": "node scripts/check-entry-writes.mjs",
     "check:legacy-journal": "node scripts/check-legacy-journal.mjs",
