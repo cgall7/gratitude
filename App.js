@@ -22,21 +22,19 @@ import { OnboardingState } from './src/services/onboardingState';
 import { supabase, isSupabaseConfigured } from './src/services/supabase';
 import { EntryStore } from './src/services/EntryStore';
 import { tagEntry } from './src/utils/themeTagger';
+import { DEMO_MODE } from './src/constants/demoMode';
 
 const Stack = createStackNavigator();
 
 SplashScreen.preventAutoHideAsync();
 
-// Demo-mode only (Colin, 2026-08-09): every time the app comes back to the
-// foreground it should reopen at onboarding, even if someone finished it
-// or was sitting on Main a minute ago — the pitch should always be fresh
-// for whoever's about to see it. Flip this off once the app is past the
-// demo phase. This flag now gates BOTH demo behaviours: the
-// foreground-resume reset below, and forcing every cold launch to start at
-// Onboarding. With it off, cold launches route on the persisted completion
-// flag / live session instead (resolveInitialRoute), so flipping this one
-// constant really is the whole switch.
-const DEMO_MODE = true;
+// DEMO_MODE gates both demo behaviours below: the foreground-resume reset,
+// and forcing every cold launch to start at Onboarding. With it off, cold
+// launches route on the persisted completion flag / live session instead
+// (resolveInitialRoute). Defined in src/constants/demoMode.js, not here —
+// CoreRitual.js/HoneycombTab.js/Onboarding.js's demo-only affordances need
+// the derived DEMO_CONTENT constant next to it, and importing from App.js
+// would be circular (App.js imports all three screens).
 
 // Cold-launch routing, only consulted when DEMO_MODE is off. Completed
 // onboarding on this device, or an existing signed-in session (fresh

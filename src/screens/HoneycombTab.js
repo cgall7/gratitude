@@ -15,6 +15,7 @@ import { ScreenHeader } from '../components/ScreenHeader';
 import { BeeTransition } from '../components/BeeTransition';
 import { FlyingBee } from '../components/FlyingBee';
 import { demoHiveShares } from '../constants/demoHive';
+import { DEMO_CONTENT } from '../constants/demoMode';
 import { TAB_CLEARANCE } from '../navigation/tabBarLayout';
 import { isBlooming } from '../utils/hiveState';
 
@@ -98,11 +99,13 @@ const toGridMember = (share) => ({
 // answer a duplicate with the wrong seat. Feed order is newest-first, so
 // keeping the first occurrence keeps the person's most recent share.
 const partitionHive = (weekFeed, now = new Date()) => {
-  // __DEV__-gated per Lumen's design assessment (thread 37fb8ef6, WP-10a):
-  // a real tester's honeycomb should show their own quiet-hive door
-  // (WP-4's EmptyCell), not fabricated strangers. check:demo-hive still
-  // exercises demoHiveShares directly, unaffected by this call site.
-  const merged = __DEV__ ? weekFeed.concat(demoHiveShares(now)) : weekFeed;
+  // DEMO_CONTENT-gated per Lumen's design assessment (thread 37fb8ef6,
+  // WP-10a): a real tester's honeycomb should show their own quiet-hive
+  // door (WP-4's EmptyCell), not fabricated strangers. check:demo-hive
+  // still exercises demoHiveShares directly, unaffected by this call site.
+  // DEMO_CONTENT, not raw __DEV__ (Sage's LATENT finding, thread 37fb8ef6):
+  // a pitch build has __DEV__ false but still wants the demo comb.
+  const merged = DEMO_CONTENT ? weekFeed.concat(demoHiveShares(now)) : weekFeed;
   const todayISO = toISODate(now);
   const seen = new Set();
   return {
