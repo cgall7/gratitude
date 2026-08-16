@@ -5,6 +5,7 @@ import * as Haptics from 'expo-haptics';
 import { theme } from '../constants/theme';
 import { AnimatedStat } from '../components/AnimatedStat';
 import { GlowOrb } from '../components/GlowOrb';
+import { LoadState, LOAD_STATES } from '../components/LoadState';
 import { EntryStore } from '../services/EntryStore';
 import { dominantTheme } from '../utils/themeTagger';
 import { startOfYear, endOfYear, longestStreak } from '../utils/dateRanges';
@@ -92,6 +93,12 @@ const buildSlidesFromEntries = (entries, year) => {
 };
 
 export const PollinateWrapped = ({ onComplete }) => {
+  // The read is a Supabase call behind an auth check (P0-2), so it can throw
+  // — signed out, offline, a hiccup. `readState` tracks how it ended;
+  // `slides` only ever holds a real or demo deck, never a stand-in for
+  // failure. Conflating the two was the bug: a rejection left `slides` null
+  // forever and the loading spinner never resolved.
+  const [readState, setReadState] = useState(LOAD_STATES.LOADING);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [slides, setSlides] = useState(null);
   const reduced = useReducedMotion();
@@ -99,20 +106,35 @@ export const PollinateWrapped = ({ onComplete }) => {
   // so Wrapped reads as a sequence rather than a stack of static cards.
   const beat = useRef(new Animated.Value(1)).current;
 
+  // A ref, not the effect's closure `let` — the retry button below calls
+  // `load` outside any focus cycle (RecapTab.js:171 is the same shape).
+  const cancelledRef = useRef(false);
+  const load = useCallback(async () => {
+    setReadState(LOAD_STATES.LOADING);
+    try {
+      const now = new Date();
+      const yearEntries = await EntryStore.getEntriesBetween(startOfYear(now), endOfYear(now));
+      if (cancelledRef.current) return;
+      setSlides(buildSlidesFromEntries(yearEntries, now.getFullYear()) || DEMO_SLIDES);
+      setCurrentSlide(0);
+      setReadState(LOAD_STATES.READY);
+    } catch (err) {
+      if (cancelledRef.current) return;
+      // Not DEMO_SLIDES: a tester with a real year would be shown a fabricated
+      // one in their own voice (§26.5). A failed Wrapped has to say it failed.
+      setReadState(LOAD_STATES.UNKNOWN);
+      console.warn('Failed to load entries for Wrapped', err);
+    }
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
-      let cancelled = false;
-      (async () => {
-        const now = new Date();
-        const yearEntries = await EntryStore.getEntriesBetween(startOfYear(now), endOfYear(now));
-        if (cancelled) return;
-        setSlides(buildSlidesFromEntries(yearEntries, now.getFullYear()) || DEMO_SLIDES);
-        setCurrentSlide(0);
-      })();
+      cancelledRef.current = false;
+      load();
       return () => {
-        cancelled = true;
+        cancelledRef.current = true;
       };
-    }, [])
+    }, [load])
   );
 
   useEffect(() => {
@@ -128,6 +150,21 @@ export const PollinateWrapped = ({ onComplete }) => {
     }
     Animated.spring(beat, { toValue: 1, ...SPRINGS.reveal, useNativeDriver: true }).start();
   }, [currentSlide, slides, reduced]);
+
+  if (readState === LOAD_STATES.UNKNOWN) {
+    return (
+      <View style={styles.loadingContainer}>
+        <LoadState
+          state={LOAD_STATES.UNKNOWN}
+          onRetry={load}
+          title="Couldn't reach your year"
+          body="Something went wrong on the way to the hive."
+          actionLabel="Try again"
+          retryAccessibilityLabel="Try loading your Wrapped again"
+        />
+      </View>
+    );
+  }
 
   if (!slides) {
     return (
