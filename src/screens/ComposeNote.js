@@ -63,7 +63,7 @@ export const ComposeNote = ({ navigation }) => {
           eyebrow="GRATITUDE NOTE"
           title="Send a note"
           right={
-            <PressableScale onPress={() => navigation.goBack()} haptic={null}>
+            <PressableScale onPress={() => navigation.goBack()} haptic={null} accessibilityLabel="Close">
               <Ionicons name="close" size={24} color={theme.colors.inkSoft} />
             </PressableScale>
           }

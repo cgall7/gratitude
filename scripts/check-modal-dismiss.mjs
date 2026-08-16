@@ -28,17 +28,37 @@
 //      An options object it cannot statically evaluate, or a component it
 //      cannot trace to a file, is a FAILURE, not a skip — the gate must not
 //      shrink its own universe quietly.
-//   3. Every modal screen contains a dismiss call — `.goBack()`, `.pop()`,
-//      `.popToTop()`, or `.dismiss()` — either in the render-prop body at
-//      the registration site (Wrapped wires `onComplete` to `goBack` right
-//      in App.js) or anywhere in the resolved component file.
+//   3. Every modal screen has a dismiss call — `.goBack()`, `.pop()`,
+//      `.popToTop()`, or `.dismiss()` — whose enclosing function is the
+//      VALUE OF A JSX ATTRIBUTE, either in the render-prop body at the
+//      registration site (Wrapped wires `onComplete` to `goBack` right in
+//      App.js) or in the resolved component file. Attribute-value, not
+//      "anywhere in the file": a compose-style modal always has a `goBack`
+//      on its submit path (`ComposeNote.handleSend`, `PlantSeed`'s
+//      equivalent), so the screens most likely to trap a user who changed
+//      their mind satisfy a file-scoped predicate for free — Sage proved it
+//      by deleting ComposeNote's close control and watching the file-scoped
+//      version stay green. Attribute-value, not `onPress`-value: Wrapped's
+//      exit hangs off `onComplete`, and an `onPress`-name rule would break
+//      the one screen the enumerator was built to find.
+//   4. Every press-shaped dismiss attribute (`onPress`/`onLongPress`) sits
+//      on an element carrying a non-empty `accessibilityLabel` — the exit
+//      must exist for a screen-reader user too. Non-press exit wirings
+//      (Wrapped's `onComplete` on a component, not a pressable) are outside
+//      this assertion; their label lives inside the child component.
 //
-// SCOPE OF THE CLAIM. "Contains a dismiss call" is asserted per FILE, found
-// by AST walk (never by regex — half these files discuss navigation in
-// comments). A screen that delegates its dismissal to an imported child
-// component would land red here even though it works; that is the safe
-// direction — the fix is to teach the gate to follow the import, not to
-// let the screen out of the universe. No screen on `main` today does this.
+// SCOPE OF THE CLAIM. Asserted by AST walk (never by regex — half these
+// files discuss navigation in comments). Two shapes this predicate does not
+// model, and BOTH fail in the safe direction — red on correct code, never
+// green on a trap:
+//   - a screen that delegates its dismissal to an imported child component;
+//   - a handler declared in the module body and passed by reference
+//     (`onPress={close}` where `close` calls `goBack`) — only inline
+//     function values and bare method references (`onPress={navigation.goBack}`)
+//     are read.
+// Neither shape occurs on `main` today. If one lands red here, the fix is
+// to teach the gate the indirection, not to let the screen out of the
+// universe.
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readFile, stat } from 'node:fs/promises';
@@ -105,6 +125,56 @@ const dismissCallsIn = (node) => {
   });
   return found;
 };
+
+// A dismiss call wired where a user can reach it: a JSX attribute whose
+// value is an inline function containing a dismiss call, or a bare method
+// reference to one (`onPress={navigation.goBack}`). Returns the attribute
+// site, not the call site — `ComposeNote.js` has a `goBack` in `handleSend`
+// too, and citing that line sent an auditor into the submit path.
+const dismissExitsIn = (node) => {
+  const found = [];
+  walk(node, (n) => {
+    if (n.type !== 'JSXOpeningElement') return;
+    for (const attr of n.attributes) {
+      if (attr.type !== 'JSXAttribute' || attr.name.type !== 'JSXIdentifier') continue;
+      if (attr.value?.type !== 'JSXExpressionContainer') continue;
+      const expr = attr.value.expression;
+      let method = null;
+      if (expr.type === 'ArrowFunctionExpression' || expr.type === 'FunctionExpression') {
+        method = dismissCallsIn(expr.body)[0]?.method ?? null;
+      } else if (
+        (expr.type === 'MemberExpression' || expr.type === 'OptionalMemberExpression') &&
+        expr.property.type === 'Identifier' &&
+        DISMISS_METHODS.has(expr.property.name)
+      ) {
+        method = expr.property.name;
+      }
+      if (method) {
+        found.push({ attrName: attr.name.name, line: attr.loc.start.line, method, element: n });
+      }
+    }
+  });
+  return found;
+};
+
+// Assertion 4: the element owning a press-shaped exit must be labelled for
+// a screen reader. Returns the label string, or null if absent/empty.
+const accessibilityLabelOf = (openingElement) => {
+  for (const attr of openingElement.attributes) {
+    if (
+      attr.type === 'JSXAttribute' &&
+      attr.name.type === 'JSXIdentifier' &&
+      attr.name.name === 'accessibilityLabel' &&
+      attr.value?.type === 'StringLiteral' &&
+      attr.value.value.trim() !== ''
+    ) {
+      return attr.value.value;
+    }
+  }
+  return null;
+};
+
+const PRESS_ATTRS = new Set(['onPress', 'onLongPress']);
 
 const src = await readFile(ENTRY, 'utf8');
 const ast = parse(src, { sourceType: 'module', plugins: ['jsx'] });
@@ -191,16 +261,31 @@ if (modals.length > 0) {
   );
 }
 
-// --- 2 & 3. Every modal has an exit --------------------------------------
+// --- 2, 3 & 4. Every modal has an exit a user can press ------------------
+const assertLabelled = (exit, file) => {
+  const where = `${file}:${exit.line}`;
+  if (!PRESS_ATTRS.has(exit.attrName)) return; // exit wired through a child component's callback
+  const a11y = accessibilityLabelOf(exit.element);
+  if (a11y) {
+    ok(`dismiss control at ${where} has accessibilityLabel "${a11y}"`);
+  } else {
+    bad(
+      `dismiss control at ${where} has a non-empty accessibilityLabel`,
+      'none found on the element owning the exit — the only way out of this modal is unlabelled for a screen reader',
+    );
+  }
+};
+
 for (const modal of modals) {
-  const label = `modal '${modal.routeName}' (App.js:${modal.line}) contains a dismiss call`;
+  const label = `modal '${modal.routeName}' (App.js:${modal.line}) has a JSX-attribute dismiss`;
 
   // Render-prop form first: Wrapped's exit is wired at the registration
-  // site (`onComplete={() => props.navigation.goBack()}`), so the call
+  // site (`onComplete={() => props.navigation.goBack()}`), so the attribute
   // lives in App.js, not in PollinateWrapped.js.
-  const inline = dismissCallsIn(modal.renderBody);
+  const inline = dismissExitsIn(modal.renderBody);
   if (inline.length) {
-    ok(`${label} — .${inline[0].method}() at the registration site, App.js:${inline[0].line}`);
+    ok(`${label} — ${inline[0].attrName}={… .${inline[0].method}()} at the registration site, App.js:${inline[0].line}`);
+    assertLabelled(inline[0], 'App.js');
     continue;
   }
 
@@ -221,14 +306,21 @@ for (const modal of modals) {
     bad(label, `${rel(file)} failed to parse: ${err.message}`);
     continue;
   }
-  const calls = dismissCallsIn(componentAst.program);
-  if (calls.length) {
-    ok(`${label} — .${calls[0].method}() at ${rel(file)}:${calls[0].line}`);
+  const exits = dismissExitsIn(componentAst.program);
+  if (exits.length) {
+    ok(
+      `${label} — ${exits
+        .map((e) => `${e.attrName}={… .${e.method}()} at ${rel(file)}:${e.line}`)
+        .join(', ')}`,
+    );
+    exits.forEach((e) => assertLabelled(e, rel(file)));
   } else {
     bad(
       label,
-      `${rel(file)} has no .goBack()/.pop()/.popToTop()/.dismiss() call anywhere. With headerShown:false ` +
-        'global, this screen has no system chrome and no exit of its own — the Seeds/Notes trap.',
+      `${rel(file)} has no JSX attribute whose value dismisses (.goBack()/.pop()/.popToTop()/.dismiss()). ` +
+        'A dismiss call elsewhere in the file does not count — ComposeNote\'s submit path has one, and a ' +
+        'user who changed their mind cannot reach it. With headerShown:false global, this screen has no ' +
+        'system chrome — the Seeds/Notes trap.',
     );
   }
 }

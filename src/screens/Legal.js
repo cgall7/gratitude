@@ -21,7 +21,7 @@ export const LegalScreen = ({ route, navigation }) => {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.topBar}>
-        <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={HIT_SLOP}>
+        <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={HIT_SLOP} accessibilityLabel="Back">
           <Ionicons name="chevron-back" size={24} color={theme.colors.ink} />
         </TouchableOpacity>
         <View style={styles.tabRow}>
