@@ -158,7 +158,9 @@ export const PlantSeed = ({ navigation }) => {
       // until the migrations are applied, so this is the path a tester hits
       // today. It has to say something true and leave the typed text intact.
       console.warn('Failed to plant seed', err);
-      setError(err?.message ?? 'Could not plant that seed — try again.');
+      // Authored copy, not the raw rail message — same inversion as
+      // ComposeNote.js:53 (Sage, thread 14492cf2 §4).
+      setError('Could not plant that seed — try again.');
     } finally {
       setPlanting(false);
     }

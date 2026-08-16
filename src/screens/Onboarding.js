@@ -500,12 +500,17 @@ const AccountStep = ({
           await attemptSignIn();
           return;
         } catch (signInErr) {
-          setError(signInErr.message || 'That email is already in use — try signing in.');
+          // Authored copy, not the raw rail message (Sage, thread 14492cf2
+          // §4) — `err.message` above stays a read, only used to classify
+          // which branch this is, never shown.
+          console.warn('Quiet sign-in retry failed', signInErr);
+          setError('That email is already in use — try signing in.');
           setMode('signin');
           return;
         }
       }
-      setError(err.message || 'Something went wrong — try again.');
+      console.warn('Onboarding submit failed', err);
+      setError('Something went wrong — try again.');
     } finally {
       setBusy(false);
     }

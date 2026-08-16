@@ -68,7 +68,10 @@ export const AccountScreen = ({ navigation }) => {
             navigation.reset({ index: 0, routes: [{ name: 'Onboarding' }] });
           } catch (err) {
             setSigningOut(false);
-            Alert.alert("Couldn't sign out", err.message ?? 'Please try again.');
+            // Authored copy, not the raw rail message (Sage, thread
+            // 14492cf2 §4).
+            console.warn('Failed to sign out', err);
+            Alert.alert("Couldn't sign out", 'Please try again.');
           }
         },
       },
