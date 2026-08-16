@@ -59,6 +59,21 @@
 // Neither shape occurs on `main` today. If one lands red here, the fix is
 // to teach the gate the indirection, not to let the screen out of the
 // universe.
+//
+// And one limit in the DANGEROUS direction — green on a trap (Sage, review
+// of b318e60): this predicate proves a dismiss handler is WIRED as a JSX
+// attribute value, not that the wiring is REACHABLE in every state the
+// screen renders. Executed instance: Wrapped's exit is `onComplete`, called
+// only on advancing past the last slide — in its failed-load branch the
+// screen renders <LoadState> alone, no slides to advance, so the handler
+// this gate credits is unreachable and the only exits are the invisible
+// system gestures. The gate stays green, correctly by its own rule.
+// Reachability across render branches is not something a static walk can
+// settle, so the remedy is a product standard rather than a tighter
+// predicate: every failure/empty branch of a modal renders a visible
+// dismiss control (the left-slot chevron idiom). When reviewing a modal's
+// failure states, do not read this gate's green as evidence the user can
+// leave from where they are actually standing.
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readFile, stat } from 'node:fs/promises';
