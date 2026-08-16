@@ -450,6 +450,24 @@ const CelebrationStep = ({ step, onNext }) => (
 // --- TodayTab has no catch around its awaits, so a signed-out Main spins
 // --- forever (Pixel, thread 19e90cf8). "Keep it" one screen back is the
 // --- persistence promise; this step has to be the one that makes it true. ---
+// Classify auth errors by code (from @supabase/auth-js error-codes.d.ts) rather than
+// prose, which survives service copy edits. User-fixable errors get specific text;
+// system failures get the generic fallback.
+const getAuthErrorMessage = (err) => {
+  if (!err || !err.code) {
+    return 'Something went wrong — try again.';
+  }
+
+  switch (err.code) {
+    case 'invalid_credentials':
+      return 'That email and password don\'t match.';
+    case 'over_request_rate_limit':
+      return 'Too many tries — wait a moment and try again.';
+    default:
+      return 'Something went wrong — try again.';
+  }
+};
+
 const AccountStep = ({
   step,
   name,
@@ -495,17 +513,19 @@ const AccountStep = ({
     } catch (err) {
       // Repeat demo pass on the same device, same email — quietly try
       // signing in instead of dead-ending on "already registered."
-      if (isSignUp && /registered|exists/i.test(err.message || '')) {
+      if (isSignUp && ['email_exists', 'user_already_exists'].includes(err.code)) {
         try {
           await attemptSignIn();
           return;
         } catch (signInErr) {
-          setError(signInErr.message || 'That email is already in use — try signing in.');
+          const signInError = getAuthErrorMessage(signInErr);
+          setError(signInError);
           setMode('signin');
           return;
         }
       }
-      setError(err.message || 'Something went wrong — try again.');
+      const errorMessage = getAuthErrorMessage(err);
+      setError(errorMessage);
     } finally {
       setBusy(false);
     }
