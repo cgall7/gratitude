@@ -162,6 +162,43 @@ export const composePhaseEasing = (split, easeA, easeB) => (w) => {
   return 0.5 + 0.5 * easeB((w - split) / (1 - split));
 };
 
+// §31 — the same construction for N segments instead of two.
+//
+// The sequencer's verbs (dart / hover / settle) each want their own easing,
+// and the scope says "never one global ease again". But `buildAttitude` takes
+// ONE easing and ONE duration and needs them, so the answer is the one
+// `composePhaseEasing` already gives for two phases, generalised: not a
+// sequence of timings but a single piecewise easing that lands the driven
+// value exactly on `i/n` at each waypoint boundary. That keeps `buildTrack`'s
+// uniform waypoint spacing (which `buildAttitude` assumes) while the segments
+// run at different speeds — all of the speed difference lives in the easing —
+// and it keeps R46 literal: one driver, one animation, stopped and restarted,
+// never two.
+//
+// `durations` are wall-clock and need not be normalised; only their ratios
+// matter, because the flight's total length is the timing's own `duration`.
+//
+// This SUBSUMES `composePhaseEasing`: at n = 2 the two are the same function,
+// not merely similar. Segment 0 maps `[0, split]` onto `[0, 1/2]` as
+// `(0 + easeA(local)) / 2`, which is `0.5 * easeA(local)`; segment 1 maps onto
+// `[1/2, 1]` as `(1 + easeB(local)) / 2`. The gate asserts that equality by
+// sampling rather than by reading, so the two cannot drift apart.
+export const composeSegmentEasing = (durations, easings) => {
+  const n = durations.length;
+  const total = durations.reduce((a, b) => a + b, 0);
+  const bounds = [0];
+  for (let i = 0; i < n; i += 1) bounds.push(bounds[i] + (total > 0 ? durations[i] / total : 1 / n));
+  return (w) => {
+    if (w <= 0) return 0;
+    if (w >= 1) return 1;
+    let i = 0;
+    while (i < n - 1 && w > bounds[i + 1]) i += 1;
+    const span = bounds[i + 1] - bounds[i];
+    const local = span > 0 ? (w - bounds[i]) / span : 1;
+    return (i + easings[i](local)) / n;
+  };
+};
+
 /**
  * Build the visit: cruise position -> staging point -> the cell.
  *
