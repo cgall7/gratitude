@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { StyleSheet, View, Text, Pressable, Animated, ActivityIndicator } from 'react-native';
+import { StyleSheet, View, Text, Pressable, TouchableOpacity, Animated, ActivityIndicator } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { theme } from '../constants/theme';
 import { AnimatedStat } from '../components/AnimatedStat';
@@ -10,6 +11,8 @@ import { EntryStore } from '../services/EntryStore';
 import { dominantTheme } from '../utils/themeTagger';
 import { startOfYear, endOfYear, longestStreak } from '../utils/dateRanges';
 import { DURATIONS, SPRINGS, useReducedMotion } from '../constants/motion';
+
+const DISMISS_HIT_SLOP = { top: 12, bottom: 12, left: 12, right: 12 };
 
 // Beats are grounded on the warm wash, with the closer on sky — washes
 // behind the card instead of a flat 12% tint over the whole screen,
@@ -154,6 +157,22 @@ export const PollinateWrapped = ({ onComplete }) => {
   if (readState === LOAD_STATES.UNKNOWN) {
     return (
       <View style={styles.loadingContainer}>
+        {/* Sage's finding on the first pass: the happy path's only exit is
+            advancing past the last slide, which this branch has none of —
+            iOS swipe-down / Android back still dismiss, but neither is
+            visible. Seeds/Notes' idiom (chevron-down, promoted from
+            Account.js) is the ratified visible exit for a modal under the
+            global headerShown:false; no ScreenHeader here, so placed
+            directly rather than through its left slot. */}
+        <TouchableOpacity
+          onPress={onComplete}
+          hitSlop={DISMISS_HIT_SLOP}
+          accessibilityRole="button"
+          accessibilityLabel="Close"
+          style={styles.unknownDismiss}
+        >
+          <Ionicons name="chevron-down" size={26} color={theme.colors.ink} />
+        </TouchableOpacity>
         <LoadState
           state={LOAD_STATES.UNKNOWN}
           onRetry={load}
@@ -255,6 +274,13 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.background,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  // Same top/left the beat progress bar uses (progressContainer, below) —
+  // this screen has no ScreenHeader to hang a left slot on.
+  unknownDismiss: {
+    position: 'absolute',
+    top: 60,
+    left: 20,
   },
   progressContainer: {
     flexDirection: 'row',
