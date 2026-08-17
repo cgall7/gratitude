@@ -3178,7 +3178,7 @@ let tickPropName = null;
   // reporting "no turns" for both sets would pass the column half by being
   // blind rather than by the property holding.
   {
-    const NAME = 'J7 §32 a column anchor set never flips the facing; a spread one does';
+    const NAME = 'J7 §32 the observed turn boundary is the predicted one, x-extent swept';
     const SIZE = BEE_SIZE;
     const W = 393;
     const H = 852;
@@ -3230,6 +3230,10 @@ let tickPropName = null;
           closed: false,
           easing: plan.easing,
           durationMs: plan.durationMs,
+          // What the sequencer's plans have always carried and nothing read
+          // until R122. Without it every sortie re-seeds from `Math.sign(dx)`
+          // and the threshold is never consulted between plans.
+          heldFacing: facing ?? undefined,
         });
         const landed = att.segments[att.segments.length - 1].facing;
         if (facing !== null && landed !== facing) turns += 1;
@@ -3241,30 +3245,91 @@ let tickPropName = null;
       }
       return { turns, sorties };
     };
-    // Three full-width cards, all perched on the LEFT edge — Sage's case, and
-    // the one a designer writing anchors in reading order actually produces.
-    const column = [
+    // Three full-width cards on a 24pt gutter — Sage's case, and the one a
+    // designer writing anchors in reading order actually produces. The middle
+    // one's x is swept so the OBSERVED boundary is derived, not sampled at two
+    // convenient points: two hand-picked sets would have been green through
+    // the whole 8..43px band where the predicate said 0 and the bee turned 27
+    // times.
+    const setAt = (ext) => [
       { key: 'badge', x: 24, y: 120 },
-      { key: 'streak', x: 24, y: 300 },
+      { key: 'streak', x: 24 + ext, y: 300 },
       { key: 'quote', x: 24, y: 520 },
     ];
-    const spread = column.map((a, i) => ({ ...a, x: i % 2 === 0 ? 24 : 369 }));
-    const col = turnsFor(column);
-    const spr = turnsFor(spread);
-    const colRate = seq.facingFlipRate(column, SIZE);
-    const spreadRate = seq.facingFlipRate(spread, SIZE);
-    if (col.turns !== 0 || colRate !== 0) {
-      bad(NAME, `the all-left column turned the bee around ${col.turns} times over ${col.sorties} ` +
-        `sorties at a flip rate of ${colRate}. Both should be 0: every pair has |dx| = 0, so this ` +
-        'row is not measuring what it names.');
-    } else if (spr.turns === 0 || !(spreadRate > 0)) {
-      bad(NAME, `the alternating set turned the bee around ${spr.turns} times over ${spr.sorties} ` +
-        `sorties at a flip rate of ${spreadRate}. A row reporting no turns for both sets is blind, ` +
-        'not passing.');
+    const rows = [];
+    let observedBoundary = null;
+    let predictedBoundary = null;
+    for (let ext = 0; ext <= SIZE * 2; ext += 1) {
+      const set = setAt(ext);
+      const { turns, sorties } = turnsFor(set);
+      const rate = seq.facingFlipRate(set, SIZE);
+      if (turns > 0 && observedBoundary === null) observedBoundary = ext;
+      if (rate > 0 && predictedBoundary === null) predictedBoundary = ext;
+      rows.push({ ext, turns, sorties, rate });
+    }
+    const disagree = rows.filter((r) => (r.turns > 0) !== (r.rate > 0));
+    if (observedBoundary === null || predictedBoundary === null) {
+      bad(NAME, `no boundary inside 0..${SIZE * 2}px of x-extent — turns first appear at ` +
+        `${observedBoundary}, rate first leaves zero at ${predictedBoundary}. One of the two never ` +
+        'changed, so this row cannot tell.');
+    } else if (disagree.length) {
+      const w = disagree[0];
+      bad(NAME, `${disagree.length} of ${rows.length} x-extents disagree with the predicate; first at ` +
+        `extent ${w.ext}px, where facingFlipRate is ${w.rate} and the bee turned around ${w.turns} ` +
+        `times in ${w.sorties} sorties. The floor predicts the flight or it is not a floor.`);
     } else {
-      ok(`${NAME} — all-left column: rate 0, ${col.turns} turns in ${col.sorties} sorties (he holds ` +
-        `one facing for the whole render state); same three cards alternating sides: rate ` +
-        `${spreadRate.toFixed(2)}, ${spr.turns} turns in ${spr.sorties}`);
+      const top = rows[rows.length - 1];
+      ok(`${NAME} — swept x-extent 0..${SIZE * 2}px in 1px steps: turns first appear at ` +
+        `${observedBoundary}px and facingFlipRate first leaves zero at ${predictedBoundary}px, ` +
+        `agreeing at all ${rows.length} extents (0 turns below, ${top.turns} in ${top.sorties} ` +
+        'sorties at the top)');
+    }
+  }
+
+  // --- J8: `heldFacing` is READ, not merely carried ----------------------
+  //
+  // J7's sweep is only true because `buildAttitude` now takes `heldFacing`.
+  // Before R122 it did not, and the field was written by three plan builders,
+  // threaded through `resolveBeat`, handed across the component boundary and
+  // consumed by nothing, while `flightSequencer`'s own comment cited "its
+  // `heldFacing` option" as the reason a perched bee keeps the facing he
+  // arrived with. Nothing about a dead field looks dead.
+  //
+  // So this row does not check that the option EXISTS — an unread parameter
+  // exists. It checks that passing the two facings produces two different
+  // answers on a path whose own travel is below the threshold, which is the
+  // only case where holding is distinguishable from re-seeding.
+  {
+    const NAME = 'J8 §32 buildAttitude consumes heldFacing, it does not just accept it';
+    const SIZE = BEE_SIZE;
+    const W = 393;
+    const H = 852;
+    // Below-threshold horizontal travel: the deadband, where the incoming
+    // facing is the only thing that can decide the answer.
+    const sub = SIZE * 0.25;
+    const opts = { width: W, height: H, size: SIZE, closed: false, durationMs: 1000 };
+    const p = [{ x: 0.5, y: 0.2 }, { x: 0.5 + sub / W, y: 0.8 }];
+    const right = buildAttitude(p, { ...opts, heldFacing: 1 }).scaleXOutput;
+    const left = buildAttitude(p, { ...opts, heldFacing: -1 }).scaleXOutput;
+    const bare = buildAttitude(p, opts).scaleXOutput;
+    const carried = seq.buildPerchPlan({
+      at: { x: 200, y: 400 }, width: W, height: H, durationMs: 3000, heldFacing: -1,
+    }).heldFacing;
+    if (carried !== -1) {
+      bad(NAME, `buildPerchPlan dropped heldFacing (carried ${carried}). The consumer below is fine ` +
+        'and the producer is not, so a sequenced bee still snaps.');
+    } else if (right.every((v, i) => v === left[i])) {
+      bad(NAME, `heldFacing +1 and -1 produce the same scaleX (${JSON.stringify(right)}) on ` +
+        `${sub.toFixed(1)}px of travel — below the ${SIZE}px threshold, so the seed is the only ` +
+        'input. The option is accepted and discarded.');
+    } else if (!left.every((v) => v === -1) || !right.every((v) => v === 1)) {
+      bad(NAME, `heldFacing did not hold through sub-threshold travel: +1 gave ` +
+        `${JSON.stringify(right)}, -1 gave ${JSON.stringify(left)}. facingFor's deadband is not ` +
+        'reaching segment 0.');
+    } else {
+      ok(`${NAME} — on ${sub.toFixed(1)}px of travel (under the ${SIZE}px threshold) heldFacing +1 ` +
+        `holds right and -1 holds left; with none passed the base case still reads its own sign ` +
+        `(${JSON.stringify(bare)}), so existing call sites are unchanged`);
     }
   }
 }
