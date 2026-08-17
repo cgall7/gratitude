@@ -3675,25 +3675,51 @@ for (const [file, { anchors, paddingH }] of perchSets) {
     width: device.width - paddingH.left - paddingH.right,
     height: 100,
   };
-  const xs = anchors.map((a) => sequencer.resolvePerchPoint(frame, a.on, a.at).x);
-  const extent = Math.max(...xs) - Math.min(...xs);
-  const sides = new Set(anchors.map((a) => a.on));
-  const flipRate = sequencer.facingFlipRate(
-    anchors.map((a, i) => ({ key: a.id, x: sequencer.resolvePerchPoint(frame, a.on, a.at).x, y: i * 100 })),
-    SIZE,
-  );
-  if (extent >= SIZE && sides.size === 2 && flipRate > 0) {
+  // BOTH the full set and the set a user cannot make disappear. The second is
+  // the one that matters and it is the one a hand-written row would omit: my
+  // first draft checked only the full set, and a mutation that put three of
+  // TodayTab's four anchors in one column stayed GREEN because the fourth —
+  // the conditional badge — still carried the whole extent by itself. An
+  // x-extent that depends on an anchor some render state removes is an extent
+  // that some render state does not have. Same shape as K3's floor: THE
+  // INVARIANT IS ABOUT THE WORST STATE, NOT THE DECLARED SET.
+  const subsets = [
+    { label: 'all', set: anchors },
+    { label: 'unconditional only', set: anchors.filter((a) => !a.conditional) },
+  ];
+  const measure = (set) => {
+    const pts = set.map((a, i) => ({
+      key: a.id,
+      x: sequencer.resolvePerchPoint(frame, a.on, a.at).x,
+      y: i * 100,
+    }));
+    const xs = pts.map((p) => p.x);
+    return {
+      extent: xs.length ? Math.max(...xs) - Math.min(...xs) : 0,
+      sides: new Set(set.map((a) => a.on)),
+      flipRate: sequencer.facingFlipRate(pts, SIZE),
+    };
+  };
+  const results = subsets.map((s) => ({ ...s, ...measure(s.set) }));
+  const failed = results.filter((r) => !(r.extent >= SIZE && r.sides.size === 2 && r.flipRate > 0));
+  if (failed.length === 0) {
     ok(
-      `${path.basename(file)} anchor set spans ${extent.toFixed(0)}pt in x on the ${device.label} ` +
-        `(>= one ${SIZE}pt bee box; both sides used; facingFlipRate ${flipRate.toFixed(3)})`,
+      `${path.basename(file)} anchor set spans at least one bee box in x on the ${device.label} ` +
+        `(${results.map((r) => `${r.label}: ${r.extent.toFixed(0)}pt, flipRate ${r.flipRate.toFixed(3)}`).join('; ')})`,
     );
   } else {
     bad(
       `${path.basename(file)} anchor set spans at least one bee box in x`,
-      `extent ${extent.toFixed(1)}pt against a ${SIZE}pt bee box on the ${device.label}; ` +
-        `sides used: ${[...sides].join('/')}; facingFlipRate ${flipRate === null ? 'null' : flipRate.toFixed(3)}. ` +
-        'Every anchor on this screen is a full-width block in one column, so the side is the only thing ' +
-        'giving the set any x-extent — put them all on one side and the bee never turns around.',
+      failed
+        .map(
+          (r) =>
+            `${r.label}: extent ${r.extent.toFixed(1)}pt against a ${SIZE}pt bee box, ` +
+            `sides ${[...r.sides].join('/') || '(none)'}, facingFlipRate ${r.flipRate === null ? 'null' : r.flipRate.toFixed(3)}`,
+        )
+        .join('; ') +
+        '. Every anchor on this screen is a full-width block in one column, so the side is the only ' +
+        'thing giving the set any x-extent — put them all on one side and the bee never turns around. ' +
+        'An "unconditional only" failure means the extent exists but rests on an anchor a render state removes.',
     );
   }
 }
