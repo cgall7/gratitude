@@ -1,5 +1,28 @@
 // Sunbeam §31 — the idle flight sequencer.
 //
+// ┌─ NOT WIRED YET, AND HERE IS HOW TO TELL THAT FROM ORPHANED ─────────┐
+// │ This module has NO importer in `src/` or `App.js`. That is the      │
+// │ engine half of a two-owner piece of work landing first, not a call  │
+// │ site somebody deleted.                                              │
+// │                                                                     │
+// │   consumer   FlyingBee.js — the fixed 5-waypoint `PATH` loop        │
+// │              (LOOP_MS 7000) is what this replaces. Anchors come     │
+// │              from the host screens: TodayTab and HoneycombTab each  │
+// │              declare 3-5, in the §28.2 window-coordinate currency.  │
+// │   owner      Pixel (engine, this file) / Deezine (choreography —    │
+// │              perch points, dwell ranges, dart-hover-settle timings, │
+// │              trail grammar, loginArc re-author)                     │
+// │   plan       PLANS/BEE_FLIGHT_REDESIGN_SCOPE.md, from Colin's ask   │
+// │              of 2026-08-16                                          │
+// │   exercised  scripts/simulate-bee-flight.mjs — reachable and run    │
+// │              today, just not from the app                           │
+// │                                                                     │
+// │ THE FALSIFIER, because a name and an owner both decay: if that plan │
+// │ is closed or FlyingBee.js's `PATH` loop has been replaced by        │
+// │ something else, this module is dead and should be deleted, not      │
+// │ maintained. Check the plan before you assume either.                │
+// └─────────────────────────────────────────────────────────────────────┘
+//
 // Colin, 2026-08-16: the idle bee "looks like a windows98 screensaver just
 // bouncing off the corners with no purpose." He is right, and the defect is
 // narrower than it looks. The engine is fine — the §28 pollination visit
