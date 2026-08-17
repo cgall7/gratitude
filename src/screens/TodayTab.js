@@ -144,9 +144,11 @@ export const TodayTab = ({ navigation }) => {
             in one 24pt column, so anchoring them all on the same side gives
             the set ZERO x-extent, `facingFor` never crosses its one-body-width
             threshold, and the bee flies every sortie facing the same way. The
-            ≥44pt span is asserted by `check-bee-attitude` J8 against these
-            declarations, so a later edit that quietly puts them back in a
-            column fails rather than ships. */}
+            ≥44pt span is asserted by `check-bee-attitude` row K4 ("the set is
+            not a column") against these declarations, so a later edit that
+            quietly puts them back in a column fails rather than ships. K4
+            checks the unconditional subset too: an extent that rests on the
+            conditional badge is an extent some render state does not have. */}
         <StaggeredItem index={0}>
           <PerchAnchor id="streak-card" on="left" at={0.5}>
           <View style={[styles.streakCard, error && { backgroundColor: theme.colors.surface }]}>

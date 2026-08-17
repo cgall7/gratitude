@@ -120,7 +120,10 @@ export const PerchField = ({ perches, children }) => (
  * @param on  'left' | 'right' — §32/R122. TodayTab's anchors are full-width
  *            blocks in one 24pt column, so a set that puts them all on the
  *            same side has zero x-extent and the bee never turns around.
- *            Alternate them; `check-bee-attitude` J8 measures the result.
+ *            Alternate them; `check-bee-attitude` row K4 ("the set is not a
+ *            column") measures the result against the declarations below.
+ *            J6/J7 derive the one-body-width threshold K4 reuses; they sweep
+ *            synthetic sets and read nothing this file declares.
  * @param at  0..1 along that side, top to bottom
  *
  * `collapsable={false}` is load-bearing on Android: a View with no drawing
