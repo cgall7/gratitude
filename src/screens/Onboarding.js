@@ -494,18 +494,40 @@ const AccountStep = ({
       }
     } catch (err) {
       // Repeat demo pass on the same device, same email — quietly try
-      // signing in instead of dead-ending on "already registered."
-      if (isSignUp && /registered|exists/i.test(err.message || '')) {
+      // signing in instead of dead-ending on "already registered." Keyed on
+      // GoTrue's stable error codes (Sage, thread 14492cf2) rather than a
+      // regex over `err.message` — prose isn't a contract, a copy edit on
+      // the rail silently kills a string match and the quiet retry stops
+      // firing with no signal.
+      if (isSignUp && (err.code === 'email_exists' || err.code === 'user_already_exists')) {
         try {
           await attemptSignIn();
           return;
         } catch (signInErr) {
-          setError(signInErr.message || 'That email is already in use — try signing in.');
+          // Authored copy, not the raw rail message (Sage, thread 14492cf2
+          // §4) — the raw error only reaches console.warn.
+          console.warn('Quiet sign-in retry failed', signInErr);
+          setError('That email is already in use — try signing in.');
           setMode('signin');
           return;
         }
       }
-      setError(err.message || 'Something went wrong — try again.');
+      console.warn('Onboarding submit failed', err);
+      // Sage's correction to §4 (thread 14492cf2): a flat "Something went
+      // wrong" here deletes the one piece of information — wrong password —
+      // that makes this screen fixable. `err.code` is GoTrue's stable
+      // contract (checked against the installed @supabase/auth-js — the
+      // wire body's `error_code` is normalized to `.code` on the thrown
+      // error), same shape as the `err?.code === '23505'` classification in
+      // HoneycombTab.js:354. Unmatched codes still fall through to the
+      // authored generic line — the rail's prose never reaches the user.
+      if (err.code === 'invalid_credentials') {
+        setError("That email and password don't match.");
+      } else if (err.code === 'over_request_rate_limit' || err.code === 'over_email_send_rate_limit') {
+        setError('Too many tries — wait a moment and try again.');
+      } else {
+        setError('Something went wrong — try again.');
+      }
     } finally {
       setBusy(false);
     }

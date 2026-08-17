@@ -50,7 +50,10 @@ export const ComposeNote = ({ navigation }) => {
       navigation.goBack();
     } catch (err) {
       console.warn('Failed to send note', err);
-      setError(err.message ?? 'Could not send that note — try again.');
+      // Authored copy, not the raw rail message — Sage, thread 14492cf2 §4:
+      // `err.message ?? copy` puts the string we didn't write in front, and
+      // the string we did in the branch users see least.
+      setError('Could not send that note — try again.');
     } finally {
       setSending(false);
     }

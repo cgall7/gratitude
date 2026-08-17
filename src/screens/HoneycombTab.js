@@ -354,7 +354,9 @@ const HoneycombFeed = () => {
       if (err?.code === '23505') {
         setAddMessage({ tone: 'error', text: 'Already connected or request pending.' });
       } else {
-        setAddMessage({ tone: 'error', text: err.message || 'Could not send request.' });
+        // Authored copy, not the raw rail message (Sage, thread 14492cf2 §4).
+        console.warn('Failed to send connection request', err);
+        setAddMessage({ tone: 'error', text: 'Could not send request.' });
       }
     } finally {
       setAddBusy(false);
