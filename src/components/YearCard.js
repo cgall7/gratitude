@@ -3,6 +3,22 @@ import { Image, StyleSheet, Text, View } from 'react-native';
 import { theme } from '../constants/theme';
 import { KeepsakeBee } from './KeepsakeBee';
 
+// ┌─ NOT WIRED YET, AND HERE IS HOW TO TELL THAT FROM ORPHANED ─────────┐
+// │ Zero importers in `src/` + `App.js`. Early, not abandoned:          │
+// │   consumer   PollinateWrapped.js — Beat 6 is the last beat and the  │
+// │              wiring lands with the beat build, together with the    │
+// │              share-sheet capture (stated below).                    │
+// │   owner      Pixel (§14.4 layout, ratified R14) / whoever builds    │
+// │              Beats 3-6 of the Wrapped spine                         │
+// │   gate       my on-device crop-safety pass at 1:1 AND 9:16 is owed  │
+// │              BEFORE Beat 6 ships — see the crop-safe note below     │
+// │   FALSIFIER  the 2026-08-12 redirect made recurring Wrapped a       │
+// │              MONTHLY recap and the 7-beat year story a Christmas    │
+// │              special. If that annual special is dropped, or Beat 6  │
+// │              is re-spec'd away from a static shareable, this is     │
+// │              dead — delete it rather than maintain it.              │
+// └─────────────────────────────────────────────────────────────────────┘
+//
 // §14.4 Beat 6 "The Year Card" — the static shareable keepsake the burst
 // resolves into. Deliberately motionless: "motion sells the ceremony;
 // stillness sells the share." This is the layout primitive only — the

@@ -7,6 +7,19 @@ import { BeeTransition } from './BeeTransition';
 import { MascotBee } from './MascotBee';
 import { CelebrationRays } from './CelebrationRays';
 
+// ┌─ NOT WIRED YET, AND HERE IS HOW TO TELL THAT FROM ORPHANED ─────────┐
+// │ Zero importers in `src/` + `App.js` (every other hit is prose in a  │
+// │ comment). Early, not abandoned:                                     │
+// │   consumer   Seeds, per R83 — this takes ONE prop (`onCracked`) and │
+// │              has zero Wrapped coupling, so §14.2 gives it a HOME,   │
+// │              not a dependency, and Seeds should be its first real   │
+// │              consumer. §14.2 Beat 0 is the second.                  │
+// │   owner      Pixel (this component) / Bumble (Seeds spine)          │
+// │   FALSIFIER  if Seeds ships without a seal gesture AND §14.2's      │
+// │              Wrapped build is closed or re-spec'd without Beat 0,   │
+// │              this is dead — delete it, don't maintain it.           │
+// └─────────────────────────────────────────────────────────────────────┘
+//
 // §14.2 Beat 0 — The Seal. Full gold field, spiral mark static, the bee
 // glides in (BeeTransition already uses the ratified 9/60 glide spring) and
 // lands on the mark. Tap cracks the seal — medium haptic + accentBurst
