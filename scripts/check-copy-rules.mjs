@@ -288,6 +288,41 @@ for (const position of POSITIONS) {
 //
 // Read against TEXT_ATTRS itself rather than a second copy of the names:
 // a gate matching a typed list proves a property of the list.
+//
+// THE RESIDUAL, AT ITS ACTUAL SIZE. A partition forces a decision, not a
+// CORRECT one: faced with a red, someone can file a copy prop under
+// NOT_COPY_ATTRS in a one-word edit. That hole is smaller than it sounds,
+// and the precision matters — "misclassification is invisible" would be
+// false and would invite machinery this does not need. Measured both ways
+// at 25e1314 (Sage, thread 4510c5c8; reproduced here):
+//
+//   cta="Continue"                    filed NOT_COPY → exit 0   INVISIBLE
+//   cta="Something went wrong here."  filed NOT_COPY → exit 1, row 2 reds
+//
+// So row 2 already covers the prose half of a misfile. The hole is exactly
+// one shape: SINGLE-WORD COPY MISFILED AS NOT-COPY. What stands in front of
+// it is that adding a name here is a reviewed source edit — a real defence,
+// and a more honest thing to write down than a gate that has to be told to
+// ignore its own only finding.
+//
+// TWO INSTRUMENTS WERE BUILT FOR THAT HOLE AND BOTH ARE REJECTED, recorded
+// so nobody rebuilds one in November and stops at "one hit, must be a bug":
+//
+//   (a) identifiers rendered inside a <Text> must not appear in
+//       NOT_COPY_ATTRS. 78 identifiers across 174 <Text> elements, 1 hit,
+//       and it is FALSE: Avatar.js:69 renders initialsFor(name) — a
+//       person's name, data rather than authored copy. (The way it could
+//       have been live was the tab labels; refuted at MainTabs.js:101,
+//       `tabBarShowLabel: false`, so route ids are never read by anyone.)
+//   (b) a not-copy attribute may not carry a value beginning with a
+//       capital. 16 hits, ALL of them `name=` route ids.
+//
+// Two independent probes, one day-one exemption, and it is the SAME name
+// both times: `name` carries Ionicons icon ids AND navigator route ids, so
+// every instrument aimed at this hole collides with it. That convergence is
+// the evidence the residual is real and the instruments are not — an
+// exemption is where the next affordance hides, which is the rule this
+// whole section exists to keep.
 const NOT_COPY_ATTRS = new Set([
   // RN / component API enums and identifiers
   'accessibilityRole', 'autoCapitalize', 'icon', 'importantForAccessibility',
