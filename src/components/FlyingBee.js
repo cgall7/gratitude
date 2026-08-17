@@ -6,11 +6,20 @@ import {
   APPROACH_SPEED_RATIO,
   POLLEN_RADIUS_FRACTION,
   buildPollinationPlan,
-  buildReturnPlan,
-  cruiseSpeedPxS,
+  composeSegmentEasing,
   pollenCountFor,
   pollenFlecks,
 } from './pollinationFlight';
+import {
+  DART_SPEED_RATIO,
+  STUB_GRAMMAR,
+  chooseAnchor,
+  makeRng,
+  nextBeat,
+  referenceSpeedPxS,
+  resolveBeat,
+  resolveGrammar,
+} from './flightSequencer';
 import { theme } from '../constants/theme';
 import { MASCOT_WIDTH_FRACTION } from '../constants/mascot';
 import { DURATIONS, MAX_TRAIL_PARTICLES, useReducedMotion } from '../constants/motion';
@@ -43,10 +52,34 @@ import { DURATIONS, MAX_TRAIL_PARTICLES, useReducedMotion } from '../constants/m
 // survives anywhere — the keepsake register it was held for is `KeepsakeBee`,
 // the same character with the ink/yellow partition inverted.
 //
-// The *path* is still a first engine pass (loose 5-point loop, eased
-// timing driver) — Deezine owns cruise posture/wing-flutter/glow-particle
-// design per §12.5 ownership split; swap the waypoint set or easing here
-// without touching the trail/pooling engine.
+// §32.2 — **there is no cruise path any more.** The fixed 5-waypoint `PATH`
+// on a 7000ms `Animated.loop` is deleted, not kept as a fallback, and the
+// deletion is the ruling rather than a consequence of one: a fallback lap
+// survives on whatever screen forgets to declare anchors, and that screen is
+// exactly the one nobody looks at until Colin does. What replaces it is
+// `flightSequencer` — the bee rests at a declared anchor, sometimes looks
+// around, then darts to a different one, and the only thing that decides
+// "different" is a seeded choice over the anchors the SCREEN declared
+// (`PerchAnchor`). Nothing here knows what it is flying over.
+//
+// Two consequences worth stating where they will be read:
+//
+//  * **No perch set, no bee.** A cruise mount with fewer than two declared
+//    anchors has nowhere to go, so it fades out over `PRESENCE_FADE_MS` and
+//    stops — that is the whole mechanism behind the two ratified suppressions
+//    (HoneycombTab's week view, TodayTab's error arm), each expressed as one
+//    expression at its own call site rather than as a special case in here.
+//  * **The §28.4 return seam dissolves rather than generalising.** The return
+//    leg existed to land exactly on `PATH[0]` so `Animated.loop` could resume
+//    without a discontinuity. With no loop there is no seam to hit: after a
+//    visit, or after an abort, the next beat is simply a sortie to the next
+//    chosen anchor — the same flight `buildReturnPlan` was flying, minus the
+//    fixed destination.
+//
+// §28.5's speeds survive the deletion untouched, which is why they could be
+// deleted from: `referenceSpeedPxS` reproduces the shipped 187.59 px/s to
+// 0.06% at 393x852 because it is the same fractional path resolved against
+// the same box, stated per-diagonal. See `CRUISE_DIAG_PER_S`.
 //
 // **Attitude is no longer part of that.** Which way the bee points and how
 // far it tips is now `beeAttitude.js`, a bounded rule rather than a
@@ -55,20 +88,26 @@ import { DURATIONS, MAX_TRAIL_PARTICLES, useReducedMotion } from '../constants/m
 // resolves every `<FlyingBee>` call site's container and will fail on a
 // path that flies the mascot at an attitude it can't be read at, or on a
 // call site the table doesn't know about.
-const LOOP_MS = 7000;
 const TRAIL_INTERVAL_MS = 160;
 const DEFAULT_SIZE = 44;
 
-// Loose loop in fractional (0-1) container coordinates — five stops
-// (closing back on the first) so the path reads as a lazy figure-eight
-// rather than a bouncing ball.
-const PATH = [
-  { x: 0.14, y: 0.72 },
-  { x: 0.52, y: 0.16 },
-  { x: 0.86, y: 0.58 },
-  { x: 0.42, y: 0.84 },
-  { x: 0.14, y: 0.72 },
-];
+// How long the bee takes to leave, and to arrive, when a screen state stops
+// (or starts) declaring anywhere to land.
+//
+// It is `settleMs` deliberately — the same 160ms the descent takes. A bee
+// leaving is not a new gesture that needs a new number, and the two places a
+// mascot appears and disappears reading at the same pace is the whole of why
+// `DESCENT_MS` was pinned rather than tuned.
+const PRESENCE_FADE_MS = STUB_GRAMMAR.settleMs;
+
+// How many anchor keys the anti-repeat memory carries. `chooseAnchor` reads
+// the TAIL of this, so it only has to be at least the largest depth any
+// grammar will ask for; the rest is slack, and slack costs one string.
+const RECENT_MEMORY = 8;
+
+// Stable identity for "no perch set", so a mount without one does not hand a
+// fresh `[]` to a dep array on every render.
+const EMPTY_KEYS = [];
 
 // A track is *position only*. Attitude — which way the bee points and how
 // far it tips — is not a property of a fractional path: it needs the
@@ -80,14 +119,21 @@ const buildTrack = (path) => ({
   inputRange: path.map((_, i) => i / (path.length - 1)),
 });
 
-const CRUISE = buildTrack(PATH);
-
 // Hoisted so the attitude builder can be handed the *same* easing the
 // timing driver runs, rather than a second copy that could drift: a facing
 // change is specified in wall time and only the easing converts that into
 // a window in `t`.
-const CRUISE_EASING = Easing.inOut(Easing.ease);
 const PRESET_EASING = Easing.out(Easing.cubic);
+
+// The three easings a sequenced beat is flown on, named once. `dart` and
+// `settle` are §28.5's approach and descent verbatim — a sortie IS a
+// pollination visit without the pollen, so it must not be flown on a second
+// pair that could drift from the one the tap uses.
+const BEAT_EASINGS = {
+  dart: Easing.inOut(Easing.ease),
+  settle: Easing.out(Easing.cubic),
+  hover: Easing.inOut(Easing.ease),
+};
 
 const PRESETS = {
   // In from off-right, up over the top, back down across to the lower
@@ -121,6 +167,13 @@ const PRESETS = {
 // `ringStep` travels with the target because it is a measured property of the
 // comb — a bee that knew the comb's cell size would be a bee that knew what it
 // was flying over.
+//
+// §32.2 — `perches` is the live anchor set from `usePerchSet()`, or null.
+// Null is not a degraded mode, it is the OFF switch: a cruise mount that is
+// handed no anchors has nowhere to land and renders no bee. The host gates it
+// (`perches={hiveView === 'week' ? null : perches}`) so that the two ratified
+// suppressions read as one expression on the screen that owns the decision,
+// instead of as a list of screen names in here.
 export const FlyingBee = ({
   active = true,
   size = DEFAULT_SIZE,
@@ -129,6 +182,7 @@ export const FlyingBee = ({
   onSettle,
   pollinate = null,
   onPollinateEnd,
+  perches = null,
 }) => {
   const reduced = useReducedMotion();
   const [layout, setLayout] = useState(null);
@@ -143,6 +197,25 @@ export const FlyingBee = ({
   planRef.current = plan;
   const t = useRef(new Animated.Value(0)).current;
   const breathe = useRef(new Animated.Value(0)).current;
+  // §32.2 — presence, not opacity-of-the-bee. It fades the whole flight box,
+  // trail particles included, so a bee leaving a screen does not leave its own
+  // glow hanging in the air behind it. Starts at 0 for a sequenced mount
+  // because anchors register a frame after layout: the bee fades IN when the
+  // screen finishes declaring where he can stand, which is the arrival this
+  // beat should have had all along.
+  const presence = useRef(new Animated.Value(preset ? 1 : 0)).current;
+  // The machine's memory. Refs, not state: nothing renders off them, and a
+  // beat is chosen inside an animation completion callback where a state read
+  // would be one render behind.
+  const recentRef = useRef([]);
+  const rngRef = useRef(null);
+  if (!rngRef.current) {
+    // Per-session seed, per mount — Principle 4. Reproducibility lives in the
+    // gate, which passes its own seed to the same `makeRng`; a shipped bee
+    // that started from the same seed every launch would be the screensaver
+    // with one extra layer of indirection.
+    rngRef.current = makeRng((Date.now() ^ (Math.random() * 0xffffffff)) >>> 0);
+  }
   const posRef = useRef({ x: 0, y: 0 });
   const beeOpacityRef = useRef(1);
   const loopRef = useRef(null);
@@ -161,10 +234,29 @@ export const FlyingBee = ({
   onPollinateEndRef.current = onPollinateEnd;
 
   const presetDef = preset ? PRESETS[preset] : null;
-  const track = plan ?? (presetDef ? presetDef.track : CRUISE);
+  const track = plan ?? presetDef?.track ?? null;
   const flightSuppressed = reduced || !active;
-  const easing = plan ? plan.easing : presetDef ? PRESET_EASING : CRUISE_EASING;
-  const durationMs = plan ? plan.durationMs : presetDef ? presetDef.duration : LOOP_MS;
+  const easing = plan ? plan.easing : PRESET_EASING;
+  const durationMs = plan ? plan.durationMs : presetDef ? presetDef.duration : 0;
+
+  // §32.2 — is there anywhere to go? Two anchors is the floor and it is
+  // `chooseAnchor`'s, not a taste call: with one anchor the bee flies a
+  // zero-length sortie to the point he is already standing on, which is worse
+  // than the loop this replaces. `resolveGrammar` returns null for the same
+  // set and for the same reason, so the two agree by construction.
+  //
+  // A preset flight has no anchors and needs none — it is a one-shot arc to a
+  // destination its host named, and it is not sequenced.
+  const anchorKeys = perches?.keys ?? EMPTY_KEYS;
+  const sequenced = !presetDef;
+  const canSequence = sequenced && anchorKeys.length >= 2;
+  // Everything that makes a bee visible or animated is off when this is true.
+  // Note it is NOT folded into `flightSuppressed`: suppressed means "parked" —
+  // a small static bee that breathes in the corner, which is the right answer
+  // for Reduce Motion and for a text field taking focus. Halted means "not
+  // here at all", which is the ratified answer for the week feed and the error
+  // arm. Collapsing the two would have shipped a parked bee onto both.
+  const sequenceHalted = sequenced && !canSequence;
 
   // Attitude is resolved against the measured container, not the path's
   // fractions — the call site names the box (`loginArc` is flown in a
@@ -172,16 +264,25 @@ export const FlyingBee = ({
   // off fractional deltas mis-faces the bee by up to 21° on a phone-shaped
   // container, differently on every device. Rebuilt only when the box, the
   // bee's size, or the track itself changes.
+  //
+  // `closed` is now always false, and that is the deletion of `PATH` showing
+  // up two files away: the seam it wraps belonged to the looping cruise, and
+  // no sequenced beat repeats — a hover's ellipse closes geometrically but is
+  // flown once and handed to the next beat, so its tail holds rather than
+  // wrapping. `heldFacing` is what replaces the continuity the seam gave: each
+  // plan carries the facing the previous one ended on, so a perch (whose first
+  // segment has `dx === 0`) does not snap the bee to face right.
   const attitude = useMemo(
     () =>
-      layout
+      layout && track
         ? buildAttitude(track.path, {
             width: layout.width,
             height: layout.height,
             size,
-            closed: !presetDef && !plan,
+            closed: false,
             easing,
             durationMs,
+            heldFacing: plan?.heldFacing,
           })
         : null,
     [layout, size, preset, plan]
@@ -207,14 +308,14 @@ export const FlyingBee = ({
   );
   const translateX = useMemo(
     () =>
-      layout
+      layout && track
         ? t.interpolate({ inputRange: track.inputRange, outputRange: track.path.map((p) => p.x * layout.width) })
         : null,
     [layout, track]
   );
   const translateY = useMemo(
     () =>
-      layout
+      layout && track
         ? t.interpolate({ inputRange: track.inputRange, outputRange: track.path.map((p) => p.y * layout.height) })
         : null,
     [layout, track]
@@ -338,7 +439,7 @@ export const FlyingBee = ({
   // cheaper than re-deriving the interpolation in JS, which reintroduces
   // exactly the drift the memo above exists to prevent.
   useEffect(() => {
-    if (!layout || flightSuppressed) return undefined;
+    if (!layout || flightSuppressed || !translateX) return undefined;
     // Cruise opacity is a constant 1, so there is nothing to sample; a preset
     // is the only flight whose bee fades, and a seeded particle scales by this.
     if (!presetOpacity) beeOpacityRef.current = 1;
@@ -354,12 +455,15 @@ export const FlyingBee = ({
     // right by coincidence between two hand-written dep arrays.
   }, [layout, flightSuppressed, translateX, translateY, presetOpacity]);
 
-  // §28.5 — every speed in the beat derives from the cruise the bee is already
-  // flying, so a re-authored `PATH` or a different container moves all of them
-  // together. The published 187.59 px/s is what this returns at 393 x 852; it
-  // is a consequence of the box, not a constant.
-  const cruiseSpeed = layout ? cruiseSpeedPxS(PATH, layout.width, layout.height, LOOP_MS) : 0;
-  const homePx = layout ? { x: PATH[0].x * layout.width, y: PATH[0].y * layout.height } : null;
+  // §28.5 / §32.1 — every speed in the beat still derives from one reference,
+  // and the reference is still a property of the box rather than a constant.
+  // What changed is only where it is measured from: it was the resolved length
+  // of `PATH` over `LOOP_MS`, and `PATH` is gone, so it is now the same
+  // quantity stated per diagonal. 187.59 px/s at 393 x 852 either way, to
+  // 0.06% — see `CRUISE_DIAG_PER_S` for the seven boxes that were measured to
+  // establish the diagonal is the basis that makes that true.
+  const cruiseSpeed = layout ? referenceSpeedPxS(layout.width, layout.height) : 0;
+  const bodyLengthPx = MASCOT_WIDTH_FRACTION * size;
 
   // Pollen. The count is derived from what the trail pool has spare, never
   // chosen: raise the cap or slow the cadence and it moves on its own.
@@ -395,15 +499,133 @@ export const FlyingBee = ({
     });
   };
 
-  const returnFromHere = () =>
-    buildReturnPlan({
-      from: { ...posRef.current },
-      home: homePx,
+  // --- §32.2, the sequencer's side of the boundary ------------------------
+  //
+  // Anchors are resolved HERE, at the moment of choosing, and never cached.
+  // `PerchAnchor.read` calls `measureInWindow` on the element itself, so the
+  // point the bee flies to is where that card is standing right now — after a
+  // scroll, after a keyboard, after a card appeared above it. There is no
+  // coordinate to go stale because there is no coordinate stored, and that is
+  // strictly better than a scroll listener: no throttle, no re-render, and no
+  // window in which the two disagree.
+  //
+  // The conversion is the one `pollinate` already does and it is done in one
+  // place for both: window point, minus this box's own origin, minus the
+  // half-box that turns a corner-driven track into a centred character (§28.3).
+  const readAnchors = () => {
+    if (!perches || !layout) return [];
+    const boxOrigin = readOrigin();
+    return anchorKeys
+      .map((key) => {
+        const p = perches.read(key);
+        return p ? { key, x: p.x - boxOrigin.x - size / 2, y: p.y - boxOrigin.y - size / 2 } : null;
+      })
+      .filter(Boolean);
+  };
+
+  // A sortie's duration for a given hop, computed by the builder that will fly
+  // it. `perchRangeFor` takes this as an argument for exactly one reason: the
+  // dwell is solved to hit an airborne FRACTION, so it has to be solved against
+  // the real plan geometry — staging offset and settle included — rather than
+  // against a second copy of the arithmetic living in the grammar.
+  const sortieDurationFor = (hopPx) =>
+    buildPollinationPlan({
+      from: { x: 0, y: 0 },
+      target: { x: hopPx, y: 0 },
+      ringStep: Infinity,
+      bodyLengthPx,
       width: layout.width,
       height: layout.height,
-      cruiseSpeedPxS: cruiseSpeed,
-      easing: CRUISE_EASING,
+      approachSpeedPxS: cruiseSpeed * DART_SPEED_RATIO,
+      easeApproach: BEAT_EASINGS.dart,
+      easeDescent: BEAT_EASINGS.settle,
+    }).durationMs;
+
+  /**
+   * Advance the machine one beat: choose, resolve, fly.
+   *
+   * `finishedState` is the beat that just ended — `nextBeat` branches on it,
+   * and 'perch' is the state that produces a sortie, which is why an ABORT
+   * passes 'perch'. That is not a lie about what happened; it is the sentence
+   * "he has finished being where he was, go somewhere". §28.9's ruling is
+   * unchanged and it is now free: aborting is leaving, and leaving is the only
+   * thing this machine does.
+   *
+   * The grammar is re-solved per beat rather than once per anchor-set change,
+   * and the reason is the measure-on-use above: the anchors have coordinates
+   * only at the instant they are read, so a dwell solved at mount would be
+   * solved against a layout the user has since scrolled. It is `meanHopPx`
+   * over at most four anchors — twelve `hypot`s once every few seconds.
+   */
+  const advance = (finishedState) => {
+    const anchors = readAnchors();
+    const grammar = resolveGrammar({ grammar: STUB_GRAMMAR, anchors, sortieDurationFor });
+    // Null grammar means fewer than two anchors, i.e. the screen stopped
+    // declaring anywhere to go mid-flight. Stop; `sequenceHalted` fades him.
+    if (!grammar) {
+      setPlan(null);
+      return;
+    }
+    const beat = nextBeat({
+      state: finishedState,
+      recent: recentRef.current,
+      anchors,
+      rng: rngRef.current,
+      grammar,
     });
+    const next = resolveBeat({
+      beat,
+      from: { ...posRef.current },
+      width: layout.width,
+      height: layout.height,
+      bodyLengthPx,
+      grammar,
+      easings: BEAT_EASINGS,
+      builders: { buildPollinationPlan, composeSegmentEasing },
+      // The facing the bee is ACTUALLY wearing as this beat ends, read off the
+      // same attitude the render is drawing with rather than recomputed from
+      // the path — `scaleXOutput` is the mirror channel, ±1, and its last
+      // entry is where the flight left him. Recomputing it here would be a
+      // second copy of `beeAttitude`'s walk, and the seam it exists to close
+      // (a perched bee snapping to face right, because a stationary path's
+      // first segment has `dx === 0`) is exactly the kind that only shows up
+      // when the two copies disagree.
+      heldFacing: attitude?.scaleXOutput?.[attitude.scaleXOutput.length - 1],
+    });
+    if (!next) {
+      setPlan(null);
+      return;
+    }
+    if (next.anchorKey) {
+      recentRef.current = [...recentRef.current, next.anchorKey].slice(-RECENT_MEMORY);
+    }
+    setPlan(next);
+  };
+
+  /**
+   * Put the bee somewhere before the first beat.
+   *
+   * He starts PERCHED on a chosen anchor rather than flying in, and the choice
+   * is not decoration: `posRef` is seeded from the animation and its
+   * initialiser is `{ x: 0, y: 0 }`, so "just start a sortie" begins every
+   * session with a flight out of this container's top-left corner — the exact
+   * artefact R89 found already shipping, arrived at a second way. Seeding the
+   * position from the anchor and opening with a landing beat means the first
+   * thing the screen shows is a bee who was already here.
+   */
+  const start = () => {
+    const anchors = readAnchors();
+    if (anchors.length < 2) return false;
+    const first = chooseAnchor(anchors, [], rngRef.current, STUB_GRAMMAR.antiRepeatDepth);
+    if (!first) return false;
+    posRef.current = { x: first.x, y: first.y };
+    recentRef.current = [first.key];
+    // 'sortie' = "a flight just ended here", which is what being placed on an
+    // anchor is. `nextBeat` answers it with a hover or a perch, never with
+    // another flight, so nothing moves until he has been seen standing still.
+    advance('sortie');
+    return true;
+  };
 
   // A target arrives, or the one in the air stops being the one you tapped.
   //
@@ -417,9 +639,12 @@ export const FlyingBee = ({
   // A second tap mid-flight re-targets by the same stop-and-rebuild, so unlike
   // `BeeTransition` this beat needs no cooldown — there is no state to protect.
   useEffect(() => {
-    if (!layout || flightSuppressed) return;
+    if (!layout || flightSuppressed || sequenceHalted) return;
     if (!pollinate) {
-      if (planRef.current?.kind === 'visit') setPlan(returnFromHere());
+      // Abort. It used to be `buildReturnPlan` to `PATH[0]`; it is now just
+      // the next beat, which is a sortie to a different anchor. Same flight,
+      // no fixed destination — §28.4's seam had nothing left to close.
+      if (planRef.current?.kind === 'visit') advance('perch');
       return;
     }
     if (pollinate.key === pollinateKeyRef.current) return;
@@ -457,13 +682,46 @@ export const FlyingBee = ({
       }),
       ringStep: pollinate.ringStep,
     });
-  }, [pollinate, layout, flightSuppressed]);
+  }, [pollinate, layout, flightSuppressed, sequenceHalted]);
 
-  // Drive the flight — looping cruise, a one-shot preset that settles, or a
-  // pollination visit/return.
+  // Drive the flight — one beat of the sequence, a one-shot preset that
+  // settles, or a pollination visit.
+  //
+  // **Every state is a plan and the completion callback is the only thing that
+  // advances the machine.** There is no `setTimeout` anywhere in the sequence,
+  // and a perch is an `Animated.timing` driving a constant rather than a
+  // pause — one driver, one mechanism, R46 unchanged. What that buys is that
+  // an interrupt (a tap, a screen state change, an unmount) stops exactly one
+  // thing and cannot leave a queued beat behind it.
   useEffect(() => {
-    if (!layout || flightSuppressed) {
+    if (!layout || flightSuppressed || sequenceHalted) {
       loopRef.current?.stop();
+      return undefined;
+    }
+    if (!plan && !presetDef) {
+      // Nothing in the air and nothing to resume from: open the sequence.
+      //
+      // **And retry until it takes.** `anchorKeys` says a `PerchAnchor`
+      // MOUNTED; it does not say the native view behind it has been laid out,
+      // and `read()` returns null until the first `measureInWindow` lands.
+      // Without the retry the two facts disagree exactly once — at the first
+      // render after registration — and this effect's deps (`layout`, `plan`,
+      // `preset`, the two suppressions) contain nothing that would ever change
+      // again to bring it back. The bee would simply never appear, on a screen
+      // whose anchors are all present and correct. A one-shot `start()` was
+      // that bug, written and caught here.
+      //
+      // It is self-terminating rather than capped: success sets `plan`, which
+      // re-runs this effect down the other branch. A screen where it never
+      // succeeds is a screen whose anchors never measure, and one measure per
+      // `PRESENCE_FADE_MS` is the right cost for the bee it is still trying to
+      // put on it.
+      if (!start()) {
+        const retry = setInterval(() => {
+          if (start()) clearInterval(retry);
+        }, PRESENCE_FADE_MS);
+        return () => clearInterval(retry);
+      }
       return undefined;
     }
     t.setValue(0);
@@ -482,15 +740,14 @@ export const FlyingBee = ({
           // stops publishing scroll positions for a flight that can no longer
           // be aborted.
           onPollinateEndRef.current?.();
-          setPlan(returnFromHere());
-        } else {
-          // §28.4 — the return ends exactly on `PATH[0]`, and `PATH[0] ===
-          // PATH[4]`, so `t` restarting at 0 resumes the loop with zero
-          // discontinuity. The only place a return can end without a seam.
-          setPlan(null);
         }
+        // A visit is a landing like any other: he may look around the cell he
+        // just pollinated before leaving it. 'sortie' is the finished state for
+        // every arrival, and the machine does not need to know which kind of
+        // errand brought him.
+        advance(plan.kind === 'visit' ? 'sortie' : plan.kind);
       });
-    } else if (presetDef) {
+    } else {
       loopRef.current = Animated.timing(t, {
         toValue: 1,
         duration: presetDef.duration,
@@ -500,19 +757,22 @@ export const FlyingBee = ({
       loopRef.current.start(({ finished }) => {
         if (finished) onSettleRef.current?.();
       });
-    } else {
-      loopRef.current = Animated.loop(
-        Animated.timing(t, {
-          toValue: 1,
-          duration: LOOP_MS,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        })
-      );
-      loopRef.current.start();
     }
     return () => loopRef.current?.stop();
-  }, [layout, flightSuppressed, preset, plan]);
+  }, [layout, flightSuppressed, sequenceHalted, preset, plan]);
+
+  // §32.2 — arrive and leave at the descent's own pace. Driving `presence`
+  // rather than unmounting keeps the fade honest in both directions: a screen
+  // that stops declaring anchors mid-hover gets a bee that fades from wherever
+  // he is, not one that vanishes on a frame boundary.
+  useEffect(() => {
+    Animated.timing(presence, {
+      toValue: sequenceHalted ? 0 : 1,
+      duration: PRESENCE_FADE_MS,
+      easing: Easing.out(Easing.quad),
+      useNativeDriver: true,
+    }).start();
+  }, [sequenceHalted]);
 
   // A suppressed preset flight settles instantly — the host is waiting on
   // onSettle to move on, and there is no parked pose for an entrance.
@@ -535,8 +795,15 @@ export const FlyingBee = ({
   // particle seeded a hair before settle, already near-zero — while
   // keeping the glow lit the whole arc. Cruise opacity is a constant 1, so
   // the scale is the identity there; no preset-vs-cruise branch needed.
+  //
+  // §32.2 — and the trail is now a property of the BEAT, not of the component.
+  // `plan.trail` is false for a perch and for a hover, because the glow marks
+  // travel: a bee that stays inside a 17px bob for 1.5s otherwise piles ~9
+  // particles into one blob at the anchor, and a perched bee would sit inside
+  // a growing puddle of his own light.
   useEffect(() => {
-    if (!layout || flightSuppressed) return undefined;
+    if (!layout || flightSuppressed || sequenceHalted) return undefined;
+    if (plan && !plan.trail) return undefined;
     trailTimerRef.current = setInterval(() => {
       const slot = takeSlot();
       slot.pos.x.setValue(posRef.current.x);
@@ -553,7 +820,7 @@ export const FlyingBee = ({
       ]).start();
     }, TRAIL_INTERVAL_MS);
     return () => clearInterval(trailTimerRef.current);
-  }, [layout, flightSuppressed, preset]);
+  }, [layout, flightSuppressed, sequenceHalted, preset, plan]);
 
   // Reduced motion (§12.5 Rule 4) / parked (inactive): no flight, no
   // particles — a small static bee that breathes via opacity only.
@@ -569,8 +836,18 @@ export const FlyingBee = ({
     return () => loop.stop();
   }, [flightSuppressed, preset]);
 
+  // A screen that declares nowhere to land has no bee — parked or otherwise.
+  // Easy to get backwards: Reduce Motion on the week feed must render NOTHING,
+  // not a parked bee in the corner of a screen the ruling took the bee off.
+  //
+  // Halted under Reduce Motion returns immediately rather than fading, and
+  // that is not an optimisation — a 160ms fade IS motion, and §12.5 Rule 4
+  // has no exceptions. Halted with motion on keeps the tree mounted at
+  // `presence: 0` instead of unmounting, because unmounting is how you get a
+  // bee that vanishes on a frame boundary the first time the fade and the
+  // render disagree about which of them finishes first.
   if (flightSuppressed) {
-    if (presetDef) return null;
+    if (presetDef || sequenceHalted) return null;
     const opacity = breathe.interpolate({ inputRange: [0, 1], outputRange: [0.55, 1] });
     return (
       <View style={[styles.parkedAnchor, style]} pointerEvents="none">
@@ -606,6 +883,7 @@ export const FlyingBee = ({
 
   return (
     <View ref={containerRef} style={[styles.fill, style]} onLayout={onLayout} pointerEvents="none">
+      <Animated.View style={[styles.fill, { opacity: presence }]} pointerEvents="none">
       {layout &&
         trailPool.map((slot, i) => (
           <Animated.View
@@ -634,7 +912,7 @@ export const FlyingBee = ({
             ]}
           />
         ))}
-      {layout && (
+      {layout && translateX && (
         <Animated.View
           style={[
             styles.bee,
@@ -644,9 +922,14 @@ export const FlyingBee = ({
             },
           ]}
         >
-          <MascotBee size={size} flutter />
+          {/* §19.5 puts wing motion on the airborne path only, and the beat
+              now says which that is: a perched bee holds his wings, a hovering
+              one does not. `plan.flutter` is the plan builder's, so this stays
+              one source rather than a second reading of `kind`. */}
+          <MascotBee size={size} flutter={plan ? plan.flutter !== false : true} />
         </Animated.View>
       )}
+      </Animated.View>
     </View>
   );
 };

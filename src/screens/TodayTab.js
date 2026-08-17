@@ -4,6 +4,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { theme } from '../constants/theme';
 import { EntryStore } from '../services/EntryStore';
 import { FlyingBee } from '../components/FlyingBee';
+import { PerchAnchor, PerchField, usePerchSet } from '../components/PerchAnchor';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { StreakBadge } from '../components/StreakBadge';
@@ -36,6 +37,10 @@ export const TodayTab = ({ navigation }) => {
   const [entry, setEntry] = useState(null);
   const [streak, setStreak] = useState(0);
   const [total, setTotal] = useState(0);
+  // §32.2 — where the bee may land, held by the screen and read by the flight.
+  // Membership only: the coordinates are measured at the moment of choosing,
+  // so scrolling this list does not touch this value and does not re-render.
+  const perches = usePerchSet();
 
   useFocusEffect(
     useCallback(() => {
@@ -103,19 +108,47 @@ export const TodayTab = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      {/* §12.2/§14.1: ambient cruise, default-on for Today idle. Absolutely
+      {/* §12.2/§14.1: ambient presence, default-on for Today idle. Absolutely
           positioned behind the content and never intercepts touches
-          (pointerEvents="none" throughout FlyingBee). */}
-      <FlyingBee active />
+          (pointerEvents="none" throughout FlyingBee).
 
+          §32.2 — `perches` is the whole of what the bee knows about this
+          screen. Passing null is how a state says "no bee": the error arm
+          withholds the badge and the CTA by design, and a mascot doing laps
+          over failure copy performs cheerfulness at failure (Lumen, ratified
+          2026-08-17). Note this is a DIFFERENT decision from the week feed's,
+          which suppresses itself structurally by declaring nothing to land on
+          — same outcome, and the two must not be collapsed into one rule,
+          because one is about tone and the other is about geometry. */}
+      <FlyingBee active perches={error ? null : perches} />
+
+      <PerchField perches={perches}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <ScreenHeader
           eyebrow={longDate(now)}
           title={greeting(now)}
-          right={error ? null : <StreakBadge streak={streak} />}
+          right={
+            error ? null : (
+              // Right side, and the only anchor on this screen that is not a
+              // full-width block: the badge sits in the header's own right
+              // slot, so it carries most of the set's x-extent by itself.
+              <PerchAnchor id="badge" on="right" at={0.5}>
+                <StreakBadge streak={streak} />
+              </PerchAnchor>
+            )
+          }
         />
 
+        {/* Anchors alternate sides down the screen — R122, and on this screen
+            it is not a preference. Every `StaggeredItem` is a full-width card
+            in one 24pt column, so anchoring them all on the same side gives
+            the set ZERO x-extent, `facingFor` never crosses its one-body-width
+            threshold, and the bee flies every sortie facing the same way. The
+            ≥44pt span is asserted by `check-bee-attitude` J8 against these
+            declarations, so a later edit that quietly puts them back in a
+            column fails rather than ships. */}
         <StaggeredItem index={0}>
+          <PerchAnchor id="streak-card" on="left" at={0.5}>
           <View style={[styles.streakCard, error && { backgroundColor: theme.colors.surface }]}>
             {error ? (
               // No numeral, no caption — both are assertions about a user
@@ -139,9 +172,11 @@ export const TodayTab = ({ navigation }) => {
               </>
             )}
           </View>
+          </PerchAnchor>
         </StaggeredItem>
 
         <StaggeredItem index={1}>
+          <PerchAnchor id="entry-card" on="right" at={0.5}>
           {entry ? (
             <View style={styles.quoteCard}>
               <Text style={styles.themeBadge}>{entry.theme}</Text>
@@ -169,16 +204,27 @@ export const TodayTab = ({ navigation }) => {
               </PrimaryButton>
             </View>
           )}
+          </PerchAnchor>
         </StaggeredItem>
 
+        {/* The written state's fourth anchor, and the reason the written state
+            is the RICHER one rather than the poorer one — Sage's §1 retraction
+            (2026-08-17). Counting affordances stops at the Write button and
+            gets 2 here; counting structural units, which is the declared rule,
+            finds this footer and gets 4. It is declared by being wrapped, so
+            the count is a consequence of this JSX and cannot drift from a
+            table that says what the JSX does. */}
         {entry && (
           <StaggeredItem index={2}>
-            <Text style={styles.footerText}>
-              Saved. Your day is open. Share it with your hive, or come back tomorrow.
-            </Text>
+            <PerchAnchor id="footer" on="left" at={0.5}>
+              <Text style={styles.footerText}>
+                Saved. Your day is open. Share it with your hive, or come back tomorrow.
+              </Text>
+            </PerchAnchor>
           </StaggeredItem>
         )}
       </ScrollView>
+      </PerchField>
     </View>
   );
 };

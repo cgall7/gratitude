@@ -14,6 +14,7 @@ import { HoneycombGrid, HIVE_SLOTS, personKey } from '../components/HoneycombGri
 import { ScreenHeader } from '../components/ScreenHeader';
 import { BeeTransition } from '../components/BeeTransition';
 import { FlyingBee } from '../components/FlyingBee';
+import { PerchAnchor, PerchField, usePerchSet } from '../components/PerchAnchor';
 import { demoHiveShares } from '../constants/demoHive';
 import { DEMO_CONTENT } from '../constants/demoMode';
 import { TAB_CLEARANCE } from '../navigation/tabBarLayout';
@@ -226,6 +227,11 @@ const HoneycombFeed = () => {
   // 'today' | 'week' — the §18 pager's resting position. State lives here
   // (not in the toggle) so Pixel's pager can drive it from swipe progress.
   const [hiveView, setHiveView] = useState('today');
+  // §32.2 — the comb view's three anchors. Declared unconditionally; the
+  // week view's suppression is at the `<FlyingBee perches>` prop, because
+  // two of these three (header actions, view toggle) render in BOTH views
+  // and a count taken off the render tree alone would keep the bee flying.
+  const perches = usePerchSet();
   const [weekFeed, setWeekFeed] = useState([]);
   const [connections, setConnections] = useState([]);
   const [incomingRequests, setIncomingRequests] = useState([]);
@@ -417,11 +423,30 @@ const HoneycombFeed = () => {
 
   return (
     <View style={styles.container}>
-      {/* §12.2/§14.1 ambient cruise — anchored to the screen (not the
+      {/* §12.2/§14.1 ambient presence — anchored to the screen (not the
           scroll content) so it never scrolls off with the feed; parked
           while idle content loads is handled by the `active` gate at the
-          top of the tree, not here. */}
-      <FlyingBee active pollinate={pollination} onPollinateEnd={() => setPollination(null)} />
+          top of the tree, not here.
+
+          §32.2 — WEEK VIEW HAS NO BEE, and this line is a BEHAVIOUR REMOVAL,
+          not a side effect of the mount. Until now the bee flew its 7s loop
+          over the week feed too (it mounts here, above the `hiveView` ternary
+          below, so the toggle never touched it). Lumen ratified suppression as
+          an explicit interim on 2026-08-17: a feed is for reading, and a
+          mascot doing laps over a list of other people's gratitude competes
+          with it. The end state is perch-only presence — one declared anchor
+          on the toggle, PERCH state, zero sorties — as an immediate
+          fast-follow, deliberately not folded in here.
+
+          It leaves over `PRESENCE_FADE_MS` rather than disappearing; that is
+          FlyingBee's, and it is the same 160ms as the descent. */}
+      <FlyingBee
+        active
+        perches={hiveView === 'week' ? null : perches}
+        pollinate={pollination}
+        onPollinateEnd={() => setPollination(null)}
+      />
+      <PerchField perches={perches}>
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.content}
@@ -480,7 +505,10 @@ const HoneycombFeed = () => {
           // inbox, `+` inside it composes — and the two entry points beside
           // each other behaving differently would have been a thing to learn
           // for no reason.
-          <View style={styles.headerActions}>
+          // §32.2 anchor. `on="right"` and it is the only anchor on this
+          // screen that starts life at the right edge, so it carries the
+          // set's x-extent the same way TodayTab's badge does.
+          <PerchAnchor id="header-actions" on="right" at={0.5} style={styles.headerActions}>
             <PressableScale
               onPress={() => navigation.getParent()?.navigate('Seeds')}
               haptic={null}
@@ -495,11 +523,13 @@ const HoneycombFeed = () => {
             >
               <Ionicons name="mail-outline" size={22} color={theme.colors.ink} />
             </PressableScale>
-          </View>
+          </PerchAnchor>
         }
       />
 
-      <HiveViewToggle view={hiveView} onChange={setHiveView} />
+      <PerchAnchor id="view-toggle" on="left" at={0.5}>
+        <HiveViewToggle view={hiveView} onChange={setHiveView} />
+      </PerchAnchor>
 
       {/* §18/§23.2/Sage(thread e10d0fed, §4 follow-up): three invariants at
           once — the feed can't render alongside the week list (it's a
@@ -520,6 +550,12 @@ const HoneycombFeed = () => {
           onLikeToggled={handleLikeToggled}
         />
       ) : (
+        // §32.2 anchor — the comb as a whole, wrapped rather than per-cell.
+        // A cell is absolutely positioned inside the grid's own box, and an
+        // absolute style carries the container it was written against, so
+        // wrapping one would move it. The comb is also the thing the eye reads
+        // as a place on this screen; its cells are seats, not destinations.
+        <PerchAnchor id="comb" on="right" at={0.4}>
         <HoneycombGrid
           members={todayMembers}
           onInvitePress={() => setAddOpen(true)}
@@ -529,6 +565,7 @@ const HoneycombFeed = () => {
           onPollinate={setPollination}
           onPollinateCancel={() => setPollination(null)}
         />
+        </PerchAnchor>
       )}
 
       <View style={styles.addCard}>
@@ -612,6 +649,7 @@ const HoneycombFeed = () => {
         )
       )}
       </ScrollView>
+      </PerchField>
     </View>
   );
 };
