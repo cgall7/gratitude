@@ -1,26 +1,22 @@
 // Sunbeam §32 — the idle flight sequencer.
 //
-// ┌─ NOT WIRED YET, AND HERE IS HOW TO TELL THAT FROM ORPHANED ─────────┐
-// │ This module has NO importer in `src/` or `App.js`. That is the      │
-// │ engine half of a two-owner piece of work landing first, not a call  │
-// │ site somebody deleted.                                              │
-// │                                                                     │
-// │   consumer   FlyingBee.js — the fixed 5-waypoint `PATH` loop        │
-// │              (LOOP_MS 7000) is what this replaces. Anchors come     │
-// │              from the host screens: TodayTab and HoneycombTab each  │
-// │              declare 3-5, in the §28.2 window-coordinate currency.  │
+// ┌─ WIRED, AND THIS IS NOW THE ONLY IDLE FLIGHT THERE IS ──────────────┐
+// │   consumer   FlyingBee.js. The fixed 5-waypoint `PATH` loop         │
+// │              (LOOP_MS 7000) this replaced is DELETED, not fallen    │
+// │              back to — a fallback is a repeat signature waiting on  │
+// │              the one screen nobody watches. Anchors come from the   │
+// │              host screens through `<PerchAnchor>`, in the §28.2     │
+// │              window-coordinate currency.                            │
 // │   owner      Pixel (engine, this file) / Deezine (choreography —    │
 // │              perch points, dwell ranges, dart-hover-settle timings, │
 // │              trail grammar, loginArc re-author)                     │
 // │   plan       PLANS/BEE_FLIGHT_REDESIGN_SCOPE.md, from Colin's ask   │
-// │              of 2026-08-16                                          │
-// │   exercised  scripts/simulate-bee-flight.mjs — reachable and run    │
-// │              today, just not from the app                           │
-// │                                                                     │
-// │ THE FALSIFIER, because a name and an owner both decay: if that plan │
-// │ is closed or FlyingBee.js's `PATH` loop has been replaced by        │
-// │ something else, this module is dead and should be deleted, not      │
-// │ maintained. Check the plan before you assume either.                │
+// │              of 2026-08-16; choreography in                         │
+// │              GUIDES/BEE_FLIGHT_CHOREOGRAPHY.md                      │
+// │   gated      scripts/check-bee-attitude.mjs sections C, J and K —   │
+// │              C resolves the plans this module builds for the real   │
+// │              declared anchor sets, so the gate flies what the app   │
+// │              flies.                                                 │
 // └─────────────────────────────────────────────────────────────────────┘
 //
 // Colin, 2026-08-16: the idle bee "looks like a windows98 screensaver just
@@ -265,6 +261,24 @@ export const chooseAnchor = (anchors, recent, rng, depth) => {
   const pool = eligible.length > 0 ? eligible : anchors;
   return pool[Math.min(pool.length - 1, Math.floor(rng() * pool.length))];
 };
+
+// §32.2 — an authored anchor is a SIDE and a FRACTION, resolved against the
+// element's own measured frame.
+//
+// It lives in this file rather than beside `<PerchAnchor>` for the reason
+// everything in this file lives here: the gate imports and samples it. A
+// screen's declared anchor set is the input to every J and K row, so the
+// conversion from what the author wrote to what the bee flies to has to be the
+// one the app runs, not a second copy in a checker.
+//
+// Sides only, never corners or a centre — R122. `at` runs top to bottom along
+// the named side, so a set gets its x-extent from ALTERNATING sides and its
+// y-spread from the fractions. A centre-based anchor would collapse both at
+// once on TodayTab, where every element is a full-width block in one column.
+export const resolvePerchPoint = (frame, on, at) => ({
+  x: on === 'right' ? frame.x + frame.width : frame.x,
+  y: frame.y + Math.min(1, Math.max(0, at)) * frame.height,
+});
 
 // --- the dwell, solved rather than typed ---------------------------------
 //
