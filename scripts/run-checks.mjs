@@ -370,6 +370,10 @@ if (failed.length) {
 // check is a comment in test.yml. `isSet` already accepts 'true', which is what
 // Actions sets CI to.
 const skippedInCI = skips.length > 0 && isSet('CI');
+// This block is narration, not enforcement. The exit code rides on the third
+// term in `ok` below — delete that term and this sentence still prints, in
+// full, while the check reports green (mutation-tested). Do not keep this
+// block and drop the clause; it is the clause that does the work.
 if (skippedInCI) {
   console.log('\n' + c(31,
     '  CI DOES NOT GET TO SKIP. The gates above did not run, and this is a ' +
