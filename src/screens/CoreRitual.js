@@ -21,6 +21,7 @@ import { GlowOrb } from '../components/GlowOrb';
 import { WelcomeBee } from '../components/WelcomeBee';
 import { CelebrationBadge } from '../components/CelebrationBadge';
 import { CelebrationRays } from '../components/CelebrationRays';
+import { DEMO_CONTENT } from '../constants/demoMode';
 
 // --- COMPONENT: LockScreen ---
 export const LockScreen = ({ onOpen }) => {
@@ -75,8 +76,10 @@ export const LockScreen = ({ onOpen }) => {
             affordance sitting on the ritual gate ships to every tester.
             Colin's 2026-08-10 note ("wants a real button, not the old
             hidden 5-tap gesture") was about discoverability during
-            development, not about shipping it past __DEV__. */}
-        {__DEV__ && (
+            development, not about shipping it past __DEV__. DEMO_CONTENT,
+            not raw __DEV__ (Sage's LATENT finding, thread 37fb8ef6): a
+            pitch build has __DEV__ false but still wants this button. */}
+        {DEMO_CONTENT && (
           <PressableScale onPress={handleLoadDemoData} style={styles.demoDataLink}>
             <Text style={styles.demoDataLinkText}>Load demo data</Text>
           </PressableScale>

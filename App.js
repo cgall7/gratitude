@@ -22,31 +22,19 @@ import { OnboardingState } from './src/services/onboardingState';
 import { supabase, isSupabaseConfigured } from './src/services/supabase';
 import { EntryStore } from './src/services/EntryStore';
 import { tagEntry } from './src/utils/themeTagger';
+import { DEMO_MODE } from './src/constants/demoMode';
 
 const Stack = createStackNavigator();
 
 SplashScreen.preventAutoHideAsync();
 
-// Demo-mode only (Colin, 2026-08-09): every time the app comes back to the
-// foreground it should reopen at onboarding, even if someone finished it
-// or was sitting on Main a minute ago — the pitch should always be fresh
-// for whoever's about to see it. This flag now gates BOTH demo behaviours: the
-// foreground-resume reset below, and forcing every cold launch to start at
-// Onboarding. With it off, cold launches route on the persisted completion
-// flag / live session instead (resolveInitialRoute), so flipping this one
-// constant really is the whole switch.
-//
-// Driven by `eas.json`'s per-profile `EXPO_PUBLIC_DEMO_MODE` (Sage, thread
-// 14492cf2), not a literal — a hardcoded `true` shipped demo mode to every
-// TestFlight build regardless of profile. Two traps this derivation avoids:
-// Expo's inline-env-vars babel plugin only rewrites a direct
-// `process.env.X` member read, so destructuring `{ EXPO_PUBLIC_DEMO_MODE }`
-// from `process.env` resolves to `undefined` at runtime and silently kills
-// the flag; and the inlined value is always a string, so a bare truthiness
-// check makes the explicit `"false"` production profile sets truthy. The
-// `=== 'true'` comparison is what makes an absent var (development profile,
-// no env block) resolve safely to `false`.
-const DEMO_MODE = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
+// DEMO_MODE gates both demo behaviours below: the foreground-resume reset,
+// and forcing every cold launch to start at Onboarding. With it off, cold
+// launches route on the persisted completion flag / live session instead
+// (resolveInitialRoute). Defined in src/constants/demoMode.js, not here —
+// CoreRitual.js/HoneycombTab.js/Onboarding.js's demo-only affordances need
+// the derived DEMO_CONTENT constant next to it, and importing from App.js
+// would be circular (App.js imports all three screens).
 
 // Cold-launch routing, only consulted when DEMO_MODE is off. Completed
 // onboarding on this device, or an existing signed-in session (fresh

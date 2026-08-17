@@ -26,6 +26,7 @@ import { IdeasAccordion } from '../components/IdeasAccordion';
 import { BeeTransition } from '../components/BeeTransition';
 import { FlyingBee } from '../components/FlyingBee';
 import { DevSettings } from '../services/devSettings';
+import { DEMO_CONTENT } from '../constants/demoMode';
 import { OnboardingState } from '../services/onboardingState';
 import { HoneycombStore } from '../services/HoneycombStore';
 import { useAuth } from '../contexts/AuthContext';
@@ -253,11 +254,18 @@ const WelcomeStep = ({ step, onNext, flow, onChangeFlow, onSkipDemo, splashHidde
             and flips terminal to foundational. Nothing unbuilt is named. */}
         <Text style={styles.bodyLgCenter}>One line a day. That's how it starts.</Text>
       </View>
-      <FlowToggle flow={flow} onChange={onChangeFlow} />
+      {/* Pixel's WP-10(c) finding (thread 37fb8ef6): both dev/demo
+          affordances below rendered unconditionally, shipping to every
+          tester's first screen. DEMO_CONTENT, not __DEV__ — Flow C is a
+          standing demo option of Colin's, and a release build he demos
+          from has __DEV__ false but DEMO_MODE still true. */}
+      {DEMO_CONTENT && <FlowToggle flow={flow} onChange={onChangeFlow} />}
       <PrimaryButton onPress={onNext}>Begin</PrimaryButton>
-      <PressableScale onPress={onSkipDemo} style={styles.skipDemoLink}>
-        <Text style={styles.skipDemoText}>Skip to the logged-in view (demo)</Text>
-      </PressableScale>
+      {DEMO_CONTENT && (
+        <PressableScale onPress={onSkipDemo} style={styles.skipDemoLink}>
+          <Text style={styles.skipDemoText}>Skip to the logged-in view (demo)</Text>
+        </PressableScale>
+      )}
     </StepShell>
   );
 };

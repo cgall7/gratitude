@@ -1,16 +1,30 @@
-// Gate for App.js's DEMO_MODE derivation (Sage, thread 14492cf2).
+// Gate for the DEMO_MODE derivation and the DEMO_CONTENT disjunction in
+// src/constants/demoMode.js (Sage, threads 14492cf2 and 37fb8ef6).
 //
 //   npm run check:demo-mode-env
 //
 // WHY THIS EXISTS
 //
-// `App.js:39` used to be `const DEMO_MODE = true;` — a literal, unconditional
+// App.js used to have `const DEMO_MODE = true;` — a literal, unconditional
 // in every build including production TestFlight/App Store releases. It
 // gates two behaviours: forcing every cold launch to Onboarding, and an
 // AppState listener that resets to Onboarding on every foreground resume. A
 // production build shipping that literal traps a real tester in the pitch
 // experience forever — write an entry, background the app, come back to
 // the welcome flow.
+//
+// The constant now lives in src/constants/demoMode.js (fizz/demo-content-flag
+// merge): screens need the derived DEMO_CONTENT next to it, and importing
+// from App.js would be circular. The gate follows the constant — the
+// derivation assertions below target demoMode.js, and App.js is asserted to
+// consume it from there rather than re-deriving or re-hardcoding its own.
+//
+// TWO HAZARDS, NOT ONE (Sage, 2026-08-15). Routing and content are separate
+// failure modes: DEMO_MODE (kiosk routing — cold-launch + foreground reset)
+// can be correctly off while FlowToggle and the "skip to demo" link still
+// render for store users. DEMO_CONTENT is the constant that gates those
+// affordances, so it gets its own assertions here; a gate that only covered
+// DEMO_MODE read green while half the hazard shipped.
 //
 // `eas.json` sets a distinct EXPO_PUBLIC_DEMO_MODE per build profile
 // (development: unset, preview: "true", production: "false"), but an env var
@@ -97,18 +111,44 @@ const isProcessEnvMember = (n, name) =>
   n.property?.type === 'Identifier' &&
   n.property.name === name;
 
-// --- App.js: the derivation itself ---------------------------------------
-const appSrc = await readFile(path.join(ROOT, 'App.js'), 'utf8');
-const appAst = parse(appSrc, { sourceType: 'module', plugins: ['jsx'] });
-
-let demoModeDecl = null;
-for (const stmt of appAst.program.body) {
-  if (stmt.type !== 'VariableDeclaration') continue;
-  for (const d of stmt.declarations) {
-    if (d.id?.type === 'Identifier' && d.id.name === 'DEMO_MODE') demoModeDecl = d;
+const topLevelConst = (ast, name) => {
+  for (const stmt of ast.program.body) {
+    const decl = stmt.type === 'ExportNamedDeclaration' ? stmt.declaration : stmt;
+    if (decl?.type !== 'VariableDeclaration') continue;
+    for (const d of decl.declarations) {
+      if (d.id?.type === 'Identifier' && d.id.name === name) return d;
+    }
   }
-}
-check('App.js declares a top-level DEMO_MODE const', Boolean(demoModeDecl), true);
+  return null;
+};
+
+const destructuredProcessEnvIn = (ast) => {
+  const hits = [];
+  walk(ast.program, (n) => {
+    if (
+      n.type === 'VariableDeclarator' &&
+      n.id?.type === 'ObjectPattern' &&
+      n.init?.type === 'MemberExpression' &&
+      n.init.object?.type === 'Identifier' &&
+      n.init.object.name === 'process' &&
+      n.init.property?.type === 'Identifier' &&
+      n.init.property.name === 'env'
+    ) {
+      hits.push(n.id.start);
+    }
+  });
+  return hits;
+};
+
+// --- demoMode.js: the derivation itself -----------------------------------
+// Retargeted from App.js when the constant moved (fizz/demo-content-flag);
+// the assertion followed the constant rather than being deleted for green.
+const constantsRel = 'src/constants/demoMode.js';
+const constantsSrc = await readFile(path.join(ROOT, constantsRel), 'utf8');
+const constantsAst = parse(constantsSrc, { sourceType: 'module', plugins: ['jsx'] });
+
+const demoModeDecl = topLevelConst(constantsAst, 'DEMO_MODE');
+check('demoMode.js declares a top-level DEMO_MODE const', Boolean(demoModeDecl), true);
 
 const init = demoModeDecl?.init;
 check('DEMO_MODE is not a bare literal', init?.type !== 'BooleanLiteral', true);
@@ -120,24 +160,49 @@ const literalSide = sides.find((s) => s?.type === 'StringLiteral');
 check('one side reads process.env.EXPO_PUBLIC_DEMO_MODE directly', Boolean(memberSide), true);
 check("the other side is the string literal 'true'", literalSide?.value, 'true');
 
-// --- No destructured process.env anywhere in App.js -----------------------
-// Catches the fix that looks equivalent and silently isn't: destructuring
-// resolves the var to undefined regardless of what any build profile sets.
-const destructuredProcessEnv = [];
-walk(appAst.program, (n) => {
-  if (
-    n.type === 'VariableDeclarator' &&
-    n.id?.type === 'ObjectPattern' &&
-    n.init?.type === 'MemberExpression' &&
-    n.init.object?.type === 'Identifier' &&
-    n.init.object.name === 'process' &&
-    n.init.property?.type === 'Identifier' &&
-    n.init.property.name === 'env'
-  ) {
-    destructuredProcessEnv.push(n.id.start);
-  }
-});
-check('no destructured `const { X } = process.env` in App.js', destructuredProcessEnv, []);
+// --- demoMode.js: the DEMO_CONTENT disjunction ----------------------------
+// The content half of the hazard. Shape-asserted (`__DEV__ || DEMO_MODE`,
+// identifiers on both sides) rather than sampled: an inline expression is
+// pinned exactly by its AST, and any other shape — a literal, a lone
+// `__DEV__`, a re-read of process.env — is a different gate than the one
+// the three build profiles were enumerated against.
+const demoContentDecl = topLevelConst(constantsAst, 'DEMO_CONTENT');
+check('demoMode.js declares a top-level DEMO_CONTENT const', Boolean(demoContentDecl), true);
+
+const dcInit = demoContentDecl?.init;
+check('DEMO_CONTENT is a || disjunction', dcInit?.type === 'LogicalExpression' && dcInit.operator === '||', true);
+check('DEMO_CONTENT left side is __DEV__',
+  dcInit?.type === 'LogicalExpression' && dcInit.left?.type === 'Identifier' ? dcInit.left.name : null,
+  '__DEV__');
+check('DEMO_CONTENT right side is DEMO_MODE',
+  dcInit?.type === 'LogicalExpression' && dcInit.right?.type === 'Identifier' ? dcInit.right.name : null,
+  'DEMO_MODE');
+
+check('no destructured `const { X } = process.env` in demoMode.js',
+  destructuredProcessEnvIn(constantsAst), []);
+
+// --- App.js: consumes the constant, never re-derives it -------------------
+// The circular-import pressure runs the other way — a screen needing
+// DEMO_MODE and importing App.js — but the regression this catches is
+// someone "fixing" a demo bug by re-hardcoding `const DEMO_MODE = true` in
+// App.js, which would shadow the derivation for the two routing behaviours.
+const appSrc = await readFile(path.join(ROOT, 'App.js'), 'utf8');
+const appAst = parse(appSrc, { sourceType: 'module', plugins: ['jsx'] });
+
+const demoModeImport = appAst.program.body.find(
+  (stmt) =>
+    stmt.type === 'ImportDeclaration' &&
+    stmt.source.value === './src/constants/demoMode' &&
+    stmt.specifiers.some(
+      (sp) => sp.type === 'ImportSpecifier' && sp.imported?.name === 'DEMO_MODE',
+    ),
+);
+check('App.js imports DEMO_MODE from ./src/constants/demoMode', Boolean(demoModeImport), true);
+check('App.js declares no top-level DEMO_MODE of its own (line, or null)',
+  topLevelConst(appAst, 'DEMO_MODE')?.loc.start.line ?? null, null);
+
+check('no destructured `const { X } = process.env` in App.js',
+  destructuredProcessEnvIn(appAst), []);
 
 // --- eas.json: read the file that owns the per-profile values -------------
 const eas = JSON.parse(await readFile(path.join(ROOT, 'eas.json'), 'utf8'));
