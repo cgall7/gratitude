@@ -147,22 +147,26 @@ const pick = (rng, [lo, hi]) => lerp(lo, hi, rng());
 // the choreography hand-off — no engine change should be needed to accept a
 // timing table.
 export const STUB_GRAMMAR = {
-  // Airborne : at-rest, per the scope's ~1:2. `perchMs` and `hoverMs` are
-  // sampled per beat, so this is a ratio in expectation, not per cycle — and
-  // it is NOT a free choice. The ratio is an output of three things the
-  // grammar does not control on its own: the dwell, the dart speed, and how
-  // far apart the host's anchors are. Simulated over 60s against five anchors
-  // spanning a 393x852 screen, at `DART_SPEED_RATIO` 1:
+  // Airborne : at-rest, per the scope's ~1:2 — stated as the TARGET, because
+  // it is the design intent and the dwell is only its consequence.
   //
-  //     dwell x1.0  ->  41.7% airborne  (1:1.40)
-  //     dwell x1.3  ->  32.8% airborne  (1:2.05)   <- these values
-  //     dwell x1.9  ->  28.4% airborne  (1:2.53)
+  // R107: the first draft of this grammar named `perchMs` directly and put
+  // the ratio in a comment, and the comment was a table reading "dwell x1.3 ->
+  // 32.8% airborne" with no units on the multiplier. Deezine read x1.3 as an
+  // absolute and wrote 1700-2200ms, which measures at 78.2% airborne against a
+  // 40% ceiling. That is not a misreading so much as a badly shaped interface:
+  // a literal dwell is only correct for the anchors and dart speed it was
+  // solved against, and NOTHING in the grammar recorded which those were.
   //
-  // So a storyboard that widens the anchor spread, or speeds the dart up,
-  // moves this ratio and the dwells have to move with it. That coupling is
-  // the reason the sequencer publishes the simulation rather than asserting
-  // a number: `scripts/simulate-bee-flight.mjs` re-derives it on demand.
-  perchMs: [1800, 4400],
+  // So the dwell is no longer a value in this table. `perchRangeFor` solves it
+  // from the anchors the host actually declared, and the fraction below is
+  // what a storyboard sets. Widen the anchor spread and the dwell follows on
+  // its own; the ratio cannot silently go stale, because it is the input.
+  airborneTarget: 0.328,
+  // How far either side of the solved mean a dwell is sampled. Variation for
+  // its own sake — the ratio is preserved in expectation because the spread is
+  // symmetric, so this is free.
+  perchSpread: 0.42,
   hoverMs: [900, 1950],
   // How often a landing is followed by a look-around before the rest.
   hoverChance: 0.6,
@@ -199,6 +203,88 @@ export const chooseAnchor = (anchors, recent, rng, depth) => {
   const eligible = anchors.filter((a) => !blocked.has(a.key));
   const pool = eligible.length > 0 ? eligible : anchors;
   return pool[Math.min(pool.length - 1, Math.floor(rng() * pool.length))];
+};
+
+// --- the dwell, solved rather than typed ---------------------------------
+//
+// The airborne fraction is an output of three things: the dwell, the dart
+// speed, and how far apart the host's anchors are. Two of those three are not
+// the grammar's to choose — the anchors belong to the screen and the dart
+// speed is §28.5's — so the only one left is the dwell, and that makes it the
+// dependent variable. Writing it as a literal is writing down the answer to a
+// sum whose other terms are on a different file.
+//
+// Estimator, and named as one: the mean over ordered pairs is what the bee
+// flies only if he chooses uniformly, and `chooseAnchor` blocks the last
+// `antiRepeatDepth` keys, which biases him towards the far ones. The realised
+// fraction therefore runs slightly ABOVE the target and only the simulation
+// knows by how much (`scripts/simulate-bee-flight.mjs` reports it). This is
+// the number to plan anchors with, not the number to assert in a gate.
+export const meanHopPx = (anchors) => {
+  if (!anchors || anchors.length < 2) return null;
+  let total = 0;
+  let n = 0;
+  for (const a of anchors) {
+    for (const b of anchors) {
+      if (a === b) continue;
+      total += Math.hypot(b.x - a.x, b.y - a.y);
+      n += 1;
+    }
+  }
+  return n > 0 ? total / n : null;
+};
+
+// airborne / (airborne + dwell) = target  =>  dwell = airborne/target - airborne.
+// A hover only happens `hoverChance` of the time, so it enters at its expected
+// value; every beat here is sampled per cycle, so the whole identity holds in
+// expectation and not per lap. Returns null rather than a number for a target
+// outside (0, 1): a bee that is airborne 100% of the time is the defect this
+// module was written to remove, and 0% is not a bee.
+export const dwellMsForAirborne = ({ airborneTarget, sortieMs, hoverChance, hoverMs }) => {
+  if (!(airborneTarget > 0 && airborneTarget < 1)) return null;
+  const airborne = sortieMs + hoverChance * ((hoverMs[0] + hoverMs[1]) / 2);
+  return airborne / airborneTarget - airborne;
+};
+
+/**
+ * The dwell range for a given set of declared anchors.
+ *
+ * `sortieDurationFor` is injected for the reason every collaborator in this
+ * file is: a sortie's duration is `buildPollinationPlan`'s to compute, and
+ * importing it would break the gate that samples this module. The call site
+ * passes the same builder it flies with, so the dwell is solved against the
+ * real plan geometry — staging offset, settle and all — rather than against a
+ * second copy of the arithmetic that could drift from it.
+ */
+export const perchRangeFor = ({ anchors, grammar, sortieDurationFor }) => {
+  const hop = meanHopPx(anchors);
+  if (hop === null) return null;
+  const mean = dwellMsForAirborne({
+    airborneTarget: grammar.airborneTarget,
+    sortieMs: sortieDurationFor(hop),
+    hoverChance: grammar.hoverChance,
+    hoverMs: grammar.hoverMs,
+  });
+  if (mean === null) return null;
+  return [mean * (1 - grammar.perchSpread), mean * (1 + grammar.perchSpread)];
+};
+
+// `nextBeat` reads `grammar.perchMs`, so the solve happens once when the host's
+// anchors change rather than per beat.
+//
+// **Null is the answer for fewer than two anchors, and it is not a guard.**
+// With one anchor there is nowhere to sortie TO: `chooseAnchor` returns the
+// only one there is, the bee flies a zero-length flight to where he already
+// is, and the sequencer degenerates into a bob at a single point — worse than
+// the loop it replaces. There is no dwell that repairs that, so there is no
+// dwell to invent, and a fallback literal here would be the module answering a
+// question it cannot answer. The call site reads null as "do not sequence",
+// which for a screen that declared nothing worth flying to is the correct
+// behaviour rather than a degraded one.
+export const resolveGrammar = ({ grammar, anchors, sortieDurationFor }) => {
+  if (grammar.perchMs) return grammar;
+  const perchMs = perchRangeFor({ anchors, grammar, sortieDurationFor });
+  return perchMs ? { ...grammar, perchMs } : null;
 };
 
 /**

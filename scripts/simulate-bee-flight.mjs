@@ -78,7 +78,6 @@ check('monotone over the domain', mono);
 // ---------------------------------------------------------------- 3
 console.log('\n3. Sixty seconds of idle, simulated (393x852, size 44)');
 const W = 393, H = 852, SIZE = 44, BODY = WIDTH_FRACTION * SIZE;
-const G = seq.STUB_GRAMMAR;
 const builders = { buildPollinationPlan: flight.buildPollinationPlan, composeSegmentEasing: flight.composeSegmentEasing };
 const easings = { dart: inOut, settle: outCubic, hover: inOut };
 // Stub anchors — Deezine's storyboard replaces these with real declarations.
@@ -88,12 +87,28 @@ const anchors = [
   { key: 'streak',  x: 200, y: 470 },
 ];
 
-const runSession = (seed, forMs, GG = G) => {
+// What a hop of `hopPx` costs, measured through the SAME builder the flight
+// uses — staging offset, settle and all. `perchRangeFor` takes this rather than
+// importing it (the gate loads these modules from a `data:` URL, where a
+// relative specifier cannot resolve).
+const sortieDurationFor = (hopPx) =>
+  flight.buildPollinationPlan({
+    from: { x: 0, y: 0 }, target: { x: hopPx, y: 0 }, ringStep: Infinity,
+    bodyLengthPx: BODY, width: W, height: H,
+    approachSpeedPxS: seq.referenceSpeedPxS(W, H) * seq.DART_SPEED_RATIO,
+    easeApproach: easings.dart, easeDescent: easings.settle,
+  }).durationMs;
+
+const G = seq.resolveGrammar({ grammar: seq.STUB_GRAMMAR, anchors, sortieDurationFor });
+console.log(`   mean hop ${seq.meanHopPx(anchors).toFixed(1)}px -> sortie ${sortieDurationFor(seq.meanHopPx(anchors)).toFixed(0)}ms ` +
+  `-> solved dwell ${G.perchMs.map(v => Math.round(v)).join('-')}ms for a ${(seq.STUB_GRAMMAR.airborneTarget * 100).toFixed(1)}% target`);
+
+const runSession = (seed, forMs, GG = G, AA = anchors) => {
   const rng = seq.makeRng(seed);
-  let state = 'perch', recent = [], at = { x: anchors[0].x, y: anchors[0].y }, clock = 0;
+  let state = 'perch', recent = [], at = { x: AA[0].x, y: AA[0].y }, clock = 0;
   const beats = [];
   while (clock < forMs) {
-    const beat = seq.nextBeat({ state, recent, anchors, rng, grammar: GG });
+    const beat = seq.nextBeat({ state, recent, anchors: AA, rng, grammar: GG });
     const plan = seq.resolveBeat({ beat, from: at, width: W, height: H, bodyLengthPx: BODY, grammar: GG, easings, builders, heldFacing: 1 });
     if (!plan) break;
     if (beat.state === 'sortie') { at = { ...plan.landing }; recent = [...recent, beat.anchor.key].slice(-8); }
@@ -106,11 +121,44 @@ const runSession = (seed, forMs, GG = G) => {
 const beats = runSession(0xC0FFEE, 60000);
 const totalMs = beats.reduce((a, b) => a + b.ms, 0);
 const byState = (s) => beats.filter(b => b.state === s).reduce((a, b) => a + b.ms, 0);
-const airborne = byState('sortie'), atRest = byState('hover') + byState('perch');
+// A HOVER IS AIRBORNE. It reads as at-rest because the bee does not go
+// anywhere, but `buildHoverPlan` sets `flutter: true` and §19.5 puts wing
+// motion on the airborne path — so a hovering bee is a flying bee, and Colin's
+// complaint ("he never rests") is not answered by one that bobs instead.
+//
+// This line counted it as rest while `dwellMsForAirborne` counts it as flight,
+// which is two quantities under one name and is why the first run of the solver
+// landed at 25.7% against a 32.8% target: the solver was paying for a beat this
+// sum was not charging for. Only PERCH is rest.
+const airborne = byState('sortie') + byState('hover'), atRest = byState('perch');
 console.log(`   ${beats.length} beats over ${(totalMs/1000).toFixed(1)}s: ` +
   `${beats.filter(b=>b.state==='sortie').length} sorties, ${beats.filter(b=>b.state==='hover').length} hovers, ${beats.filter(b=>b.state==='perch').length} perches`);
-check(`airborne fraction <= 40%`, airborne/totalMs <= 0.40,
-      `${(airborne/totalMs*100).toFixed(1)}% airborne, ${(atRest/totalMs*100).toFixed(1)}% at rest (ratio 1:${(atRest/airborne).toFixed(2)})`);
+// The ceiling is asserted over 24 seeds, not this one. A 60s session is ~7
+// sorties; at that count the single-seed figure swings several points either
+// side and this seed happens to land at 39.0% — under the ceiling, but only by
+// a draw. A check that can flip colour on the seed is not checking the
+// property it names.
+let sumAir = 0, sumTot = 0, realisedHop = 0, hopN = 0;
+for (let s = 0; s < 24; s += 1) {
+  const bs = runSession(0x5EED + s * 7919, 60000);
+  sumTot += bs.reduce((a,b)=>a+b.ms,0);
+  sumAir += bs.filter(b=>b.state==='sortie'||b.state==='hover').reduce((a,b)=>a+b.ms,0);
+  let prev = anchors[0];
+  for (const b of bs) if (b.state === 'sortie') {
+    const to = anchors.find(a => a.key === b.key);
+    realisedHop += Math.hypot(to.x - prev.x, to.y - prev.y); hopN += 1; prev = to;
+  }
+}
+console.log(`   over 24 seeds: ${(sumAir/sumTot*100).toFixed(1)}% airborne (this seed ${(airborne/totalMs*100).toFixed(1)}%), ` +
+  `${(atRest/totalMs*100).toFixed(1)}% at rest this seed (ratio 1:${(atRest/airborne).toFixed(2)})`);
+check(`airborne fraction <= 40% over 24 seeds`, sumAir/sumTot <= 0.40,
+      `${(sumAir/sumTot*100).toFixed(1)}% mean`);
+// Why the realised fraction sits ~2pp above the solved target, measured rather
+// than asserted: `chooseAnchor` blocks the last `antiRepeatDepth` keys, which
+// pushes him towards the far anchors, so the hops he actually flies are longer
+// than the mean over all pairs that `perchRangeFor` solved against.
+console.log(`   realised mean hop ${(realisedHop/hopN).toFixed(1)}px vs meanHopPx estimate ${seq.meanHopPx(anchors).toFixed(1)}px ` +
+  `(+${((realisedHop/hopN)/seq.meanHopPx(anchors)*100-100).toFixed(1)}% — anti-repeat biases him to the far ones)`);
 
 // no anchor twice in a row, and no repeated window of 3
 const keys = beats.filter(b=>b.key).map(b=>b.key);
@@ -166,13 +214,32 @@ console.log(`         (the settle peaks at ${settlePeak.toFixed(0)} px/s and alw
 console.log(`          so §28.5's 30.07pt-in-160ms gesture is 188 px/s MEAN and ~564 px/s peak. Ratified, unchanged, not travel.)`);
 
 // ---------------------------------------------------------------- 5
-console.log('\n4b. What dwell hits the scope\'s 1:2?');
-for (const scale of [1.0, 1.3, 1.6, 1.9, 2.2]) {
-  const G2 = { ...G, perchMs: G.perchMs.map(v=>v*scale), hoverMs: G.hoverMs.map(v=>v*scale) };
-  const bs = runSession(0xC0FFEE, 60000, G2);
-  const tot = bs.reduce((a,b)=>a+b.ms,0);
-  const air = bs.filter(b=>b.state==='sortie').reduce((a,b)=>a+b.ms,0);
-  console.log(`   dwell x${scale.toFixed(1)}  perch ${G2.perchMs.map(v=>Math.round(v)).join('-')}ms  hover ${G2.hoverMs.map(v=>Math.round(v)).join('-')}ms  ->  airborne ${(air/tot*100).toFixed(1)}%  (1:${((tot-air)/air).toFixed(2)})`);
+// R107 — the dwell is no longer a value to sweep, so this sweeps the thing that
+// MOVES it. Anchor spacing and dwell are the same knob: place the perches
+// further apart and the sorties get longer, and the rest has to grow to pay for
+// them. The point of the table is that the ratio holds anyway, because the
+// dwell is solved from the anchors rather than typed next to them.
+//
+// Scaling is about the centroid, so the shape of the arrangement is fixed and
+// only its extent moves — otherwise this would be measuring two things at once.
+console.log('\n4b. Anchor spacing and dwell are one knob (the target is 32.8%)');
+const cx = anchors.reduce((a, p) => a + p.x, 0) / anchors.length;
+const cy = anchors.reduce((a, p) => a + p.y, 0) / anchors.length;
+// Averaged over 24 seeds. One 60s session is ~7 sorties, which is far too few
+// to read a percentage off — the first draft of this table sampled a single
+// seed and showed the fraction FALLING as the anchors moved apart, which is
+// noise wearing the shape of a result.
+for (const spread of [0.4, 0.7, 1.0, 1.4]) {
+  const AA = anchors.map((p) => ({ ...p, x: cx + (p.x - cx) * spread, y: cy + (p.y - cy) * spread }));
+  const G2 = seq.resolveGrammar({ grammar: seq.STUB_GRAMMAR, anchors: AA, sortieDurationFor });
+  let tot = 0, air = 0;
+  for (let s = 0; s < 24; s += 1) {
+    const bs = runSession(0x5EED + s * 7919, 60000, G2, AA);
+    tot += bs.reduce((a,b)=>a+b.ms,0);
+    air += bs.filter(b=>b.state==='sortie'||b.state==='hover').reduce((a,b)=>a+b.ms,0);
+  }
+  console.log(`   spread x${spread.toFixed(1)}  mean hop ${seq.meanHopPx(AA).toFixed(0).padStart(3)}px  ->  solved dwell ` +
+    `${G2.perchMs.map(v=>Math.round(v)).join('-').padEnd(11)}ms  ->  airborne ${(air/tot*100).toFixed(1)}%  (1:${((tot-air)/air).toFixed(2)})`);
 }
 
 console.log('\n5. Two sessions with different seeds do not agree');
