@@ -107,6 +107,27 @@ const check = (label, got, want) => {
 
 // --- A. Collect the copy -----------------------------------------------
 
+// THE COLLECTOR'S POSITION VOCABULARY, declared once and used twice: `push`
+// refuses a position that is not in it, and section A derives one control per
+// member from it. Neither half is decoration.
+//
+// The first draft named the controls in a hand-written list of four, and the
+// collector emitted five. Sage measured the gap (2026-08-17): disabling
+// `alert` collection dropped 34 strings — 7.5% of the corpus — and every
+// assertion stayed green, over the one position that holds
+// 'Demo: onboarding flow'. A gate arguing that a CANNOT TELL must not look
+// like a clean pass had a clean pass sitting exactly there.
+//
+// Adding `'alert'` to that list would have fixed the count and kept the
+// shape: the sixth position added in November lands in the same hole. So the
+// two sets are tied together instead. A position cannot exist without a
+// control, and a control cannot exist without a position — one goes red
+// either way. This is section A's own argument applied to section A.
+const POSITIONS = ['jsx-text', 'jsx-expr', 'prop', 'alert', 'constant'];
+const POSITION_SET = new Set(POSITIONS);
+const emittedPositions = new Set();
+const undeclaredPositions = new Set();
+
 const TEXT_ATTRS = new Set([
   'placeholder',
   'accessibilityLabel',
@@ -125,6 +146,11 @@ function collect(src, file) {
   const ast = parse(src, { sourceType: 'module', plugins: ['jsx', 'typescript'] });
 
   const push = (value, node, position) => {
+    // Recorded before the emptiness test: a position whose every string
+    // happens to be blank has still been collected FROM, and section A must
+    // be able to tell that apart from a position nothing reached.
+    emittedPositions.add(position);
+    if (!POSITION_SET.has(position)) undeclaredPositions.add(position);
     const v = String(value ?? '').replace(/\s+/g, ' ').trim();
     if (v) out.push({ file, line: node.loc?.start.line, position, text: v });
   };
@@ -234,8 +260,11 @@ check('every file parsed', parseErrors, []);
 check('copy strings collected', copy.length > 0, true);
 
 // Per-position, because the collector can lose one position and keep the
-// others — and the total would still look healthy.
-for (const position of ['jsx-text', 'jsx-expr', 'prop', 'constant']) {
+// others — and the total would still look healthy. Derived from POSITIONS,
+// never hand-listed: see the note beside it for the 34 strings that walked
+// out of a hand-listed version of this loop.
+check('every position the collector emits is declared', [...undeclaredPositions], []);
+for (const position of POSITIONS) {
   check(
     `position "${position}" is represented in the collected set`,
     copy.some((c) => c.position === position),
