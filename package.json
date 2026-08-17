@@ -31,7 +31,8 @@
     "check:copy-rules": "node scripts/check-copy-rules.mjs",
     "check:private-hives-seal": "node scripts/check-private-hives-seal.mjs",
     "test": "node scripts/run-checks.mjs",
-    "deploy:migrations": "bash scripts/deploy-migrations.sh"
+    "deploy:migrations": "bash scripts/deploy-migrations.sh",
+    "check:legal-consent-gate": "node scripts/check-legal-consent-gate.mjs"
   },
   "dependencies": {
     "@expo-google-fonts/dancing-script": "^0.4.2",
