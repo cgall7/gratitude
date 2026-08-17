@@ -34,6 +34,22 @@
 // So this gate asserts the derivation is a `===` comparison against the
 // string `'true'` on a direct member read, not merely that the words
 // "DEMO_MODE" and "process.env" both appear in the file.
+//
+// ONE MORE RESTRICTION — NOT A TRAP, A HOUSE STYLE (Sage, same thread)
+//
+// `isProcessEnvMember` also reds `process.env['EXPO_PUBLIC_DEMO_MODE']`
+// (computed, string-literal property). At SDK 57, babel-preset-expo's
+// `toMemberProperty` accepts both an Identifier and a StringLiteral, so that
+// form *is* inlined correctly at runtime — reding it isn't catching a bug,
+// it's this gate preferring one correct spelling over another. Kept
+// deliberately: the failure direction is red-on-correct-code, never
+// green-on-a-trap, and loosening it buys nothing but risk. If this ever
+// reds a legitimate computed read, that's this note, not a gate defect.
+//
+// --- .env.example: the file a human actually opens ------------------------
+// `eas.json` and this script both read the value; neither is where a
+// developer looks to find the switch. Asserted below so the flag can't go
+// undiscoverable again the way it did between 73b29f8 and this fix.
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readFile } from 'node:fs/promises';
@@ -124,6 +140,11 @@ check('preview profile sets EXPO_PUBLIC_DEMO_MODE "true"',
   eas.build?.preview?.env?.EXPO_PUBLIC_DEMO_MODE, 'true');
 check('production profile sets EXPO_PUBLIC_DEMO_MODE "false"',
   eas.build?.production?.env?.EXPO_PUBLIC_DEMO_MODE, 'false');
+
+// --- .env.example lists the var --------------------------------------------
+const envExample = await readFile(path.join(ROOT, '.env.example'), 'utf8');
+check('.env.example lists EXPO_PUBLIC_DEMO_MODE',
+  /^EXPO_PUBLIC_DEMO_MODE=/m.test(envExample), true);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
