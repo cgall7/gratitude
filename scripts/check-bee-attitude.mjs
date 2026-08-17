@@ -2867,6 +2867,260 @@ let tickPropName = null;
   }
 }
 
+// =========================================================================
+// H. §32 — the anti-repeat rule preserves a CHOICE, not a destination
+// =========================================================================
+//
+// R121. `flightSequencer.js`'s own comment rejects "a shuffle of the full
+// set, which would guarantee every anchor is visited once per cycle and
+// reintroduce a period equal to the anchor count" — and at `n = depth + 1`
+// the implementation WAS that shuffle, because blocking `n - 1` keys leaves a
+// pool of exactly one. The rule was asserted only by that comment, which is
+// how it stayed true in prose and false in code for a day.
+//
+// So this section asserts it as arithmetic, and it samples the function
+// rather than reading the clamp: R81 — a sequencer is a generator of
+// flights, so the only honest way to gate it is to sweep its seeds. Every
+// row below runs the IMPORTED `chooseAnchor` and looks at what came out.
+// Rewriting the clamp expression to something equivalent leaves every row
+// green, which is the point; rewriting it to something weaker does not.
+//
+// THE BOUNDARY IS DERIVED, NOT LISTED. H4 and H5 do not assert "3 anchors
+// work" — they measure where the behaviour changes and check that against
+// arithmetic. A hardcoded pass-list has the hole it closes (R85(f)): raise
+// `antiRepeatDepth` and a list of cases would keep passing while the
+// invariant moved underneath it.
+//
+// Writing them that way immediately falsified the sentence they were written
+// from. The first draft of H4 asserted the aperiodicity threshold is
+// `depth + 2`, which is the invariant as stated in the module — and it went
+// red at `depth 2: expected 4, observed 3`. That is the clamp working: it
+// gives up DEPTH to keep a CHOICE, so aperiodicity arrives at three anchors
+// for every depth, and `n >= depth + 2` is not the threshold for a choice —
+// it is the threshold above which the requested depth is actually honoured.
+// Two properties, so two rows. The prose that survived the correction is now
+// H5's, and the module's own comment moved with it.
+//
+// WHAT THIS SECTION CANNOT DO, said because a silent gap reads like a clean
+// one. `flightSequencer.js` still has no importer in `src/`, so no host
+// declares an anchor set and there is nothing to check the invariant
+// AGAINST. The row that matters most — "every render state a host declares
+// supplies at least `antiRepeatDepth + 2` anchors" — cannot be written until
+// a host declares one, and it is the row that turns this from a property of
+// the engine into a property of the app. Sage's §4 rule, arriving as a
+// missing row rather than as a mutation: A GATE ASSERTS A PROPERTY OF
+// WHATEVER IT CAN IMPORT, AND THE DEFECT LIVES AT THE CALL SITE IT COULDN'T.
+{
+  const seqSource = await readFile(path.join(ROOT, 'src/components/flightSequencer.js'), 'utf8');
+  const seq = await import(
+    `data:text/javascript;base64,${Buffer.from(seqSource).toString('base64')}`
+  );
+  const { chooseAnchor, makeRng, STUB_GRAMMAR } = seq;
+  // The depth under test comes from the module, so raising `antiRepeatDepth`
+  // moves the boundary H4 asserts instead of leaving it pinned to a literal.
+  const SHIPPED_DEPTH = STUB_GRAMMAR.antiRepeatDepth;
+  const DEPTHS = [...new Set([1, 2, 3, SHIPPED_DEPTH])].sort((a, b) => a - b);
+  const COUNTS = [2, 3, 4, 5, 6];
+  const SEEDS = 256;
+  const STEPS = 60;
+
+  const anchorsOf = (n) =>
+    Array.from({ length: n }, (_, i) => ({ key: String.fromCharCode(65 + i), x: i * 100, y: 0 }));
+
+  // Walk exactly as `nextBeat` will: one `recent` list, appended and trimmed.
+  const walk = (n, depth, seed) => {
+    const anchors = anchorsOf(n);
+    const rng = makeRng(seed);
+    const recent = [];
+    const out = [];
+    for (let i = 0; i < STEPS; i += 1) {
+      const a = chooseAnchor(anchors, recent, rng, depth);
+      if (!a) return null;
+      out.push(a.key);
+      recent.push(a.key);
+      if (recent.length > 8) recent.shift();
+    }
+    return out.join('');
+  };
+
+  // Smallest p for which the post-warmup tail repeats with period p, or null.
+  // Capped at 12: a period longer than the anchor count is not a period a
+  // viewer could see, and every count under test is well below it.
+  const periodOf = (s) => {
+    const tail = s.slice(20);
+    for (let p = 1; p <= 12; p += 1) {
+      let holds = true;
+      for (let i = 0; i + p < tail.length; i += 1) {
+        if (tail[i] !== tail[i + p]) {
+          holds = false;
+          break;
+        }
+      }
+      if (holds) return p;
+    }
+    return null;
+  };
+
+  // Shortest gap between two visits of the same anchor. This is the depth the
+  // run ACTUALLY enforced, read off the output — `minReturn - 1` keys were
+  // blocked, whatever the clamp expression says.
+  const minReturnGap = (s) => {
+    const last = new Map();
+    let min = Infinity;
+    for (let i = 0; i < s.length; i += 1) {
+      if (last.has(s[i])) min = Math.min(min, i - last.get(s[i]));
+      last.set(s[i], i);
+    }
+    return min;
+  };
+
+  const sweep = new Map(); // `${n}:${depth}` -> { periods:Set, tails:Set, selfRepeats, minGap }
+  for (const n of COUNTS) {
+    for (const depth of DEPTHS) {
+      const periods = new Set();
+      const tails = new Set();
+      let selfRepeats = 0;
+      let minGap = Infinity;
+      for (let seed = 1; seed <= SEEDS; seed += 1) {
+        const s = walk(n, depth, seed * 7919);
+        for (let i = 1; i < s.length; i += 1) if (s[i] === s[i - 1]) selfRepeats += 1;
+        periods.add(periodOf(s));
+        tails.add(s.slice(-12));
+        minGap = Math.min(minGap, minReturnGap(s));
+      }
+      sweep.set(`${n}:${depth}`, { periods, tails, selfRepeats, minGap });
+    }
+  }
+  const cases = COUNTS.length * DEPTHS.length * SEEDS;
+
+  // --- H1: no anchor is ever chosen twice in a row -----------------------
+  //
+  // The row the floor of 1 exists for. `Math.min(depth, n - 2)` is 0 at two
+  // anchors and `[..].slice(-0)` returns the WHOLE array, so an unfloored
+  // clamp blocks everything, empties `eligible`, takes the `: anchors`
+  // fallback and picks the incumbent 48.2% of the time — a dart, a descent
+  // and a settle flown to the point the bee is already on.
+  {
+    const NAME = 'H1 §32 chooseAnchor never returns the incumbent, swept';
+    const guilty = [];
+    for (const [key, r] of sweep) if (r.selfRepeats > 0) guilty.push(`${key} (${r.selfRepeats})`);
+    if (guilty.length) {
+      bad(
+        NAME,
+        `n:depth pairs whose sequence repeats an anchor back-to-back — ${guilty.join(', ')}. ` +
+          'A zero-length sortie flies the whole break-off gesture to where the bee already is. ' +
+          'If the clamp was just changed, check the floor: `slice(-0)` returns the whole array.'
+      );
+    } else {
+      ok(`${NAME} — ${cases} sequences x ${STEPS} beats, n ${COUNTS.join('/')} x depth ${DEPTHS.join('/')}, zero back-to-back`);
+    }
+  }
+
+  // --- H2: above the invariant, the sequence is aperiodic ----------------
+  {
+    const NAME = 'H2 §32 no observable period at three anchors or more, any depth';
+    const guilty = [];
+    for (const n of COUNTS) {
+      for (const depth of DEPTHS) {
+        if (n < 3) continue; // two anchors is arithmetic — H3 owns it
+        const { periods } = sweep.get(`${n}:${depth}`);
+        const seen = [...periods].filter((p) => p !== null);
+        if (seen.length) guilty.push(`n=${n} depth=${depth} -> period ${seen.join('/')}`);
+      }
+    }
+    if (guilty.length) {
+      bad(
+        NAME,
+        `the clamp should leave a pool of at least two at every n >= 3, whatever the depth asks for, but the tail repeats: ${guilty.join(', ')}`
+      );
+    } else {
+      const distinct = [...sweep]
+        .filter(([k]) => Number(k.split(':')[0]) >= 3)
+        .reduce((min, [, r]) => Math.min(min, r.tails.size), Infinity);
+      ok(`${NAME} — every (n, depth) with n >= 3 aperiodic over ${SEEDS} seeds; worst case still ${distinct} distinct 12-tails`);
+    }
+  }
+
+  // --- H3: below the invariant, the degeneracy is DECLARED ---------------
+  //
+  // Stated positively, so silence means one thing. Two anchors with no
+  // self-repeat is forced alternation — arithmetic, not a defect, and not
+  // something the engine can repair. Asserting the period IS 2 means a
+  // change that "fixes" it (by reintroducing self-repeats, the only way out)
+  // fails here as well as at H1, instead of quietly looking like progress.
+  {
+    const NAME = 'H3 §32 two anchors alternate, and that is the documented floor';
+    const { periods, tails } = sweep.get(`2:${SHIPPED_DEPTH}`);
+    const seen = [...periods];
+    if (seen.length === 1 && seen[0] === 2 && tails.size === 2) {
+      ok(`${NAME} — n=2 depth=${SHIPPED_DEPTH}: period 2 on all ${SEEDS} seeds, ${tails.size} distinct tails (the two phases). A host declaring two anchors in a render state has declared a screensaver; the answer is on the host.`);
+    } else {
+      bad(
+        NAME,
+        `expected period 2 and exactly 2 distinct tails at two anchors, got periods [${seen.map((p) => (p === null ? 'none' : p)).join(', ')}] and ${tails.size} tails. ` +
+          'Aperiodic here would mean the incumbent became eligible again — see H1.'
+      );
+    }
+  }
+
+  // --- H4: the choice threshold is 3, and it does NOT move with depth ----
+  //
+  // Derived rather than listed: for each depth, find the smallest anchor
+  // count at which periodicity disappears. It is 3 for every depth, and that
+  // independence IS the clamp — the requested depth is the thing that gives
+  // way, never the pool. Raise `antiRepeatDepth` and this row must not move.
+  {
+    const NAME = 'H4 §32 the aperiodicity threshold is 3 and is independent of depth';
+    const guilty = [];
+    const found = [];
+    for (const depth of DEPTHS) {
+      const first = COUNTS.find((n) => [...sweep.get(`${n}:${depth}`).periods].every((p) => p === null));
+      found.push(`depth ${depth} -> ${first ?? 'never'}`);
+      if (first !== 3) {
+        guilty.push(
+          `depth ${depth}: expected 3, observed ${first ?? `no aperiodic count in ${COUNTS.join('/')}`}`
+        );
+      }
+    }
+    if (guilty.length) {
+      bad(
+        NAME,
+        `${guilty.join('; ')}. A threshold that tracks depth means the clamp is honouring the requested depth at the pool's expense — the pre-R121 behaviour.`
+      );
+    } else {
+      ok(`${NAME} — ${found.join(', ')}; depth gives way, the pool does not`);
+    }
+  }
+
+  // --- H5: the requested depth IS honoured wherever it can be ------------
+  //
+  // The other half, and the one the module's invariant is actually about.
+  // The enforced depth is read off the output — the shortest gap between two
+  // visits of the same anchor is `enforced + 1` — and compared against the
+  // clamp's arithmetic. So `n >= antiRepeatDepth + 2` earns its place as the
+  // condition under which a host gets the anti-repeat it asked for, rather
+  // than as a claim about whether the bee has anywhere to go.
+  {
+    const NAME = 'H5 §32 enforced anti-repeat depth = max(1, min(depth, n-2)), measured';
+    const guilty = [];
+    for (const n of COUNTS) {
+      for (const depth of DEPTHS) {
+        const expected = Math.max(1, Math.min(depth, n - 2));
+        const observed = sweep.get(`${n}:${depth}`).minGap - 1;
+        if (observed !== expected) {
+          guilty.push(`n=${n} depth=${depth}: asked ${depth}, arithmetic says ${expected}, observed ${observed}`);
+        }
+      }
+    }
+    if (guilty.length) {
+      bad(NAME, guilty.join('; '));
+    } else {
+      const full = COUNTS.filter((n) => n >= SHIPPED_DEPTH + 2);
+      ok(`${NAME} — ${cases} sequences agree; at the shipped depth ${SHIPPED_DEPTH} the full depth is honoured from ${full[0]} anchors up (n >= antiRepeatDepth + 2), and traded down below that`);
+    }
+  }
+}
+
 console.log(`\ncheck-bee-attitude: ${pass} passed, ${failures.length} failed`);
 if (failures.length) {
   failures.forEach((f) => console.log(`  - ${f}`));
