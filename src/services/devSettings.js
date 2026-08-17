@@ -32,6 +32,18 @@ export const DevSettings = {
     // future reader that doesn't route through this getter. Skip the write
     // when value is null (never set): that's the normal fresh-install case,
     // not a value to correct.
+    //
+    // This setItem is FLOW_KEY's only UNGUARDED writer, and its range is
+    // exactly {'B'}, by construction (Sage, thread 4510c5c8): resolved can
+    // only be 'C' when value is already 'C', and then value === resolved
+    // and the write doesn't fire. That property — no write from a
+    // production build can persist a demo flow — lives in THIS line, not
+    // in the guarded setter below; editing the resolve or this condition
+    // can break it without touching any guarded function. And keep the two
+    // roles separate: the DEMO_CONTENT divert above is the fix, this heal
+    // is defence in depth — dropping the heal (say, if the tester
+    // round-trip cost of re-picking Flow C ever bites) leaves the defect
+    // fixed. Don't read this write as load-bearing.
     if (value !== null && value !== resolved) await AsyncStorage.setItem(FLOW_KEY, resolved);
     return resolved;
   },

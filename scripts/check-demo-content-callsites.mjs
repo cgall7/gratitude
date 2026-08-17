@@ -43,19 +43,38 @@
 //      function sits lexically beside the JSX, never inside the guard — so
 //      widening any string universe can't reach them, but the capability
 //      they invoke lives in a nameable module, and importing one is the
-//      structural marker. Paired with the capability guards IN
-//      setOnboardingFlow and seedDemoData (each no-ops unless
-//      DEMO_CONTENT), which this gate also asserts by name: deleting a
-//      capability guard deletes the file's flag reference too, so the same
-//      mutation reds both layers. Zero exemptions — that matters, because
-//      an exemption is where the next affordance hides.
+//      structural marker. Paired with the capability guards in the modules
+//      themselves, asserted two ways (Sage's read, thread 4510c5c8):
+//
+//        - services/devSettings is ENUMERATED, zero names: every method on
+//          the DevSettings export must consult DEMO_CONTENT in its body.
+//          Per-method is available here because the entire module is the
+//          demo toggle — every accessor of the demo-only persisted key is
+//          in scope by construction, so a clearOnboardingFlow written in
+//          November is covered without anyone registering it.
+//        - EntryStore.seedDemoData stays a NAMED entry: a demo capability
+//          living in a module that is NOT dev-only, so nothing structural
+//          marks it. That is the residual, stated.
+//
+//      Do NOT generalise the enumerator over DEV_ONLY_MODULES: measured
+//      (Sage), the general form is red-on-correct-code — buildDemoEntries
+//      in utils/demoSeed is a pure data builder, guarded at its caller
+//      EntryStore.seedDemoData, and shouldn't consult the flag; covering
+//      it would need an exemption, and an exemption is where the next
+//      affordance hides. Deleting a capability guard deletes the file's
+//      flag reference too, so the same mutation reds both layers.
 //
 //      Residuals, direction stated: (a) the MODULE list is itself named —
 //      a NEW dev-only fixture module ships uncovered until listed here;
 //      green-on-a-trap. (b) file-level "references the flag" is coarser
 //      than per-read guarding — a file with one legitimate reference and a
 //      second, unguarded affordance passes rule 3; rules 1/2 and the named
-//      entries are what stand in front of that.
+//      entries are what stand in front of that. This fired eleven minutes
+//      after it was written (getOnboardingFlow, Pixel's review), and the
+//      per-method enumerator below closes it for devSettings.js ONLY —
+//      per-method was available there because the module is small and
+//      wholly dev-only; Onboarding.js gets no such upgrade, so the
+//      residual stands for every other file.
 //
 //   4. NAMED, NOT ENUMERATED — these are a LIST, and a list has the hole
 //      an enumerator closes. A demo affordance that never says "demo",
@@ -219,18 +238,58 @@ for (const [label, pattern] of DEV_ONLY_MODULES) {
 }
 
 // --- Rule 3's depth layer: the capability guards themselves ---------------
-// setOnboardingFlow's write outlives the gesture (a persisted 'C' decides
-// the flow forever after); getOnboardingFlow is the read that decides what
-// renders, and the persisted value crosses build profiles (pitch and store
-// builds share a bundle id, so a demo build's 'C' arrives in a production
-// container this build never wrote — Pixel's review, thread 4510c5c8: one
-// persisted key is TWO capabilities, and guarding only the setter leaves
-// the read deciding the flow); seedDemoData is the seeding capability
-// behind any button. Each must consult the flag in its own body, so a
-// future caller with a neutral label is inert in a production build.
-// Pinned to the ObjectMethod shape on this tree — a refactor to another
-// shape reds this and extends it here, red-on-correct-code, never
-// green-on-a-trap.
+// One persisted key is TWO capabilities (Pixel's review, thread 4510c5c8):
+// setOnboardingFlow's write outlives the gesture, and getOnboardingFlow is
+// the read that decides what renders — the persisted value crosses build
+// profiles (pitch and store builds share a bundle id), so a demo build's
+// 'C' arrives in a production container this build never wrote. The gate's
+// first version asserted the setter BY NAME and never asked who reads —
+// the same what-to-look-at error one layer down. So devSettings is now
+// ENUMERATED, not listed (Sage's read): every method on the DevSettings
+// export must consult the flag, zero names, zero exemptions — a method
+// nobody has written yet is already covered. Pinned to the
+// `export const DevSettings = { ObjectMethod... }` shape on this tree — a
+// property that isn't an ObjectMethod, or a reshaped export, reds this and
+// extends it here: red-on-correct-code, never green-on-a-trap.
+const devSettingsMethods = [];
+const devSettingsNonMethodProps = [];
+{
+  const entry = parsed.find((p) => p.rel === 'src/services/devSettings.js');
+  if (entry) {
+    walkWithAncestry(entry.ast.program, (node) => {
+      if (
+        node.type !== 'VariableDeclarator' ||
+        node.id.type !== 'Identifier' ||
+        node.id.name !== 'DevSettings' ||
+        node.init?.type !== 'ObjectExpression'
+      ) return;
+      for (const prop of node.init.properties) {
+        if (prop.type === 'ObjectMethod' && !prop.computed && prop.key.type === 'Identifier') {
+          let found = false;
+          walkWithAncestry(prop.body, (n) => {
+            if (n.type === 'Identifier' && n.name === FLAG) found = true;
+          });
+          devSettingsMethods.push({ name: prop.key.name, line: prop.loc.start.line, guarded: found });
+        } else {
+          devSettingsNonMethodProps.push(`src/services/devSettings.js:${prop.loc.start.line} ${prop.type}`);
+        }
+      }
+    });
+  }
+}
+check('walker control: the DevSettings export enumerates at least one method',
+  devSettingsMethods.length > 0, true);
+check('every DevSettings property is a plain ObjectMethod (the pinned shape — reshape reds here, extend the enumerator)',
+  devSettingsNonMethodProps, []);
+check(`every method on the DevSettings export consults ${FLAG} in its body (enumerated, zero names)`,
+  devSettingsMethods.filter((m) => !m.guarded).map((m) => `src/services/devSettings.js:${m.line} ${m.name}`),
+  []);
+
+// seedDemoData is the seeding capability behind any button; it must consult
+// the flag in its own body so a future caller with a neutral label is inert
+// in a production build. NAMED, not enumerated — see the rule 3 header note
+// for why EntryStore gets no enumerator (the module is not dev-only, and
+// the general form over DEV_ONLY_MODULES reds on buildDemoEntries).
 const methodReferencesFlag = (rel, methodName) => {
   const entry = parsed.find((p) => p.rel === rel);
   if (!entry) return 'file-missing';
@@ -245,10 +304,6 @@ const methodReferencesFlag = (rel, methodName) => {
   });
   return found;
 };
-check(`DevSettings.setOnboardingFlow consults ${FLAG} in its body`,
-  methodReferencesFlag('src/services/devSettings.js', 'setOnboardingFlow'), true);
-check(`DevSettings.getOnboardingFlow consults ${FLAG} in its body`,
-  methodReferencesFlag('src/services/devSettings.js', 'getOnboardingFlow'), true);
 check(`EntryStore.seedDemoData consults ${FLAG} in its body`,
   methodReferencesFlag('src/services/EntryStore.js', 'seedDemoData'), true);
 
