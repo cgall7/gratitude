@@ -26,8 +26,8 @@
 //      Extraction is scripts/lib/rendered-strings.mjs, shared with the
 //      copy gate (one walker, two questions) — its header states what
 //      counts as rendered and the exclusions' directions. This gate asks
-//      it for TEXT POSITIONS ONLY (jsx-text, jsx-expr); the reason it must
-//      not take `alert` is measured at the call site below.
+//      it for the positions a lexical guard can reach; the exclusions and
+//      their measured reasons are at the call site below.
 //
 //      SCOPE IS NOW STATED HERE RATHER THAN DECIDED THERE, and that alone
 //      changed this rule's reach. The walker used to require the
@@ -128,6 +128,7 @@ import { fileURLToPath } from 'node:url';
 import { readFile, readdir } from 'node:fs/promises';
 import { parse } from '@babel/parser';
 import {
+  POSITIONS,
   walkWithAncestry,
   collectRenderedStrings,
   isUnderGuard,
@@ -175,18 +176,39 @@ for (const rel of files) {
 check('every enumerated file parses', parseFailures, []);
 
 // --- Rule 1: rendered strings saying "demo" are guarded -------------------
-// TEXT POSITIONS ONLY, and the exclusion of `alert` is measured rather than
-// inherited (Sage, thread 4510c5c8). Collecting Alert arguments here and
-// asking the same guard question returns three hits, two of them false:
-// CoreRitual's "Demo data loaded" and "Couldn't load demo data" are the
-// success and failure copy of a seeding button that IS correctly gated —
-// the alert fires from a handler, which is never lexically inside the guard
-// that wraps the button. Rule 1 would go red on correct code to catch one
-// affordance that rules 3/4b already cover in depth. So this gate takes two
-// positions and the copy gate takes five: the walker enumerates positions,
-// the question chooses them, and each caller states its own choice at the
-// call site rather than inheriting whatever the collector happened to pick.
-const RULE_1_POSITIONS = ['jsx-text', 'jsx-expr'];
+// SCOPE IS AN EXCLUSION LIST, so a position added at the walker lands IN
+// this rule by default (red-on-correct-code, never green-on-a-trap) and
+// only leaves it by a deliberate edit here. The two exclusions share one
+// structural property, which is the actual rule: A LEXICAL GUARD TEST CAN
+// ONLY JUDGE A STRING A GUARD COULD LEXICALLY ENCLOSE.
+//
+//   alert     handler-bound. The Alert call sits beside the JSX, never
+//             inside the wrapper. Measured at b5e7754 over this gate's own
+//             universe: 4 /demo/i hits in `alert`, all 4 unguarded, and 2
+//             of them false — CoreRitual's "Demo data loaded" and
+//             "Couldn't load demo data" are the success and failure copy
+//             of a seeding button that IS correctly gated. (Sage measured
+//             3 before DevVersionTag gained a second alert string; the
+//             ratio is what carries, not the count.) Rule 1 would red on
+//             correct code to catch an affordance rules 3 and 4b already
+//             cover in depth.
+//   constant  module scope. A top-level literal has no enclosing
+//             conditional to sit inside: 0 of 191 constant-position
+//             strings are under a guard, and none could be. The demo
+//             FIXTURE that lives there is covered structurally by rule 2,
+//             which asks about imports rather than about words.
+//
+// AND THE INCLUSIONS ARE A JUDGEMENT, NOT A MEASUREMENT — worth stating
+// because it is the weak joint. `jsx-expr` and `prop` hold ZERO guarded
+// strings in this tree (0/75 and 0/45): no demo affordance has yet been
+// written as a ternary label or a placeholder, so nothing here forces them
+// into scope. They are in because the guard CAN reach them. That means no
+// behavioural control can catch someone narrowing this list — the pin
+// below is a tripwire, not a proof, and its job is to make a scope change
+// cost a deliberate edit next to this reasoning, the way §D of the copy
+// gate freezes ruled copy.
+const RULE_1_OUT_OF_SCOPE = ['alert', 'constant'];
+const RULE_1_POSITIONS = POSITIONS.filter((p) => !RULE_1_OUT_OF_SCOPE.includes(p));
 const allStrings = [];
 const vocabularyErrors = [];
 for (const { rel, ast } of parsed) {
@@ -205,13 +227,16 @@ for (const { rel, ast } of parsed) {
 }
 check('every position the collector emits is declared in POSITIONS', vocabularyErrors, []);
 check('rendered-string universe is non-empty', allStrings.length > 0, true);
-// One control per position ASKED FOR, derived from RULE_1_POSITIONS rather
-// than written out — otherwise the scope statement above is a comment with
-// nothing behind it. Narrowing this rule back to jsx-text alone (which is
-// what the walker used to give it, in effect) leaves both /demo/i controls
-// below satisfied, because both of those strings are jsx-text: the gate
-// would report a clean verdict over a universe it had quietly halved. Same
-// shape as check-copy-rules §A's per-position controls, and the same reason.
+// The scope pin. Narrowing rule 1 means adding a position to the exclusion
+// list, and this row reds naming it — both /demo/i controls below are
+// jsx-text strings, so a gate narrowed to jsx-text alone would otherwise
+// report a clean verdict over a universe it had quietly halved.
+check('rule 1 excludes exactly the positions no lexical guard can reach', RULE_1_OUT_OF_SCOPE, ['alert', 'constant']);
+
+// One control per position asked for. This catches the WALKER failing to
+// deliver a position this gate requested — it does NOT catch the gate
+// asking for less, because the loop is derived from the same list; that is
+// the pin's job, one row up. Two different failures, two instruments.
 for (const position of RULE_1_POSITIONS) {
   check(
     `position "${position}" is represented in rule 1's universe`,
