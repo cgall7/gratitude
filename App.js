@@ -4,6 +4,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import * as SplashScreen from 'expo-splash-screen';
 import * as Font from 'expo-font';
+import * as Notifications from 'expo-notifications';
 import { theme } from './src/constants/theme';
 import { fontAssets } from './src/constants/fontAssets';
 import { OnboardingFlow } from './src/screens/Onboarding';
@@ -25,8 +26,50 @@ import { EntryStore } from './src/services/EntryStore';
 import { tagEntry } from './src/utils/themeTagger';
 import { DEMO_MODE } from './src/constants/demoMode';
 import { resolveInitialRouteWithTimeout } from './src/utils/resolveInitialRoute';
+import { reconcile as reconcileDailyNudge, isNudgeResponse, WINDOW_DAYS as NUDGE_WINDOW_DAYS } from './src/services/dailyNudge';
+import { NUDGE_TITLE, NUDGE_BODY } from './src/constants/nudgeCopy';
 
 const Stack = createStackNavigator();
+
+// Daily Nudge half A (`PLANS/DAILY_NUDGE_SPEC.md` §4.1) — re-arm the window
+// on every foreground. `reconcile()` itself no-ops until half B's Celebration
+// "yes" ever sets the enabled flag (`requestPermissionAndEnable`, not called
+// from anywhere in half A on purpose — §2's fuse), so this is inert today;
+// it exists so half B only has to add the ask, not the re-arm plumbing too.
+//
+// GAP, flagged rather than silently partial: §4.1 also says "re-arm ... on
+// every entry save." That save happens in `src/screens/CoreRitual.js`
+// (`InputScreen`'s real write path) and `src/screens/Onboarding.js`'s
+// pre-auth buffer, neither of which is in half A's touched-file list
+// (`app.json`, this file, the service module, one response listener,
+// Deezine's copy — Sage, thread 1a0821d5). The foreground re-arm below
+// covers the common case (opening the app after writing backgrounds and
+// foregrounds it in practice), but the save-triggered re-arm needs a
+// follow-up call to `reconcileDailyNudge` at CoreRitual's `saveEntry` call
+// site.
+//
+// The sentinel guard is redundant with `reconcile()`'s own required-content
+// check today (nothing is enabled yet), and cheap insurance against a future
+// dev-only toggle that flips the enabled flag without going through
+// Celebration.
+const rearmDailyNudge = async () => {
+  if (NUDGE_TITLE.startsWith('__OWNED_BY_') || NUDGE_BODY.startsWith('__OWNED_BY_')) return;
+  try {
+    const now = new Date();
+    const windowEnd = new Date(now);
+    windowEnd.setDate(windowEnd.getDate() + NUDGE_WINDOW_DAYS - 1);
+    const entries = await EntryStore.getEntriesBetween(now, windowEnd);
+    await reconcileDailyNudge({
+      writtenDaysISO: entries.map((e) => e.date),
+      now,
+      content: { title: NUDGE_TITLE, body: NUDGE_BODY },
+    });
+  } catch {
+    // Not signed in, Supabase unconfigured, or a transient failure — the
+    // next foreground tries again. §4.1's re-arm has no "must succeed now"
+    // requirement; it is called unconditionally on a cadence.
+  }
+};
 
 SplashScreen.preventAutoHideAsync();
 
@@ -52,6 +95,11 @@ export default function App() {
   const [splashHidden, setSplashHidden] = useState(false);
   const navigationRef = useRef(null);
   const appState = useRef(AppState.currentState);
+  // Independent of `appState` above — that ref is only maintained while the
+  // DEMO_MODE listener is registered (it early-returns and never subscribes
+  // otherwise), so the nudge re-arm needs its own foreground-transition
+  // tracking to run in every build.
+  const nudgeAppState = useRef(AppState.currentState);
   // Bumped by ErrorBoundary's reset. Changing a subtree's `key` is what
   // forces React to unmount and remount it fresh, rather than reconcile
   // onto the same instances that just threw — a plain setState re-render
@@ -79,10 +127,47 @@ export default function App() {
     return () => subscription.remove();
   }, []);
 
+  // Daily Nudge §4.1 — re-arm on every foreground, in every build. Runs once
+  // on mount (the app is "foregrounding" from cold start too) and again on
+  // every background -> active transition.
+  useEffect(() => {
+    rearmDailyNudge();
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      const resuming = nudgeAppState.current.match(/inactive|background/) && nextState === 'active';
+      if (resuming) rearmDailyNudge();
+      nudgeAppState.current = nextState;
+    });
+    return () => subscription.remove();
+  }, []);
+
+  // §C12 — tap routing, navigation only. Registered unconditionally: no
+  // notification is ever scheduled while `NUDGE_TITLE`/`NUDGE_BODY` are
+  // still the sentinel (`reconcile()`'s content guard, and the sentinel
+  // check above), so this listener has nothing to catch yet, but it costs
+  // nothing to have wired ahead of half B.
+  useEffect(() => {
+    const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
+      if (isNudgeResponse(response)) {
+        navigationRef.current?.navigate('Main', { screen: 'Today' });
+      }
+    });
+    return () => subscription.remove();
+  }, []);
+
   const onLayoutRootView = useCallback(async () => {
     if (fontsLoaded) {
       await SplashScreen.hideAsync();
       setSplashHidden(true);
+      // §C12 cold-start read — a tap that launched the app from terminated
+      // can fire before `addNotificationResponseReceivedListener` above is
+      // attached, so it needs the paired one-shot read. Composed into this
+      // callback rather than a second `onReady` prop (`NotificationContainer`
+      // only takes one) and read after the splash hides so `navigationRef`
+      // is already mounted.
+      const lastResponse = await Notifications.getLastNotificationResponseAsync();
+      if (isNudgeResponse(lastResponse)) {
+        navigationRef.current?.navigate('Main', { screen: 'Today' });
+      }
     }
   }, [fontsLoaded]);
 
