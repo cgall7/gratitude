@@ -4,8 +4,21 @@
 //
 // Each prompt carries a few short "sparks" — example completions a user can
 // tap to drop straight into the input and edit, rather than staring at a
-// blank page. They're phrased as noun phrases so they read naturally after
-// "I am grateful for...".
+// blank page.
+//
+// THE SPARK REGISTER IS A COMPOSITION CONTRACT, NOT A STYLE PREFERENCE.
+// A spark is never rendered alone: both of IdeasAccordion's mounts hand the
+// tapped spark straight into a sentence — CoreRitual sets the input to
+// `I am grateful for ${spark}.`, Onboarding's Write beat to
+// `I'm grateful for ${spark}.`. So a spark must be a
+// LOWERCASE NOUN PHRASE — anything else lands mid-sentence as a capital,
+// and a leading preposition ("in a gesture") lands as broken grammar the
+// user then has to repair before they can write. Measured over this file:
+// 72/72 sparks are lowercase, 0/72 lead with a preposition, and no spark
+// string appears twice (a repeated chip in a four-chip row reads as a
+// rendering bug). check:copy-rules cannot see any of that — its walker asks
+// whether a word is allowed, not whether a fragment composes — so the
+// contract is written here and asserted in check:onboarding-flow section D.
 export const DAILY_PROMPTS = [
   {
     question: "Who made you smile this week?",
@@ -89,13 +102,91 @@ export const DAILY_PROMPTS = [
   },
 ];
 
+// --- The first three days: seniority, not rotation ---
+//
+// One Door (PLANS/ONBOARDING_ONE_DOOR_SPEC.md) cut the three belief screens
+// B1–B3 out of onboarding. They are NOT deleted — the argument they made
+// arrives one line a day instead, which is the product's own thesis applied
+// to its own pitch. Lumen's ruling put them here rather than on the gate
+// line: §27.1 ("Pause. / Think of someone.") already owns the gate, under
+// the rule merged with it — a gate aims; the screen with the field asks.
+// These are the screen with the field, so these are questions.
+//
+// The originals, verbatim from GUIDES/GRATITUDE_ONBOARDING_GIVEN_COPY.md §5:
+//   B1  "The morning showed up without you."
+//   B2  "Noticing is one thing. Saying thanks is another."
+//   B3  "Peace tends to follow, but it's not the point."
+//
+// The rephrase carries each line's TURN, not its words — and never names
+// what a Christian reader hears in them. That guide's §2 is explicit: the
+// subtlety is the mechanism, so naming it deletes it.
+//
+// Indexed by days-since-first-entry (0, 1, 2), then the day-of-year
+// rotation below takes over for good.
+export const FIRST_DAYS_PROMPTS = [
+  {
+    // B1 — the day arrived without you arranging it.
+    //
+    // "today", not "this morning". Deezine's rephrase said morning (B1's own
+    // first word) and Lumen accepted it, but day 0 is not a morning: it is
+    // the first entry, written at whatever hour someone installs the app,
+    // and Onboarding.js's FirstEntryStep renders this exact question at that
+    // moment. "What showed up for you this morning?" at 9pm asks about a
+    // time that has already gone — a small false premise on the one screen
+    // §5 calls the activation moment. This is the line already live on main
+    // for that screen, so the change is a deletion, not a new string.
+    question: 'What showed up for you today?',
+    sparks: ['something unexpected', 'a quiet moment', 'a conversation', 'the light'],
+  },
+  {
+    // B2 — the turn: receiving the day, not reviewing it.
+    //
+    // The question carries the turn; the chips do not have to. Day 1 was the
+    // only all-abstract deck of the three, and abstraction is what loses to a
+    // blank page — so all four are now things a day hands you, not categories
+    // of thing. The first recut kept the categories ('a song', 'a walk') and
+    // was rejected for it: the file already renders both of those grounded
+    // ("a song from high school on the radio", "my walk to work"), so the
+    // generic form is the deck saying worse what it already says well.
+    //
+    // 'an ease' also failed the read-aloud test the contract above implies:
+    // "I am grateful for an ease." is strained English in a way "a breath"
+    // is not, because ease does not take an article in that frame. Every
+    // replacement was said aloud inside the template before it landed.
+    question: 'What let the day land with you today?',
+    sparks: [
+      'the commute home',
+      'my first shower of the day',
+      'the end of the workday',
+      'a few minutes to myself',
+    ],
+  },
+  {
+    // B3 — peace as the byproduct, never the reason.
+    question: 'What let you breathe a little easier today?',
+    sparks: ['a gesture', 'a word', 'a rest', 'a kindness'],
+  },
+];
+
 const dayOfYear = (date) => {
   const start = new Date(date.getFullYear(), 0, 0);
   const diff = date - start;
   return Math.floor(diff / 86400000);
 };
 
-export const getDailyPrompt = (date = new Date()) => {
+// `daysSinceFirstEntry` is optional and null-safe on purpose: a caller that
+// cannot cheaply know a user's seniority (or whose lookup failed) gets the
+// rotation, which is exactly the behaviour every caller had before this
+// argument existed. A wrong prompt is a worse failure than an unseasoned
+// one, so the fallback is the general deck, never a guess at day 0.
+export const getDailyPrompt = (date = new Date(), daysSinceFirstEntry = null) => {
+  if (
+    Number.isInteger(daysSinceFirstEntry) &&
+    daysSinceFirstEntry >= 0 &&
+    daysSinceFirstEntry < FIRST_DAYS_PROMPTS.length
+  ) {
+    return FIRST_DAYS_PROMPTS[daysSinceFirstEntry];
+  }
   const idx = dayOfYear(date) % DAILY_PROMPTS.length;
   return DAILY_PROMPTS[idx];
 };

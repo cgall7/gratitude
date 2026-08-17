@@ -47,8 +47,8 @@
 //      HoneycombTab's merge and any future importer, unregistered.
 //
 //   3. DEV-ONLY IMPORT RULE (structural over a named module list): every
-//      file importing a dev-only module (services/devSettings,
-//      utils/demoSeed, constants/demoHive) must reference DEMO_CONTENT
+//      file importing a dev-only module (utils/demoSeed,
+//      constants/demoHive) must reference DEMO_CONTENT
 //      outside its imports. This replaced the original seedDemoData caller
 //      REGISTRY after Sage found the structural property the named entries
 //      share (thread 4510c5c8): demo affordances are HANDLER-bound — the
@@ -58,19 +58,14 @@
 //      structural marker. Paired with the capability guards in the modules
 //      themselves, asserted two ways (Sage's read, thread 4510c5c8):
 //
-//        - services/devSettings is ENUMERATED, zero names: every method on
-//          the DevSettings export must consult DEMO_CONTENT in its body.
-//          Per-method is available here because the entire module is the
-//          demo toggle — every accessor of the demo-only persisted key is
-//          in scope by construction, so a clearOnboardingFlow written in
-//          November is covered without anyone registering it. That premise
-//          — the module is WHOLLY demo-only — is enforced by nothing but
-//          this note (Sage, thread 4510c5c8), so the response to its red
-//          is pre-authorised here: a non-demo setting does not belong in
-//          devSettings. If one legitimately needs to live beside the flow
-//          toggle, MOVE it to its own service — onboardingState.js is the
-//          precedent and says so in its header — and never exempt it here.
-//          An exemption is what this enumerator replaced.
+//        - services/devSettings WAS enumerated per-method here. One Door
+//          (PLANS/ONBOARDING_ONE_DOOR_SPEC.md) deleted the onboarding forks
+//          and that module with them — it was wholly the flow toggle. Both
+//          its rows are gone, per the self-deleting-controls note below.
+//          The shape of the argument is worth keeping for the next one: a
+//          per-method enumerator was available there only because the whole
+//          module was demo-only, and that premise was enforced by a comment
+//          rather than by code.
 //        - EntryStore.seedDemoData stays a NAMED entry: a demo capability
 //          living in a module that is NOT dev-only, so nothing structural
 //          marks it. That is the residual, stated.
@@ -90,28 +85,30 @@
 //      second, unguarded affordance passes rule 3; rules 1/2 and the named
 //      entries are what stand in front of that. This fired eleven minutes
 //      after it was written (getOnboardingFlow, Pixel's review), and the
-//      per-method enumerator below closes it for devSettings.js ONLY —
-//      per-method was available there because the module is small and
-//      wholly dev-only; Onboarding.js gets no such upgrade, so the
-//      residual stands for every other file.
+//      per-method enumerator that closed it for devSettings.js is gone
+//      with that module, so this residual now stands for every file
+//      without exception.
 //
 //   4. NAMED, NOT ENUMERATED — these are a LIST, and a list has the hole
 //      an enumerator closes. A demo affordance that never says "demo",
 //      reads no demoHive data, and imports no dev-only module is caught by
 //      NOTHING here; green-on-a-trap.
 //
-//        a. FlowToggle (Onboarding.js): the A/B flow picker. Label text
-//           ("Flow A"/"Flow B"/"Flow C") never says "demo", so rule 1 is
-//           blind to it. Every <FlowToggle> JSX usage must be guarded.
-//        b. DevVersionTag (RecapTab.js): the fifth affordance (Pixel,
+//        a. DevVersionTag (RecapTab.js): the fifth affordance (Pixel,
 //           thread 4510c5c8) — its only rendered string is a version
 //           number, its "demo" strings are Alert args rule 1 deliberately
 //           excludes. Every <DevVersionTag> JSX usage must be guarded, so
 //           production renders no five-tap picker surface at all; rule 3
 //           and the capability guard sit behind it in depth.
 //
+//           FlowToggle (Onboarding.js) was entry (a) until One Door deleted
+//           it. It is the reason this list exists — its labels said "Flow
+//           B"/"Flow C" and never "demo", so rule 1 was structurally blind
+//           to it. Recorded because the hole it named is still open, even
+//           though the example is gone.
+//
 // SELF-DELETING CONTROLS: the walker-control assertions below ("finds
-// 'Load demo data'", "FlowToggle is used at least once", "some file
+// 'Load demo data'", "DevVersionTag is rendered at least once", "some file
 // imports demoHive") exist so a silently-broken extractor cannot report an
 // empty universe as green. Their cost: legitimately REMOVING one of those
 // features reds this gate. That red is authorisation to delete the
@@ -300,8 +297,15 @@ check(`every reference to a constants/demoHive import is inside a ${FLAG} guard`
 // the universe is a named red, not a silent shrink. Legitimately deleting
 // one of these modules reds its control; per the SELF-DELETING CONTROLS
 // note above, that red is authorisation to drop the list entry.
+//
+// `services/devSettings` WAS the first entry here. One Door deleted the
+// onboarding forks (PLANS/ONBOARDING_ONE_DOOR_SPEC.md) and that module was
+// wholly the flow toggle — one persisted key, two methods, no other reason
+// to exist. Its control went red exactly as designed, and this is the drop
+// the note above authorises: the subject is gone, so the row has nothing to
+// assert. It is removed, not exempted — an exemption would leave a door for
+// a future `services/devSettings` to walk back in ungated.
 const DEV_ONLY_MODULES = [
-  ['services/devSettings', /(^|\/)services\/devSettings$/],
   ['utils/demoSeed', /(^|\/)utils\/demoSeed$/],
   ['constants/demoHive', DEMO_HIVE],
 ];
@@ -331,52 +335,21 @@ for (const [label, pattern] of DEV_ONLY_MODULES) {
 }
 
 // --- Rule 3's depth layer: the capability guards themselves ---------------
-// One persisted key is TWO capabilities (Pixel's review, thread 4510c5c8):
-// setOnboardingFlow's write outlives the gesture, and getOnboardingFlow is
-// the read that decides what renders — the persisted value crosses build
-// profiles (pitch and store builds share a bundle id), so a demo build's
-// 'C' arrives in a production container this build never wrote. The gate's
-// first version asserted the setter BY NAME and never asked who reads —
-// the same what-to-look-at error one layer down. So devSettings is now
-// ENUMERATED, not listed (Sage's read): every method on the DevSettings
-// export must consult the flag, zero names, zero exemptions — a method
-// nobody has written yet is already covered. Pinned to the
-// `export const DevSettings = { ObjectMethod... }` shape on this tree — a
-// property that isn't an ObjectMethod, or a reshaped export, reds this and
-// extends it here: red-on-correct-code, never green-on-a-trap.
-const devSettingsMethods = [];
-const devSettingsNonMethodProps = [];
-{
-  const entry = parsed.find((p) => p.rel === 'src/services/devSettings.js');
-  if (entry) {
-    walkWithAncestry(entry.ast.program, (node) => {
-      if (
-        node.type !== 'VariableDeclarator' ||
-        node.id.type !== 'Identifier' ||
-        node.id.name !== 'DevSettings' ||
-        node.init?.type !== 'ObjectExpression'
-      ) return;
-      for (const prop of node.init.properties) {
-        if (prop.type === 'ObjectMethod' && !prop.computed && prop.key.type === 'Identifier') {
-          let found = false;
-          walkWithAncestry(prop.body, (n) => {
-            if (n.type === 'Identifier' && n.name === FLAG) found = true;
-          });
-          devSettingsMethods.push({ name: prop.key.name, line: prop.loc.start.line, guarded: found });
-        } else {
-          devSettingsNonMethodProps.push(`src/services/devSettings.js:${prop.loc.start.line} ${prop.type}`);
-        }
-      }
-    });
-  }
-}
-check('walker control: the DevSettings export enumerates at least one method',
-  devSettingsMethods.length > 0, true);
-check('every DevSettings property is a plain ObjectMethod (the pinned shape — reshape reds here, extend the enumerator)',
-  devSettingsNonMethodProps, []);
-check(`every method on the DevSettings export consults ${FLAG} in its body (enumerated, zero names)`,
-  devSettingsMethods.filter((m) => !m.guarded).map((m) => `src/services/devSettings.js:${m.line} ${m.name}`),
-  []);
+// This layer used to enumerate every method on the DevSettings export and
+// require each to consult the flag in its own body — zero names, so a
+// method nobody had written yet was already covered (Sage's read: one
+// persisted key is TWO capabilities, and the gate's first version asserted
+// the setter BY NAME and never asked who reads).
+//
+// The subject is gone. One Door deleted services/devSettings.js outright,
+// so the enumerator's own control ("the DevSettings export enumerates at
+// least one method") went red with nothing behind it. The enumerator is
+// removed rather than pointed somewhere else: it was written for a
+// specific shape (`export const DevSettings = { ObjectMethod... }`) held by
+// a specific module, and re-aiming a shape assertion at a different module
+// is how a gate ends up asserting a property of whatever it can still
+// reach. If another persisted demo capability is ever added, it gets its
+// own enumerator, written against its own shape.
 
 // seedDemoData is the seeding capability behind any button; it must consult
 // the flag in its own body so a future caller with a neutral label is inert
@@ -400,8 +373,12 @@ const methodReferencesFlag = (rel, methodName) => {
 check(`EntryStore.seedDemoData consults ${FLAG} in its body`,
   methodReferencesFlag('src/services/EntryStore.js', 'seedDemoData'), true);
 
-// --- Named 4a/4b: FlowToggle and DevVersionTag usages are guarded ---------
-for (const componentName of ['FlowToggle', 'DevVersionTag']) {
+// --- Named 4a: DevVersionTag usages are guarded ---------------------------
+// FlowToggle was the other member until One Door deleted it; its control
+// went red with the component and the entry came out with it (see the
+// self-deleting-controls note in the header). The loop shape stays — this
+// list is expected to grow again, and a one-element loop costs nothing.
+for (const componentName of ['DevVersionTag']) {
   const uses = [];
   const unguarded = [];
   for (const { rel, ast } of parsed) {

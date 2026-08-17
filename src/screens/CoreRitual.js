@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   StyleSheet,
   View,
@@ -95,7 +95,47 @@ export const InputScreen = ({ onUnlock }) => {
   const [unlocking, setUnlocking] = useState(false);
   const formAnim = useRef(new Animated.Value(1)).current;
   const overlayOpacity = useRef(new Animated.Value(0)).current;
-  const dailyPrompt = getDailyPrompt();
+
+  // The first three days get the belief prompts (FIRST_DAYS_PROMPTS) before
+  // the day-of-year rotation takes over, so the argument onboarding used to
+  // make across three screens arrives one line a day instead.
+  //
+  // Resolved async, and the prompt renders only once it resolves, because a
+  // prompt that CHANGES under the user is worse than one that arrives a beat
+  // late: the seed would have to be the rotation (the only thing knowable
+  // synchronously), and a day-1 user would read the wrong question and watch
+  // it swap. `null` seniority means "could not tell", which getDailyPrompt
+  // answers with the rotation — the exact behaviour every caller had before
+  // seniority existed, so a failed read degrades to today's app.
+  const [dailyPrompt, setDailyPrompt] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    EntryStore.getFirstEntryDate()
+      .then((firstISO) => {
+        if (cancelled) return;
+        let seniority = null;
+        if (firstISO) {
+          const [y, m, d] = firstISO.split('-').map(Number);
+          // Local calendar parts on both sides. `new Date(firstISO)` parses
+          // as UTC midnight, which lands on the previous local day in every
+          // negative offset — the app stores no timezone data, so calendar
+          // days are client-derived and both ends must be derived the same
+          // way.
+          const first = new Date(y, m - 1, d);
+          const now = new Date();
+          const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          seniority = Math.round((today - first) / 86400000);
+        }
+        setDailyPrompt(getDailyPrompt(new Date(), seniority));
+      })
+      .catch(() => {
+        if (!cancelled) setDailyPrompt(getDailyPrompt());
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleSave = () => {
     if (!text.trim() || unlocking) return;
@@ -168,11 +208,11 @@ export const InputScreen = ({ onUnlock }) => {
 
       <Animated.View style={[styles.content, { opacity: formAnim }]}>
         <Text style={styles.logoSmall}>Pollinate</Text>
-        <Text style={styles.promptQuestion}>{dailyPrompt.question}</Text>
+        <Text style={styles.promptQuestion}>{dailyPrompt ? dailyPrompt.question : ' '}</Text>
 
         <SparkChips
-          sparks={dailyPrompt.sparks}
-          visible={!text.trim()}
+          sparks={dailyPrompt ? dailyPrompt.sparks : []}
+          visible={!!dailyPrompt && !text.trim()}
           onPick={(spark) => setText(`I am grateful for ${spark}.`)}
         />
 
@@ -247,6 +287,16 @@ const styles = StyleSheet.create({
     color: theme.colors.textPrimary,
     textAlign: 'center',
     marginBottom: 20,
+    // Two lines, reserved. The prompt now resolves async (seniority: the
+    // first three days get the belief prompts), so this box is briefly
+    // empty and everything below it would jump when the question lands.
+    //
+    // Two is the right number, measured rather than guessed: all 23
+    // questions in the deck, set in the real Nunito_700Bold at 18px, have
+    // advance widths from 187 to 516pt. The widest is 1.70x the tightest
+    // plausible line box (303pt on a 375pt screen), so every question wraps
+    // to at most two lines and none reaches three. 2 x lineHeight 24 = 48.
+    minHeight: 48,
   },
   inputCard: {
     width: '100%',

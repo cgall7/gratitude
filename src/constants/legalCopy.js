@@ -27,6 +27,13 @@
 //     in the same paragraph, and turns `profiles.phone_hash` real.
 //   * Flow C app-locking adds a data category this policy has no section for.
 //     It needs new copy, NOT a pre-written sentence — see below.
+//   * Daily-nudge open-rate or conversion metrics falsify two sentences here:
+//     "nothing here reports what you do back to us or to anyone else" in
+//     'The short version', and "We do not include analytics, attribution or
+//     crash-reporting tools" in 'What we do not do'. Cited by heading and by
+//     the sentence, not by line: a comment in this file moves the lines it
+//     cites, which is how the first draft of this entry shipped both numbers
+//     three short.
 //
 // On Flow C specifically, because the obvious reassuring line — "we can see
 // that you locked apps, we cannot see which ones" — is not one sentence:
