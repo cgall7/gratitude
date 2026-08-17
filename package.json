@@ -25,6 +25,7 @@
     "check:bee-attitude": "node scripts/check-bee-attitude.mjs",
     "check:type-floor": "node scripts/check-type-floor.mjs",
     "check:reexport-bindings": "node scripts/check-reexport-bindings.mjs",
+    "check:demo-mode-env": "node scripts/check-demo-mode-env.mjs",
     "test": "node scripts/run-checks.mjs",
     "deploy:migrations": "bash scripts/deploy-migrations.sh"
   },
@@ -43,6 +44,7 @@
     "@supabase/supabase-js": "^2.109.0",
     "expo": "~57.0.11",
     "expo-blur": "~57.0.2",
+    "expo-dev-client": "~57.0.12",
     "expo-font": "~57.0.1",
     "expo-haptics": "~57.0.1",
     "expo-splash-screen": "~57.0.5",
