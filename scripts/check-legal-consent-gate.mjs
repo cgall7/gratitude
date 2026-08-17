@@ -297,5 +297,67 @@ check(
   true
 );
 
+// --- Row 4: the control can CHANGE it, not merely display it ----------
+//
+// Row 3's stated residual was "a reference that reads the binding without
+// offering a way to change it (a stray log) satisfies this — a shape nobody
+// writes on purpose." Measured at e538d43, it is not a stray log; it is the
+// ordinary build order, and it is the same half-finished edit as row 3's
+// lock-out one rung later:
+//
+//   const [agreedToTerms] = useState(false);        // setter not added yet
+//   …
+//   <Switch value={agreedToTerms} />                // control rendered
+//
+// 9 passed, 0 failed, exit 0. Every row green, `agreedToTerms` permanently
+// false, `canSubmit` permanently false for sign-up, the button never
+// enables, `handleSubmit` early-returns — nobody can create an account, and
+// the gate reports the transition complete. Building the control before
+// wiring its handler is what everybody does; the value prop lands one edit
+// before the change prop, and that is the window this row covers.
+//
+// STILL NO NEW NAME, and less guessing than row 3: the setter is not named
+// here, it is READ OFF the binding site. `const [x, setX] = useState(…)` is
+// an ArrayPattern; element 0 is CONSENT_BINDING and element 1 is whatever
+// the setter is called. So a rename of the setter cannot drift from this
+// row, and a destructure with no second element — the lock-out itself —
+// fails for the right reason rather than by a name lookup missing.
+//
+// Two ways to fail, one row each, because they are different repairs:
+// there is no setter to call, versus there is one and nothing calls it.
+const setterNames = new Set();
+let consentBindingSites = 0;
+walkWithAncestry(onboardingAst.program, (node) => {
+  if (node.type !== 'VariableDeclarator' || node.id?.type !== 'ArrayPattern') return;
+  const [value, setter] = node.id.elements;
+  if (value?.type !== 'Identifier' || value.name !== CONSENT_BINDING) return;
+  consentBindingSites += 1;
+  if (setter?.type === 'Identifier') setterNames.add(setter.name);
+});
+
+check(
+  `legal copy is unpublished, or \`${CONSENT_BINDING}\` is destructured with a setter`,
+  READY === false || (consentBindingSites > 0 && setterNames.size > 0),
+  true
+);
+
+// A setter that exists and is never called is the same dead end reached by
+// a different edit, so it gets its own row rather than being folded above.
+const setterCallSites = [];
+if (setterNames.size > 0) {
+  walkWithAncestry(onboardingAst.program, (node, ancestors) => {
+    if (node.type !== 'Identifier' || !setterNames.has(node.name)) return;
+    // The binding site's own `id` side is the declaration, not a use.
+    if (ancestors.some((a) => a.node.type === 'ArrayPattern')) return;
+    setterCallSites.push(`${ONBOARDING}:${node.loc.start.line}`);
+  });
+}
+
+check(
+  `legal copy is unpublished, or ${CONSENT_BINDING}'s setter is referenced outside its declaration`,
+  READY === false || setterCallSites.length > 0,
+  true
+);
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
