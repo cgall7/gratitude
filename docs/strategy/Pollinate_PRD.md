@@ -101,7 +101,7 @@ Today  |  Hive  |  Wallet  |  Garden
 
 | Tab | What it is | Free tier | Paid tier ($2.99/mo) | MVP1 status |
 |---|---|---|---|---|
-| **Today** | Journal + Private Hives | 1 private hive, 1 recipient per hive. Daily journal full. | Unlimited private hives, unlimited recipients. | ✅ Full |
+| **Today** | Journal + Private Hives | 1 private hive. Daily journal full. | Unlimited private hives. | ✅ Full |
 | **Hive** | Honeycomb + feed + social seeds | 1 friend in public hives. Can receive unlimited. | Unlimited friends in public hives. | ✅ Full |
 | **Wallet** | Gifting | Shell: "Coming Soon" | Cash App gifting via iMessage links | 🔲 Shell in MVP1, Cash App in Slice 2 |
 | **Garden** | Recap, Wrapped, history | Full solo features | Full + social features (Phase 3) | ✅ Full (solo) |
@@ -181,10 +181,10 @@ The review prompt is the app's core re-engagement mechanic. It's not a notificat
 
 | | Free | Paid ($2.99/mo or $29.99/yr) |
 |---|---|---|
-| Private hives | 1 hive, 1 recipient | Unlimited hives, unlimited recipients |
+| Private hives | 1 hive | Unlimited hives |
 | Entries per hive | Unlimited | Unlimited |
 | Review cadence | Yearly only | Monthly, yearly, or manual |
-| Send | 1 send per hive per year (2026-08-17: gate moved from seal to send; sealing is unconditional) | Unlimited sends |
+| Send | *(2026-08-17 flag — not yet ruled: `sealed_at`/`sent_at` are one-directional per hive, so "1/hive/year" is vacuous — every tier gets ≤1 send per hive, forever. Pending Colin: is free "1 hive" concurrent or lifetime? See Slices 8b.5 open item.)* | *(same, pending)* |
 
 #### Acceptance Criteria
 
@@ -387,7 +387,9 @@ If we eventually want to earn transaction fees on tips, we'd need to integrate M
 | Feature | Free limit |
 |---|---|
 | Daily journal | Full, unlimited |
-| Private hives | **1 hive, 1 recipient** |
+| Private hives | **1 hive** |
+| Review cadence | **Yearly only** |
+| Send | *(pending Colin's ruling — see 2026-08-17 flag above)* |
 | Social seeds | **1 active seed at a time** |
 | Public hives (social) | **1 friend** |
 | Feed | Full access (view and react) |
@@ -399,7 +401,9 @@ If we eventually want to earn transaction fees on tips, we'd need to integrate M
 
 | Feature | Paid unlocks |
 |---|---|
-| Private hives | **Unlimited hives, unlimited recipients** |
+| Private hives | **Unlimited hives** |
+| Review cadence | **Monthly, yearly, or manual** |
+| Send | *(pending Colin's ruling — see 2026-08-17 flag in §5.1)* |
 | Social seeds | **Unlimited active seeds** |
 | Public hives | **Unlimited friends** |
 | "Bloom When" conditional seeds | Unlocked |

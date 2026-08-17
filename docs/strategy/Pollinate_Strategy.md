@@ -18,7 +18,7 @@ We sit at the intersection of three proven markets — gratitude apps ($1.3B), s
 
 **Delivery is a spectrum, not a gate (added 2.1).** A Private Hive must be worth keeping even if its person can never install the app — a young child, a grandparent, someone you've lost. The hive is a letter drawer, not an outbox: it is valuable at zero deliveries, because the compiling itself is the practice. Delivery paths, in order of arrival: **(1) send in-app** (Slice 1) — the full bloom; **(2) send as a link** (post-Slice 1) — a beautiful web-read moment that doubles as the viral loop, since the recipient's first experience of Pollinate is the strongest thing we make; **(3) keep, or export as a keepsake** (later) — for the person who will never install anything. The moat is accumulated *time*, not features — no competitor can copy a year of someone's entries.
 
-**Business model:** Freemium. The free tier gives users one private hive, one friend connection, one seed, full daily journal access, a yearly review, and one send per hive per year — sealing a hive is always free and unconditional, regardless of tier (2026-08-17). **Pollinate Plus** ($2.99/month or $29.99/year) unlocks unlimited hives, friends, seeds, monthly review cadence, and unlimited sends. Gifting happens via Cash App payment links shared through iMessage — Pollinate generates a gratitude note and a Cash App $cashtag link, the user sends it via iMessage, and Pollinate never touches money. We are not a money transmitter.
+**Business model:** Freemium. The free tier gives users one private hive, one friend connection, one seed, full daily journal access, and a yearly review — sealing a hive is always free and unconditional, regardless of tier (2026-08-17). Where the send gate lands is pending Colin's ruling: `sealed_at`/`sent_at` cap every tier at ≤1 send/hive forever, so it can only bind as an account-level count, and only if free hives are concurrent rather than lifetime (see Slices 8b.5 open item). **Pollinate Plus** ($2.99/month or $29.99/year) unlocks unlimited hives, friends, seeds, and monthly review cadence. Gifting happens via Cash App payment links shared through iMessage — Pollinate generates a gratitude note and a Cash App $cashtag link, the user sends it via iMessage, and Pollinate never touches money. We are not a money transmitter.
 
 > **Build Slices:**
 > - **Slice 1 (Demo Mode):** Journal + private hives + social seeds + honeycomb + feed. No money. TestFlight / internal testing. Validates the core emotional and social loop.
@@ -120,7 +120,7 @@ Pollinate is a **freemium consumer app**. The primary revenue stream is subscrip
 | Friend connections | 1 friend | Unlimited |
 | Seeds (time capsules) | 1 seed | Unlimited |
 | Review cadence | Yearly only | Monthly |
-| Sends (curated hive entries sent to friends; sealing itself is unconditional and never gated, 2026-08-17) | 1 per year | Unlimited |
+| Sends (curated hive entries sent to friends; sealing itself is unconditional and never gated, 2026-08-17) | *pending Colin's ruling — see business model note above* | *pending* |
 | Honeycomb visualization | ✓ | ✓ |
 | Social feed | ✓ | ✓ |
 | Garden / recap / history | ✓ | ✓ |
@@ -382,7 +382,8 @@ Before shipping Slice 1 (Demo Mode) to TestFlight / internal testers:
 - [ ] A user can write a daily gratitude journal entry
 - [ ] A user can share an entry to the Hive feed
 - [ ] A user can create a Private Hive, write entries for someone, and see all their entries
-- [ ] A user can package curated hive entries and send them to a connected friend
+- [ ] A user can seal a Private Hive with no recipient (the grandmother/child/lost-someone case — must complete with no connection required)
+- [ ] A user can send a sealed hive to a connected friend
 - [ ] A "trip down memory lane" review prompt fires correctly at the right cadence (yearly for free, monthly for Plus)
 - [ ] A user can plant a seed (time-capsule message) with a future bloom date
 - [ ] Seed bloom notifications fire correctly and on time
