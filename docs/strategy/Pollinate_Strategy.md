@@ -127,7 +127,7 @@ Pollinate is a **freemium consumer app**. The primary revenue stream is subscrip
 
 **Why this works:**
 - The free tier is genuinely useful — one hive, full journal access, yearly reviews. Users can experience the core loop without paying.
-- The upgrade triggers are natural: a second hive (for another person), monthly reviews (instead of yearly), more seeds, more packages. These are needs that emerge from engagement, not artificial limits.
+- The upgrade triggers are natural: a second hive (for another person), monthly reviews (instead of yearly), more seeds. These are needs that emerge from engagement, not artificial limits.
 - $2.99/month is impulse territory — less than a coffee. $29.99/year offers ~16% savings and anchors to annual commitment.
 
 #### 2. Cash App Gifting via iMessage (Slice 2 — No Revenue to Pollinate)
