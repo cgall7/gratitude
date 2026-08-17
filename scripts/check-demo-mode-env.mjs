@@ -71,6 +71,20 @@
 // pass this check while leaving `=TRUE`, `=1`, `=yes` all silently off with
 // no error anywhere. The explanatory note above the var in .env.example is
 // the thing that prevents that, and nothing here checks the note.
+//
+// ONE CONVENTION FOR OPERAND ORDER (Sage, thread 4510c5c8): assertions here
+// pin SHAPE, never operand order. The DEMO_MODE comparison already accepted
+// `'true' === process.env.X` with the sides swapped; the DEMO_CONTENT
+// disjunction below now does the same (`__DEV__ || DEMO_MODE` and
+// `DEMO_MODE || __DEV__` are both green — commutative here, both operands
+// boolean). A gate brittle on operand order teaches people to distrust it,
+// and two rules read out of one gate means the third gets guessed.
+//
+// SCOPE — DEFINITIONS ONLY (same thread): this gate proves the constants
+// are correctly DERIVED, and proves nothing about anyone consulting them.
+// Sage ungated the FlowToggle, the skip-demo link and the demo-hive merge
+// one at a time and this gate stayed green each time — correctly, by its
+// own scope. The call sites are check-demo-content-callsites' subject.
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readFile } from 'node:fs/promises';
@@ -171,12 +185,13 @@ check('demoMode.js declares a top-level DEMO_CONTENT const', Boolean(demoContent
 
 const dcInit = demoContentDecl?.init;
 check('DEMO_CONTENT is a || disjunction', dcInit?.type === 'LogicalExpression' && dcInit.operator === '||', true);
-check('DEMO_CONTENT left side is __DEV__',
-  dcInit?.type === 'LogicalExpression' && dcInit.left?.type === 'Identifier' ? dcInit.left.name : null,
-  '__DEV__');
-check('DEMO_CONTENT right side is DEMO_MODE',
-  dcInit?.type === 'LogicalExpression' && dcInit.right?.type === 'Identifier' ? dcInit.right.name : null,
-  'DEMO_MODE');
+check('DEMO_CONTENT operands are __DEV__ and DEMO_MODE, identifiers, either order',
+  dcInit?.type === 'LogicalExpression'
+    ? [dcInit.left, dcInit.right]
+        .map((s) => (s?.type === 'Identifier' ? s.name : null))
+        .sort()
+    : null,
+  ['DEMO_MODE', '__DEV__']);
 
 check('no destructured `const { X } = process.env` in demoMode.js',
   destructuredProcessEnvIn(constantsAst), []);
