@@ -1,8 +1,10 @@
 # Pollinate — Strategy Document
 
-**Version:** 2.0  
+**Version:** 2.1  
 **Date:** August 2026  
 **Domain:** pollinateapp.xyz  
+
+> **Changelog 2.1 — 2026-08-17, ratified by Colin (CEO action items thread).** Positioning re-researched from zero at Colin's request. Killed sentence: *"It's a journal that becomes social."* — it led with the container, not the gift. The hero sentence is now **"gratitude you compile for someone, until it's ready to give,"** and the hero is the Private Hive arc *ending in the reveal*. Delivery reframed as a spectrum (in-app → link → keepsake); a hive is valuable at zero deliveries. "Public hive" naming rejected — the two modes are **Private Hive** and **the Hive**. Slice 1 ships the full arc minus the reply (8b.8 → Slice 1.1). §1 and §2 amended in place below.
 
 ---
 
@@ -10,9 +12,11 @@
 
 Pollinate is a social gratitude app where journaling becomes connection. The hero feature — **Private Hives** — lets you keep a personal gratitude journal FOR someone: you write entries about a friend, partner, or child over time, then periodically review them on a "trip down memory lane" and package curated entries to send as a meaningful gift.
 
-We sit at the intersection of three proven markets — gratitude apps ($1.3B), social networking ($200B+), and gifting ($250B+) — with no direct competitor occupying the same space. Pollinate is not a payments app, not a workplace tool, and not a standalone journal. It's a journal that becomes social.
+We sit at the intersection of three proven markets — gratitude apps ($1.3B), social networking ($200B+), and gifting ($250B+) — with no direct competitor occupying the same space. Pollinate is not a payments app, not a workplace tool, and not a standalone journal. It's **gratitude you compile for someone, until it's ready to give.** The dinner-party version: *I've been writing things down about my daughter all year, and on her birthday she gets all of it at once.* That's the app. Everything else is the place it lives.
 
 **The core insight:** Nobody has built a practice that becomes a gift. Private Hives turn daily gratitude — about someone specific — into a curated, accumulative act that blooms into connection. You write gratitude FOR someone over weeks or months. When the moment is right, you package those entries and send them. The recipient experiences a "trip down memory lane" they didn't know existed. This two-sided emotional bloom — the author's review and the recipient's package-open — doesn't exist anywhere else.
+
+**Delivery is a spectrum, not a gate (added 2.1).** A Private Hive must be worth keeping even if its person can never install the app — a young child, a grandparent, someone you've lost. The hive is a letter drawer, not an outbox: it is valuable at zero deliveries, because the compiling itself is the practice. Delivery paths, in order of arrival: **(1) send in-app** (Slice 1) — the full bloom; **(2) send as a link** (post-Slice 1) — a beautiful web-read moment that doubles as the viral loop, since the recipient's first experience of Pollinate is the strongest thing we make; **(3) keep, or export as a keepsake** (later) — for the person who will never install anything. The moat is accumulated *time*, not features — no competitor can copy a year of someone's entries.
 
 **Business model:** Freemium. The free tier gives users one private hive, one friend connection, one seed, full daily journal access, and a yearly review. **Pollinate Plus** ($2.99/month or $29.99/year) unlocks unlimited hives, friends, seeds, monthly review cadence, and unlimited packages. Gifting happens via Cash App payment links shared through iMessage — Pollinate generates a gratitude note and a Cash App $cashtag link, the user sends it via iMessage, and Pollinate never touches money. We are not a money transmitter.
 
@@ -41,7 +45,7 @@ We sit at the intersection of three proven markets — gratitude apps ($1.3B), s
     ($200B+)                 ($250B+)
 ```
 
-**Our position:** We are not competing with Venmo (we're about gratitude, not debt-splitting). We are not competing with workplace recognition tools (we're consumer, not enterprise). We are not competing with standalone gratitude journals — we're building a journal that becomes social. The journal is the practice. The network is the payoff. Private Hives are the bridge: a practice that becomes a gift. We are the only product in the intersection.
+**Our position:** We are not competing with Venmo (we're about gratitude, not debt-splitting). We are not competing with workplace recognition tools (we're consumer, not enterprise). We are not competing with standalone gratitude journals — we're building gratitude you compile for someone, until it's ready to give. The journal is the practice. The reveal is the payoff. Private Hives are the bridge: a practice that becomes a gift. We are the only product in the intersection.
 
 ### Competitive Matrix
 
@@ -59,7 +63,11 @@ We sit at the intersection of three proven markets — gratitude apps ($1.3B), s
 
 ### Positioning Statement
 
-> For people who want to express genuine gratitude to the people they care about, Pollinate is a social gratitude app that makes appreciation a living practice — with Private Hives you keep FOR someone, time-capsule seeds that bloom on future dates, and a honeycomb network that grows with every connection. We are a freemium consumer app, not a money transmitter. Gifting happens through Cash App links the user sends via iMessage — we never touch money. We are not competing with standalone gratitude journals. We're building a journal that becomes social. The journal is the practice. Private Hives are the payoff: a practice that becomes a gift. Unlike Venmo (transactional) or greeting card apps (one-off), Pollinate combines the emotional depth of sustained gratitude with the delight of delayed delivery and the connection of a living social network.
+> For people who want to express genuine gratitude to the people they care about, Pollinate is a social gratitude app that makes appreciation a living practice — with Private Hives you keep FOR someone, time-capsule seeds that bloom on future dates, and a honeycomb network that grows with every connection. We are a freemium consumer app, not a money transmitter. Gifting happens through Cash App links the user sends via iMessage — we never touch money. We are not competing with standalone gratitude journals. We're building gratitude you compile for someone, until it's ready to give. The journal is the practice. Private Hives are the payoff: the full arc — write → review → package → send → open — ending in the reveal, the one moment in the product that can make a person cry. Unlike Venmo (transactional) or greeting card apps (one-off), Pollinate combines the emotional depth of sustained gratitude with the delight of delayed delivery and the connection of a living social network.
+
+### Naming Rule (added 2.1)
+
+The one clean line through the product is **audience**: a **Private Hive** is for an audience of one; **the Hive** is for an audience of your invited people. Never "Public" — the social layer is mutual-consent connections, RLS-gated to members, and "public" would be a privacy claim pointing the opposite way from the truth. Performative gratitude is the failure mode of every competitor we beat. The schema's own visibility value for the social layer is `shared`; user-facing copy says "the Hive."
 
 ---
 
@@ -286,7 +294,7 @@ Cash App is our gifting partner — not through infrastructure integration, but 
 ## 7. Competitive Moats
 
 ### 1. Private Hives — Practice That Becomes a Gift
-A Private Hive is a gratitude journal you keep FOR someone — accumulating entries over weeks, months, or years — that becomes a curated gift when you package and send it. This mechanic doesn't exist in any other product. Greeting cards are one-off. Standalone journals are for yourself. Social posts are performative. Private Hives are a sustained, intimate practice that blooms into connection. Once a user has months of hive entries for someone they love, they can't replicate that anywhere else.
+A Private Hive is a gratitude journal you keep FOR someone — accumulating entries over weeks, months, or years — that becomes a finished keepsake when you seal it, and a delivered gift if you then send it (sending is optional and separate; the hive is valuable at zero deliveries). This mechanic doesn't exist in any other product. Greeting cards are one-off. Standalone journals are for yourself. Social posts are performative. Private Hives are a sustained, intimate practice that blooms into connection. Once a user has months of hive entries for someone they love, they can't replicate that anywhere else.
 
 ### 2. Network Effects
 Once a friend group is exchanging gratitude, seeds, and packages on Pollinate, the social graph + shared history creates lock-in. You can't replicate the history of gratitude between friends on a new app. Same moat as Venmo: all my friends are here.

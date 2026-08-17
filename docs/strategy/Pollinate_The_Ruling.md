@@ -12,6 +12,18 @@
 
 ---
 
+## Amendment — 2026-08-17 (re-researched from zero at Colin's request; ratified by Colin in the CEO action items thread)
+
+Colin asked for items 3 (scope) and 4 (positioning) to be re-derived ignoring all prior rulings, from one question: *what will users fall in love with.* The hero survived the re-research and sharpened. Four changes, applied in place below and in the strategy doc (v2.1):
+
+1. **The hero sentence changed.** Killed: *"A journal that becomes social"* (the Marketing §1 line below originally read this way). Now: **"gratitude you compile for someone, until it's ready to give."** The hero is the Private Hive arc *ending in the reveal* — opening a package someone spent months writing you is the only moment in the product that can make a person cry, and it is the tell-a-friend moment Slice 1 exists to discover.
+2. **Delivery is a spectrum, not a gate.** A hive must be worth keeping even if its person can never install the app (a child, a grandparent, someone you've lost). The hive is a letter drawer, not an outbox — valuable at zero deliveries. In-app send ships in Slice 1; send-as-a-link (the viral loop) and keepsake export come later.
+3. **Naming: never "Public."** The two-mode model Colin sketched is ruled in as **Private Hive** (audience of one) and **the Hive** (audience of your invited people). The social layer is mutual-consent and RLS-gated; "public" would be a false privacy claim. The schema's word is `shared`.
+4. **Slice 1 scope: the full arc minus the reply.** Write → review → seal → (send) → open all ship. **Seal and send are two acts, deliberately decoupled** (amended same day, per Sage; the schema already made this call in migration `20260815000003`): *seal* is the author's completion act on the hive — sets `sealed_at`, requires no recipient, so the grandmother/child/lost-someone hives complete the arc as keepsakes; *send* is optional and separate — chooses a connected friend, writes `packaged`/`sent`. Sealing must never be gated on picking a recipient. 8b.8 (reply) moves to Slice 1.1 — it has roundtrip mechanics and no new emotion; a moved recipient responds by starting their own hive, which is the same creation flow we already build. Sequence: write-and-review first, in testers' hands the moment it works; then package → send → open.
+   **Acceptance bar for the reveal (8b.4 / 8b.6): pacing, not particle effects.** Entries surface one at a time, dates visible — *March 12… April 3…* — because time is the material of the gift. One tap per memory; the recipient cannot skim. If a tester screenshots it or cries, it passes. If they scroll it like a feed, it fails, whatever it looks like.
+
+---
+
 ## Why I'm Making This Call
 
 Your memo is right that there are three things in play right now, and that nobody has ruled on which one is real. Here's the ruling, with the reasoning behind it.
@@ -25,14 +37,14 @@ But a journal that **feeds into a social network** isn't a competitor. It's the 
 1. **Stay private** (like any journal)
 2. **Be shared to the Honeycomb feed** (social)
 3. **Be sealed as a Seed** for a future date (time capsule)
-4. **Be written into a Private Hive** (a personal gratitude journal kept FOR someone, reviewed periodically, then packaged and sent — the Christmas concept)
+4. **Be written into a Private Hive** (a personal gratitude journal kept FOR someone, reviewed periodically, then sealed as a keepsake — sending is optional and separate; the Christmas concept)
 5. **Have a tip attached** (money via MDK — Slice 2)
 
 A journal entry in Three Good Things can do exactly one of those: stay private. That's the competitive gap.
 
 ### On the Christmas concept specifically
 
-The Christmas concept — a personal gratitude journal kept *for* someone — is a **Private Hive**. It lives in the Today tab alongside your personal journal. You write entries over time — a thought, a memory, a moment of gratitude about that person — and they're always there for you to see. Nothing is hidden from the author. Then, on a cadence you choose (monthly, yearly, or manual), Pollinate taps you on the shoulder: "Hey — let's take a trip down memory lane." You review what you've written, relive those moments, and when you're ready, you package up the best entries and send them directly to that person in the app. This is the journal + private hives used together, and it's the strongest product story because it works with just two people.
+The Christmas concept — a personal gratitude journal kept *for* someone — is a **Private Hive**. It lives in the Today tab alongside your personal journal. You write entries over time — a thought, a memory, a moment of gratitude about that person — and they're always there for you to see. Nothing is hidden from the author. Then, on a cadence you choose (monthly, yearly, or manual), Pollinate taps you on the shoulder: "Hey — let's take a trip down memory lane." You review what you've written, relive those moments, and when you're ready, you **seal** the hive — the author's completion act, no recipient required. If the person is a connected friend, sending is a separate, optional step after the seal (2026-08-17 amendment, item 4). This is the journal + private hives used together, and it's the strongest product story because it works with just two people.
 
 **The journal + private hives + seeds = a gift you spend a year making.** That's not in any competitor. That's the moat.
 
@@ -50,7 +62,7 @@ Today  |  Hive  |  Wallet  |  Garden
 
 | Tab | What it is | Solo user (day 1) | Social user (has friends) |
 |---|---|---|---|
-| **Today** | Journal + Private Hives | Full feature. Write daily gratitude. Start a private hive for someone (always visible to you, reviewed periodically, then packaged and sent). | Same, but now you can also share today's entry to the feed or seal it as a social seed. |
+| **Today** | Journal + Private Hives | Full feature. Write daily gratitude. Start a private hive for someone (always visible to you, reviewed periodically, then sealed — sending is optional and separate). | Same, but now you can also share today's entry to the feed or seal it as a social seed. |
 | **Hive** | Social layer: honeycomb + feed | Empty state: "Add your first friend." | Full feature. Hexagons with states. Tap → action menu. Feed flows here. |
 | **Wallet** | Balance, funding, tips | **Shell only in MVP1.** Shows $0.00 + "Coming Soon." Tab exists but no functionality. | Full feature in Slice 2: balance, transactions, send tips, funding. |
 | **Garden** | Reflection: Recap, Wrapped, history | Shows your entries, streak, monthly recap. Solo reflection. | Adds: gratitude graph, Annual Harvest, shared history with friends. |
@@ -59,7 +71,7 @@ Today  |  Hive  |  Wallet  |  Garden
 
 **TODAY TAB — "Where you write"**
 - My Daily Journal (personal gratitude entries — your practice, your streak)
-- Private Hives (personal gratitude journals you keep FOR someone — always visible to you, reviewed on a trip down memory lane, then packaged and sent)
+- Private Hives (personal gratitude journals you keep FOR someone — always visible to you, reviewed on a trip down memory lane, then sealed; sending is optional and separate)
   - "Hive for Mateo" (47 entries — yearly review)
   - "Hive for Mom" (3 entries — monthly review)
   - + Start a private hive for someone
@@ -187,6 +199,11 @@ Moving to Supabase isn't just about persistence — it's the privacy fix. RLS po
 | Seeds bloomed during testing | 5+ | Bloom experience lands emotionally |
 | 7-day retention (unprompted) | 30%+ | People come back without being nagged |
 | Seed bloom open rate | 80%+ | Bloom notifications drive re-engagement |
+| Private hives created | 10+ | The hero gets adopted |
+| Memory Lane reviews completed | 5+ | The author's bloom moment lands |
+| Packages sent | 5+ | The arc completes end to end |
+| Package open rate | 80%+ | The reveal is anticipated, not ignored |
+| Hives **sealed** with 5+ entries and no send | 3+ | The letter drawer is valuable at zero deliveries — seal requires no recipient, so this is directly measurable via `sealed_at` (added 2026-08-17) |
 | Qualitative: "Would you send this to a friend?" | 70%+ yes | Viral loop potential |
 | Qualitative: NPS | 30+ | Product-market fit signal |
 | No critical data loss (entries, friendships, seeds) | 0 incidents | Reliability |
@@ -201,7 +218,7 @@ Moving to Supabase isn't just about persistence — it's the privacy fix. RLS po
 
 ### 1. Run the Supabase Migration (P0 — Today)
 
-Four people's merged work is invisible on devices because migrations haven't been applied to prod. `notes`, `seeds`, `seed_contents`, `list_hive_state`, `plant_seed`, `list_my_seeds` all return 404. Assign an owner. Run `supabase db push`. Verify endpoints return 200. Test on a real device.
+Four people's merged work is invisible on devices because migrations haven't been applied to prod. `notes`, `seeds`, `seed_contents`, `list_hive_state`, `plant_seed` all return 404. (Amended 2026-08-17: this list previously named `list_my_seeds` — `list_my_seeds` (never in schema); no such function was ever merged. Seeds are listed by direct `seeds` table selects under RLS — see src/services/SeedsStore.js.) Assign an owner. Run `supabase db push`. Verify endpoints return 200. Test on a real device.
 
 ### 2. Fix Journal Storage (P0 — This Week)
 
@@ -224,15 +241,15 @@ Entries live in `gratitude_entries_v1` as a local blob tied to no user. A year o
 ### Design
 
 1. **Tab bar is decided:** `Today | Hive | Wallet | Garden`. Design accordingly.
-2. **Today tab includes Private Hives.** Design the private hive creation flow: "Start a private hive for someone" → compose entries over time → always visible to author → periodic trip down memory lane review → package entries → send to connected friend.
-3. **The Christmas concept is a Private Hive,** not a separate product. It's a personal gratitude journal kept for a specific person, reviewed on a trip down memory lane, then packaged and sent. Design the compose + review + package + send experience.
+2. **Today tab includes Private Hives.** Design the private hive creation flow: "Start a private hive for someone" → compose entries over time → always visible to author → periodic trip down memory lane review → **seal** (the completion act; closing a letter drawer, not addressing an envelope) → optionally send to a connected friend.
+3. **The Christmas concept is a Private Hive,** not a separate product. It's a personal gratitude journal kept for a specific person, reviewed on a trip down memory lane, then sealed — and optionally sent. Design the compose + review + seal + (send) experience; the compose flow ends in a seal moment, not a recipient picker.
 4. **Wallet tab in MVP1 = shell only.** Design a beautiful "Coming Soon" empty state. No balance, no funding UI, no transactions. Just the shell so the tab bar is complete.
 5. **@Pixel's Wrapped goes into the Garden tab,** not as a top-level tab.
 6. **Honeycomb tap → action menu is still needed.** Current reveal card is fine for solo browsing. The action menu (Send note, Plant seed, View history) is the social layer. Design as bottom sheet. (Cash App gift link appears in Slice 2.)
 
 ### Marketing
 
-1. **Positioning updated:** "A journal that becomes social." Lead with the Christmas concept for tester recruitment.
+1. **Positioning updated (2026-08-17 amendment):** "Gratitude you compile for someone, until it's ready to give." Lead with the Christmas concept for tester recruitment.
 2. **Slice 1 success criteria revised** (see above). No money metrics. The demo validates social gratitude + seeds.
 3. **Recruit testers who will write journal entries and plant seeds,** not just poke around.
 
@@ -247,7 +264,10 @@ Entries live in `gratitude_entries_v1` as a local blob tied to no user. A year o
 | What's the tab bar? | **Today \| Hive \| Wallet \| Garden** |
 | Where do private hives live? | **Today tab, alongside personal journal** |
 | Where does Wrapped go? | **Garden tab** |
-| Is the Christmas concept separate? | **No. It's a Private Hive — a personal gratitude journal for someone, reviewed on trips down memory lane, then packaged and sent.** |
+| Is the Christmas concept separate? | **No. It's a Private Hive — a personal gratitude journal for someone, reviewed on trips down memory lane, then sealed — and optionally sent. (2026-08-17)** |
+| What's the hero sentence? | **"Gratitude you compile for someone, until it's ready to give." Never "a journal that becomes social." (2026-08-17)** |
+| Private vs. "Public" hives? | **Private Hive (audience of one) and the Hive (audience of your people). Never "Public." (2026-08-17)** |
+| What ships of Private Hives in Slice 1? | **The full arc — write → review → seal → (send) → open. Seal and send are decoupled; sealing never requires a recipient. The reply (8b.8) moves to Slice 1.1. (2026-08-17)** |
 | Is the wallet in MVP1? | **No. Shell only. Money is Slice 2.** |
 | What's the most urgent task? | **Run the Supabase migration. Then fix journal storage. Both block testing.** |
 | What does Slice 1 validate? | **Social gratitude + delayed delivery (seeds). Not money.** |
