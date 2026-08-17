@@ -30,6 +30,9 @@
     "check:demo-content-callsites": "node scripts/check-demo-content-callsites.mjs",
     "check:copy-rules": "node scripts/check-copy-rules.mjs",
     "check:private-hives-seal": "node scripts/check-private-hives-seal.mjs",
+    "check:resolve-initial-route": "node scripts/check-resolve-initial-route.mjs",
+    "check:date-ranges-utils": "node scripts/check-date-ranges-utils.mjs",
+    "check:hive-state-utils": "node scripts/check-hive-state-utils.mjs",
     "test": "node scripts/run-checks.mjs",
     "deploy:migrations": "bash scripts/deploy-migrations.sh",
     "check:legal-consent-gate": "node scripts/check-legal-consent-gate.mjs"

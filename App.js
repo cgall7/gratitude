@@ -23,6 +23,7 @@ import { supabase, isSupabaseConfigured } from './src/services/supabase';
 import { EntryStore } from './src/services/EntryStore';
 import { tagEntry } from './src/utils/themeTagger';
 import { DEMO_MODE } from './src/constants/demoMode';
+import { resolveInitialRouteWithTimeout } from './src/utils/resolveInitialRoute';
 
 const Stack = createStackNavigator();
 
@@ -31,52 +32,12 @@ SplashScreen.preventAutoHideAsync();
 // DEMO_MODE gates both demo behaviours below: the foreground-resume reset,
 // and forcing every cold launch to start at Onboarding. With it off, cold
 // launches route on the persisted completion flag / live session instead
-// (resolveInitialRoute). Defined in src/constants/demoMode.js, not here —
+// (resolveInitialRouteWithTimeout, src/utils/resolveInitialRoute.js — pulled
+// out of this file so check-resolve-initial-route.mjs can exercise it
+// without a renderer). Defined in src/constants/demoMode.js, not here —
 // CoreRitual.js/HoneycombTab.js/Onboarding.js's demo-only affordances need
 // the derived DEMO_CONTENT constant next to it, and importing from App.js
 // would be circular (App.js imports all three screens).
-
-// Cold-launch routing, only consulted when DEMO_MODE is off. Completed
-// onboarding on this device, or an existing signed-in session (fresh
-// install by a returning user), both land on Main. Any storage failure
-// falls back to Onboarding — the worst case is seeing the flow again,
-// never being locked out of it.
-const resolveInitialRoute = async () => {
-  try {
-    if (await OnboardingState.isComplete()) return 'Main';
-    if (isSupabaseConfigured && supabase) {
-      // getSession() can hit the network (token refresh past the 90s expiry
-      // margin), so this branch is the slow path. Writing the flag here makes
-      // it self-healing: users who predate the flag — everyone who completed
-      // onboarding before it shipped — pay this path once, then read the
-      // local key on every launch after.
-      const { data } = await supabase.auth.getSession();
-      if (data?.session) {
-        OnboardingState.markComplete().catch(() => {});
-        return 'Main';
-      }
-    }
-  } catch (e) {
-    // fall through
-  }
-  return 'Onboarding';
-};
-
-// getSession's refresh has no app-level timeout, and while the resolve is
-// pending the splash can never hide (NavigationContainer isn't mounted, so
-// onReady can't fire). On a dead or captive-portal network that's a frozen
-// splash — the one state a user can't back out of. Racing a short timeout
-// keeps the worst case at "see onboarding again," which is the designed
-// fallback. With the self-healing write above, a user hits this window at
-// most once — after that the route resolves from local storage.
-const ROUTE_RESOLVE_TIMEOUT_MS = 3000;
-const resolveInitialRouteWithTimeout = () =>
-  Promise.race([
-    resolveInitialRoute(),
-    new Promise((resolve) => {
-      setTimeout(() => resolve('Onboarding'), ROUTE_RESOLVE_TIMEOUT_MS);
-    }),
-  ]);
 
 export default function App() {
   const [fontsLoaded, setFontsLoaded] = useState(false);
@@ -97,7 +58,7 @@ export default function App() {
 
   useEffect(() => {
     if (DEMO_MODE) return;
-    resolveInitialRouteWithTimeout().then(setInitialRoute);
+    resolveInitialRouteWithTimeout({ OnboardingState, isSupabaseConfigured, supabase }).then(setInitialRoute);
   }, []);
 
   useEffect(() => {
