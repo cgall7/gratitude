@@ -41,6 +41,20 @@ import { resolvePerchPoint } from './flightSequencer';
 // (§28.13). That is the same structural guarantee the pollinate mount already
 // depends on, stated once in `FlyingBee`.
 //
+// AND THIS SCREEN HAS A LIVE INSTANCE OF IT, so it is named here rather than
+// rediscovered as a bug (Sage, 2026-08-17). Every TodayTab anchor sits inside
+// a `StaggeredItem`, whose `Animated.View` drives `translateY` with
+// `useNativeDriver: true` — exactly the case above. It is BOUNDED BY
+// CONSTRUCTION rather than by luck: the entrance runs `Animated.timing` to a
+// terminal of `translateY: 0` (`StaggeredItem.js:115-118`, outputRange
+// `[14, 0]`), so the discrepancy is at most 14pt, only downward, and only
+// while the cascade is in flight — 380ms per item, and with `count`
+// defaulting to 1 the delays are `index * 50`, so the last of four items has
+// settled by 530ms from mount. Any sortie chosen after that aims at the
+// settled frame, and one chosen during it aims at most 14pt off a card that
+// is still visibly arriving. `pop` would swap `translateY` for `scale` and
+// change that bound; neither perch host passes it.
+//
 // Window coordinates cross the boundary, §28.2 unchanged — the same currency
 // `pollinate` already uses, converted once inside the flight's own box.
 

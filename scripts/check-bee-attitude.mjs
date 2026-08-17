@@ -3975,6 +3975,27 @@ for (const [file, { anchors, paddingH }] of perchSets) {
     // hole behind a prop, and no AST walk reaches it. Neither host does that
     // today; if one ever does, this row will say yes and be wrong, and the
     // honest place to catch it is the call site.
+    //
+    // AN ANCHOR IN BOTH ARMS PASSES THIS ROW, AND YOU SHOULD STILL NOT WRITE
+    // ONE. Both arms carrying an anchor does mean one renders in every state,
+    // so a green here is correct — but the only spelling that gets there
+    // gives ONE REGION TWO IDENTITIES, because written the natural way (one
+    // region, one name) K2 reds on `duplicate ids: hive-shelf` (measured, not
+    // reasoned: Sage's correction to a note of mine that stopped one step
+    // short). And `PerchAnchor.js:117` says what two identities cost — the
+    // anti-repeat memory is keyed on `id`, so two names for one place are two
+    // places to `chooseAnchor`. Hoist the anchor ABOVE the ternary: one id,
+    // unconditional, and the question does not arise.
+    //
+    // K3 DISAGREES WITH THIS ROW ON THAT SHAPE, AND THE DISAGREEMENT IS
+    // FAIL-SAFE, WHICH IS WHY THERE IS NO ROW JOINING THEM. K3 measures each
+    // anchor's own conditionality, so it cannot see that a pair is jointly
+    // total and reads `2 unconditional of 6` where this row reads reachable.
+    // That is an UNDERCOUNT against a `>= FLOOR` assertion, and an undercount
+    // there can only ever produce a false RED — a conversation. This row's
+    // old defect ran the other direction, which is what made it worth an
+    // evening. Naming the direction is the point: "these two disagree" invites
+    // a reconciliation, and the reconciliation is the row not to build.
     const anchorsInEveryState = (n) => {
       if (!n || typeof n !== 'object') return false;
       if (Array.isArray(n)) return n.some(anchorsInEveryState);
