@@ -340,7 +340,17 @@ const MomentStep = ({ step, momentTime, onPick, onNext, onBack }) => (
     <View style={styles.fillBetween}>
       <View style={styles.topContent}>
         <Text style={styles.h1}>When will you stop and notice?</Text>
-        <Text style={styles.bodySm}>We'll nudge you once. Gently.</Text>
+        {/* R15's subhead here read "We'll nudge you once. Gently." — a body
+            line asserting a capability that has never existed: zero
+            expo-notifications, zero `notification` in app.json, zero
+            Notifications.* call sites (Sage, thread 4510c5c8). §27.2's rule
+            one notch worse than over-reach — not "how far the product
+            goes" but something the product does not do. Deleted rather
+            than reworded because deletion is the only edit that survives
+            every outcome of the step's own ruling: it dies with the step
+            if the step is cut, and it becomes writable again only once a
+            nudge exists to describe. No replacement line: §30.5,
+            onboarding's job is activation, not explanation. */}
         <View style={styles.momentList}>
           {MOMENT_TIMES.map((option, index) => {
             const selected = option.key === momentTime;
