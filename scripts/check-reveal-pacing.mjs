@@ -1,4 +1,4 @@
-// Gate for the reveal sequencer's pacing (Sunbeam §32, `src/components/revealSequencer.js`).
+// Gate for the reveal sequencer's pacing (Sunbeam §31, `src/components/revealSequencer.js`).
 //
 //   npm run check:reveal-pacing
 //

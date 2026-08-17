@@ -1,4 +1,4 @@
-// Sunbeam §32 — the reveal sequencer.
+// Sunbeam §31 — the reveal sequencer.
 //
 // ┌─ NOT WIRED YET, AND HERE IS HOW TO TELL THAT FROM ORPHANED ─────────┐
 // │ This module has NO importer in `src/` or `App.js`. That is the      │
