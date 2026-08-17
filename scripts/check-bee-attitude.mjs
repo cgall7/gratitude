@@ -3857,6 +3857,162 @@ for (const [file, { anchors, paddingH }] of perchSets) {
   }
 }
 
+// --- K7. a cascade step the bee cannot reach -----------------------------
+//
+// SAGE'S FINDING, AS A ROW (2026-08-17). K1-K6 all read the DECLARED set —
+// they enumerate `PerchAnchor` nodes and measure them. So they are blind in
+// exactly one direction: a screen that grows a new top-level region carrying
+// no anchor stays green, because the thing that is missing is the thing the
+// collector enumerates. `fizz/private-hives-rails` adds an unconditional
+// `<StaggeredItem index={3}>` shelf to TodayTab with no anchor in it; the
+// merge is one trivial conflict hunk in the `useState` block, so the half
+// that needs a decision is the half git resolves silently.
+//
+// A GATE THAT ENUMERATES X CANNOT SEE A MISSING X. So this row asserts the
+// direction the others cannot:
+//
+//   every top-level `StaggeredItem` on a screen that declares a perch set
+//   contains, or is contained by, a `PerchAnchor`.
+//
+// ONE DIRECTION, NOT A BIJECTION, and the difference is not a detail. The
+// obvious reading is Bumble's `check-migration-sentinels` shape, which
+// checks both ways — but he needs both because his sentinel table is a
+// SECOND COPY of the migration list, and either copy can drift. The anchor
+// set is not a copy of anything; `PerchAnchor.js`'s header says it outright
+// ("THE ANCHOR SET IS NOT A TABLE, IT IS THE RENDER TREE"). An anchor for a
+// region that does not render cannot exist, because the anchor IS the
+// region. So the converse has no content to assert, and asserting it anyway
+// is red on a correct tree: measured on this branch, TodayTab declares 3
+// cascade steps and 4 anchors — the badge sits in `ScreenHeader`'s `right`
+// slot with no cascade step of its own — and HoneycombTab declares 3
+// anchors and no cascade at all. A bijection reds four times on the tree it
+// lands on. A RULE MUST BE STATED IN THE DIRECTION THAT HAS CONTENT.
+//
+// WHY `StaggeredItem` AND NOT "every child of the content container": the
+// general rule is false. HoneycombTab's scroll content has many direct
+// children that are legitimately not anchors (the controls, the feed, the
+// week list Lumen ratified as perch-only at the toggle), so a row demanding
+// an anchor per child would be red on a screen that is correct. What
+// `StaggeredItem` marks is narrower and is the right thing: a deliberate
+// cascade step — a region the designer already declared arrives on its own
+// and reads as a place. That is the same population the bee should be able
+// to visit.
+//
+// NO EXEMPTION LIST, and that is a considered refusal rather than an
+// omission. There are zero exemptions today, so a list would be AN EMPTY
+// LIST WITH A DOOR IN IT (R83, where I declined one for the same reason).
+// The deeper argument is §32.2's own: the anchor set is the render tree,
+// not a table. Putting the NEGATIVE in a table reintroduces exactly the
+// drift `PerchAnchor` was built to remove — a row saying "this shelf is
+// deliberately unreachable" would sit in this file, outlive the shelf, and
+// nobody reading the screen would ever see it. If a cascade step must be
+// exempt, that belongs at the call site where a reviewer meets it, and it
+// arrives with the ruling that justifies it.
+{
+  const hostSteps = [];
+  for (const [file, { src }] of perchSets) {
+    const ast = parseJs(src);
+    const steps = [];
+    const stack = [];
+    // An anchor makes the region reachable whether it is INSIDE the step or
+    // WRAPS it — both are live shapes in this repo (TodayTab nests the anchor
+    // inside; HoneycombTab wraps `HoneycombGrid` from outside). Checking only
+    // the subtree would red on a correct screen.
+    const hasAnchorInSubtree = (node) => {
+      let found = false;
+      const walk = (n) => {
+        if (found || !n || typeof n !== 'object') return;
+        if (Array.isArray(n)) return n.forEach(walk);
+        if (n.type === 'JSXOpeningElement' && n.name?.name === 'PerchAnchor') {
+          found = true;
+          return;
+        }
+        for (const k of Object.keys(n)) if (k !== 'loc' && !k.endsWith('Comments')) walk(n[k]);
+      };
+      walk(node);
+      return found;
+    };
+    const descend = (node) => {
+      if (!node || typeof node !== 'object') return;
+      if (Array.isArray(node)) return node.forEach(descend);
+      if (typeof node.type !== 'string') {
+        for (const k of Object.keys(node)) if (k !== 'loc' && !k.endsWith('Comments')) descend(node[k]);
+        return;
+      }
+      stack.push(node);
+      if (node.type === 'JSXElement' && node.openingElement?.name?.name === 'StaggeredItem') {
+        const idxAttr = node.openingElement.attributes.find(
+          (a) => a.type === 'JSXAttribute' && a.name.name === 'index',
+        );
+        const wrapped = stack.some(
+          (a) =>
+            a !== node &&
+            a.type === 'JSXElement' &&
+            a.openingElement?.name?.name === 'PerchAnchor',
+        );
+        steps.push({
+          line: node.openingElement.loc.start.line,
+          index: idxAttr?.value?.expression?.value ?? idxAttr?.value?.value ?? '?',
+          anchored: wrapped || hasAnchorInSubtree(node),
+          conditional: stack.some(
+            (a) => a !== node && (a.type === 'ConditionalExpression' || a.type === 'LogicalExpression'),
+          ),
+        });
+      }
+      for (const k of Object.keys(node)) if (k !== 'loc' && !k.endsWith('Comments')) descend(node[k]);
+      stack.pop();
+    };
+    descend(ast.program);
+    hostSteps.push({ file, steps });
+
+    const orphans = steps.filter((s) => !s.anchored);
+    if (steps.length === 0) {
+      // VACUOUS, AND IT SAYS SO. A host with no cascade steps has nothing for
+      // this rule to bind to, and a silent `ok` here would read exactly like a
+      // host that was checked and found clean. CANNOT TELL MUST NOT LOOK LIKE
+      // A CLEAN NO.
+      ok(
+        `${path.basename(file)} declares no cascade steps, so the reachability rule is vacuous here ` +
+          '(its anchors are declared directly, not as StaggeredItem children) — checked nothing, and says so',
+      );
+    } else if (orphans.length === 0) {
+      ok(
+        `${path.basename(file)} every cascade step is reachable ` +
+          `(${steps.map((s) => `index ${s.index}${s.conditional ? ' (conditional)' : ''}`).join(', ')})`,
+      );
+    } else {
+      bad(
+        `${path.basename(file)} every cascade step is reachable`,
+        `${orphans.length} of ${steps.length} cascade step(s) carry no anchor: ` +
+          `${orphans.map((s) => `index ${s.index} at :${s.line}${s.conditional ? ' (conditional)' : ''}`).join(', ')}. ` +
+          'A top-level StaggeredItem is a region that reads as a place on the screen, and one with no ' +
+          '<PerchAnchor> is a place the bee can never visit — the other K rows cannot see this, because ' +
+          'what is missing is the node they enumerate. Either wrap it, or land the ruling that says it ' +
+          'is deliberately unreachable.',
+      );
+    }
+  }
+
+  // THE ROW MUST BIND SOMEWHERE. Every per-host branch above can pass by
+  // being vacuous, so without this the whole section could go green on a tree
+  // where `StaggeredItem` had been renamed and nothing was being checked at
+  // all — green by blindness rather than by the property holding.
+  const bound = hostSteps.reduce((n, h) => n + h.steps.length, 0);
+  if (bound > 0) {
+    ok(
+      `the cascade-step reachability rule is exercised: ${bound} step(s) across ` +
+        `${hostSteps.filter((h) => h.steps.length).length} of ${hostSteps.length} perch host(s)`,
+    );
+  } else {
+    bad(
+      'the cascade-step reachability rule is exercised on at least one host',
+      'no <StaggeredItem> was found on any perch host, so every branch above passed vacuously. ' +
+        'Either the cascade component was renamed and this row is now looking for a node that no ' +
+        'longer exists, or the hosts changed shape — in both cases this row is asserting nothing.',
+    );
+  }
+}
+
 console.log(`\ncheck-bee-attitude: ${pass} passed, ${failures.length} failed`);
 if (failures.length) {
   failures.forEach((f) => console.log(`  - ${f}`));
