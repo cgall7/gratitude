@@ -29,6 +29,7 @@
     "check:demo-mode-env": "node scripts/check-demo-mode-env.mjs",
     "check:demo-content-callsites": "node scripts/check-demo-content-callsites.mjs",
     "check:copy-rules": "node scripts/check-copy-rules.mjs",
+    "check:onboarding-flow": "node scripts/check-onboarding-flow.mjs",
     "check:private-hives-seal": "node scripts/check-private-hives-seal.mjs",
     "check:resolve-initial-route": "node scripts/check-resolve-initial-route.mjs",
     "check:date-ranges-utils": "node scripts/check-date-ranges-utils.mjs",

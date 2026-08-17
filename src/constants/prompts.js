@@ -4,8 +4,17 @@
 //
 // Each prompt carries a few short "sparks" — example completions a user can
 // tap to drop straight into the input and edit, rather than staring at a
-// blank page. They're phrased as noun phrases so they read naturally after
-// "I am grateful for...".
+// blank page.
+//
+// THE SPARK REGISTER IS A COMPOSITION CONTRACT, NOT A STYLE PREFERENCE.
+// A spark is never rendered alone: CoreRitual.js:176 sets the input to
+// `I am grateful for ${spark}.` and IdeasAccordion feeds the same shape
+// (`I'm grateful for ${spark}.`, Onboarding.js). So a spark must be a
+// LOWERCASE NOUN PHRASE — anything else lands mid-sentence as a capital,
+// and a leading preposition ("in a gesture") lands as broken grammar the
+// user then has to repair before they can write. Measured over this file:
+// 60/60 sparks are lowercase, 0/60 lead with a preposition. That is the
+// contract; check:copy-rules cannot see it, so it is written here.
 export const DAILY_PROMPTS = [
   {
     question: "Who made you smile this week?",
@@ -89,13 +98,73 @@ export const DAILY_PROMPTS = [
   },
 ];
 
+// --- The first three days: seniority, not rotation ---
+//
+// One Door (PLANS/ONBOARDING_ONE_DOOR_SPEC.md) cut the three belief screens
+// B1–B3 out of onboarding. They are NOT deleted — the argument they made
+// arrives one line a day instead, which is the product's own thesis applied
+// to its own pitch. Lumen's ruling put them here rather than on the gate
+// line: §27.1 ("Pause. / Think of someone.") already owns the gate, under
+// the rule merged with it — a gate aims; the screen with the field asks.
+// These are the screen with the field, so these are questions.
+//
+// The originals, verbatim from GUIDES/GRATITUDE_ONBOARDING_GIVEN_COPY.md §5:
+//   B1  "The morning showed up without you."
+//   B2  "Noticing is one thing. Saying thanks is another."
+//   B3  "Peace tends to follow, but it's not the point."
+//
+// The rephrase carries each line's TURN, not its words — and never names
+// what a Christian reader hears in them. That guide's §2 is explicit: the
+// subtlety is the mechanism, so naming it deletes it.
+//
+// Indexed by days-since-first-entry (0, 1, 2), then the day-of-year
+// rotation below takes over for good.
+export const FIRST_DAYS_PROMPTS = [
+  {
+    // B1 — the day arrived without you arranging it.
+    //
+    // "today", not "this morning". Deezine's rephrase said morning (B1's own
+    // first word) and Lumen accepted it, but day 0 is not a morning: it is
+    // the first entry, written at whatever hour someone installs the app,
+    // and Onboarding.js's FirstEntryStep renders this exact question at that
+    // moment. "What showed up for you this morning?" at 9pm asks about a
+    // time that has already gone — a small false premise on the one screen
+    // §5 calls the activation moment. This is the line already live on main
+    // for that screen, so the change is a deletion, not a new string.
+    question: 'What showed up for you today?',
+    sparks: ['something unexpected', 'a quiet moment', 'a conversation', 'the light'],
+  },
+  {
+    // B2 — the turn: receiving the day, not reviewing it.
+    question: 'What let the day land with you today?',
+    sparks: ['a presence', 'an ease', 'a moment', 'a breath'],
+  },
+  {
+    // B3 — peace as the byproduct, never the reason.
+    question: 'What let you breathe a little easier today?',
+    sparks: ['a gesture', 'a word', 'a rest', 'a kindness'],
+  },
+];
+
 const dayOfYear = (date) => {
   const start = new Date(date.getFullYear(), 0, 0);
   const diff = date - start;
   return Math.floor(diff / 86400000);
 };
 
-export const getDailyPrompt = (date = new Date()) => {
+// `daysSinceFirstEntry` is optional and null-safe on purpose: a caller that
+// cannot cheaply know a user's seniority (or whose lookup failed) gets the
+// rotation, which is exactly the behaviour every caller had before this
+// argument existed. A wrong prompt is a worse failure than an unseasoned
+// one, so the fallback is the general deck, never a guess at day 0.
+export const getDailyPrompt = (date = new Date(), daysSinceFirstEntry = null) => {
+  if (
+    Number.isInteger(daysSinceFirstEntry) &&
+    daysSinceFirstEntry >= 0 &&
+    daysSinceFirstEntry < FIRST_DAYS_PROMPTS.length
+  ) {
+    return FIRST_DAYS_PROMPTS[daysSinceFirstEntry];
+  }
   const idx = dayOfYear(date) % DAILY_PROMPTS.length;
   return DAILY_PROMPTS[idx];
 };

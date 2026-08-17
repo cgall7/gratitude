@@ -5,10 +5,17 @@ import { theme } from '../constants/theme';
 import { useReducedMotion } from '../constants/motion';
 
 // Internal stage keys only — never rendered as on-screen text (Deezine,
-// ratified by Sage 2026-08-09). Claims collapse into `why`; signup/name is
-// `you`.
-const STAGE_ORDER = ['welcome', 'why', 'you', 'moment', 'entry', 'done'];
-const STAGE_LABELS = ['Welcome', 'Why', 'You', 'Moment', 'Entry', 'Done'];
+// ratified by Sage 2026-08-09).
+//
+// ONE CELL PER BEAT, AND THE BEATS ARE THE ONES THAT EXIST. This was six
+// cells for a nine-screen flow with two forks (welcome, why, you, moment,
+// entry, done). One Door cut it to five beats, and a progress map is a
+// CLAIM ABOUT LENGTH: leaving six cells up would have said "five more to
+// go" on the first screen of a flow with four, and drawn two cells that
+// nothing could ever fill. The map has to shrink with the flow it maps —
+// especially this flow, whose whole point is being shorter than it looks.
+const STAGE_ORDER = ['welcome', 'entry', 'saved', 'who', 'account'];
+const STAGE_LABELS = ['Welcome', 'Entry', 'Saved', 'Who', 'Account'];
 const A11Y_LABEL = STAGE_LABELS.join(', ');
 
 const CELL_SIZE = 10;

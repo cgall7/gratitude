@@ -105,6 +105,30 @@ export const EntryStore = {
     return (data ?? []).map(toEntry);
   },
 
+  // The user's first journal day, as a plain 'YYYY-MM-DD' string, or null if
+  // they have never written one. Its own query rather than
+  // `getAllEntries()[0]`: this runs on the writing screen's mount, and a
+  // user with two years of entries would otherwise pull ~700 rows across the
+  // wire to read one date off the front. `limit(1)` on the same index the
+  // ascending order already uses.
+  //
+  // Consumed by the daily prompt (src/constants/prompts.js): the first three
+  // days are seniority-based before the day-of-year rotation takes over.
+  async getFirstEntryDate() {
+    const client = requireSupabase();
+    const userId = await requireUserId(client);
+    const { data, error } = await client
+      .from('entries')
+      .select('entry_date')
+      .eq('user_id', userId)
+      .is('hive_id', null)
+      .order('entry_date', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    if (error) throw error;
+    return data?.entry_date ?? null;
+  },
+
   async getEntriesBetween(startDate, endDate) {
     const client = requireSupabase();
     const userId = await requireUserId(client);
