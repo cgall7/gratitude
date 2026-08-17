@@ -13,10 +13,18 @@
 //   npm run preflight:prod-schema
 //
 // Exit codes:
-//   0  every migration is applied (directly probed or implied by order)
+//   0  every migration is applied — directly probed live, or implied by a
+//      later live probe. This requires the LAST row to be live: order can
+//      only vouch backwards.
 //   1  prod is BEHIND this tree, or a migration on disk has no sentinel here
 //   2  the instrument itself failed (env missing, network, calibration) —
 //      NOT a statement about prod either way
+//   3  INDETERMINATE: nothing probed missing, but the tail after the last
+//      live probe — including the tip — has no anon-visible surface, so
+//      this script structurally cannot answer "is the tip applied". Not a
+//      pass: a deploy that dies mid-push right after the last probeable
+//      migration looks exactly like this. `supabase migration list`
+//      (authenticated) is the instrument that settles it; this one cannot.
 //
 // Three design rules, each paid for by a prior incident:
 //
@@ -35,13 +43,17 @@
 //    until prod catches up. A hand-kept list with no enumerator was short the
 //    day it mattered (the four-migration gate that missed cover_theme).
 //
-// 3. ORDER DOES THE VOUCHING FOR WHAT ANON CANNOT SEE. Policies, triggers,
-//    grants, constraints and comments have no anon-visible surface. The CLI
-//    applies migrations in version order, so a later LIVE probe implies the
-//    unprobeable ones before it (IMPLIED); unprobeable versions after the
-//    last LIVE probe stay UNVERIFIED and are reported as such, with the
-//    premise stated so it can be attacked: this vouching holds ONLY if the
-//    remote migration history is clean — prod's earliest schema predates
+// 3. ORDER DOES THE VOUCHING FOR WHAT ANON CANNOT SEE — AND ONLY BACKWARDS.
+//    Policies, triggers, grants, constraints and comments have no
+//    anon-visible surface. The CLI applies migrations in version order, so a
+//    later LIVE probe implies the unprobeable ones before it (IMPLIED).
+//    Unprobeable versions AFTER the last LIVE probe are a different thing:
+//    nothing vouches for them, a partial deploy that died right after the
+//    last probeable migration produces exactly this table, and an earlier
+//    draft of this script printed "prod is not behind" over that state and
+//    exited 0 (Sage, 2026-08-17). An UNVERIFIED tail is exit 3, never 0.
+//    The premise, stated so it can be attacked: order vouching holds ONLY if
+//    the remote migration history is clean — prod's earliest schema predates
 //    deploy-migrations.sh, so `supabase migration list` is the instrument
 //    for that half, not this script.
 //
@@ -116,9 +128,11 @@ const ANON = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || fileEnv.EXPO_PUBLIC_SU
 
 const die = (code, msg) => {
   console.error(`\nprod-schema-check: ${msg}`);
-  console.error(code === 2
-    ? 'This is an instrument failure — it says nothing about prod either way.'
-    : 'Prod is behind this tree (or a migration has no sentinel). Do not merge client code that reads the missing surface.');
+  console.error({
+    1: 'Prod is behind this tree (or a migration has no sentinel). Do not merge client code that reads the missing surface.',
+    2: 'This is an instrument failure — it says nothing about prod either way.',
+    3: 'INDETERMINATE — not a pass. Nothing probed missing, but nothing vouches for the tail either; a deploy that died mid-push looks exactly like this. Settle it with an authenticated `supabase migration list`.',
+  }[code]);
   process.exit(code);
 };
 
@@ -147,7 +161,16 @@ const MISSING_CODES = new Set(['42703', '42P01', 'PGRST202', 'PGRST205']);
 const classify = (probe, r) => {
   if (probe.kind === 'column') {
     if (r.status === 200) return 'LIVE';
-    if (r.code === '42501') return 'LIVE'; // table+column resolved; access denied is a policy answer
+    // 42501 is a GRANT answer, not a policy one (RLS denial is 200 []), and
+    // column resolution precedes the privilege check, so reaching 42501
+    // proves the column exists. Measured on embedded-postgres 18.4, plain
+    // role, no RLS/PostgREST (Sage, 2026-08-17):
+    //   granted table, fabricated column            -> 42703
+    //   no-grant table, real column                 -> 42501
+    //   no-grant table, fabricated column           -> 42703
+    //   column-grant on id only, ungranted real col -> 42501
+    //   column-grant on id only, fabricated column  -> 42703
+    if (r.code === '42501') return 'LIVE';
     if (MISSING_CODES.has(r.code)) return 'MISSING';
     return `INSTRUMENT(${r.status}/${r.code ?? '??'})`;
   }
@@ -180,7 +203,21 @@ const main = async () => {
   if (unmapped.length) die(1, `migration(s) on disk with no sentinel entry — add one (or an explicit 'order' entry with its reason) to SENTINELS:\n  ${unmapped.join('\n  ')}`);
   if (orphaned.length) die(1, `sentinel entr${orphaned.length > 1 ? 'ies' : 'y'} whose migration file is gone — remove from SENTINELS:\n  ${orphaned.join('\n  ')}`);
 
-  // Rule 1: calibrate before any verdict.
+  // Rule 1: calibrate before any verdict. The reachability+auth control is
+  // the fabricated rpc, NOT a table: every public table here is created by
+  // some migration in the set under test, so a table-based known-good probe
+  // makes its own row unfalsifiable — if that migration were missing, the
+  // run would exit 2 blaming the key instead of reporting the row (Sage,
+  // 2026-08-17). PGRST202 can only be spoken by PostgREST itself with the
+  // key already accepted (a bad key dies at the gateway as 401 before
+  // PostgREST answers; a wrong URL never says PGRST202), and a fabricated
+  // name belongs to no migration by construction. (The OpenAPI root at
+  // /rest/v1/ was tried for this job and is service_role-gated on Supabase —
+  // anon reads 401 "Invalid API key" even with a valid key. Do not "fix" the
+  // control back to it.) entries.id is therefore a *sentinel* probe wearing
+  // a calibration hat: with PGRST202 already proving key+URL+PostgREST, a
+  // missing-object answer on it is a verdict about 20260808000001, not an
+  // instrument failure.
   console.log(`prod-schema-check against ${URL_}\n\ncalibration`);
   let cal;
   try {
@@ -193,10 +230,14 @@ const main = async () => {
     die(2, `network failure during calibration: ${e.message}`);
   }
   const [known, fabCol, fabFn] = cal;
-  if (known.status !== 200) die(2, `known-good probe (entries.id) answered ${known.status}/${known.code ?? '??'}, expected 200 — key revoked, URL wrong, or prod unreachable.`);
+  if (fabFn.code !== 'PGRST202') die(2, `fabricated rpc answered ${fabFn.status}/${fabFn.code ?? '??'}, expected PGRST202 — key revoked, URL wrong, prod unreachable, or the missing-object signal is not trustworthy in this run.`);
+  if (MISSING_CODES.has(known.code)) {
+    // PGRST202 above proved key+URL+PostgREST: the base schema itself is absent.
+    die(1, `entries.id answered ${known.status}/${known.code} with PostgREST reachable and the key accepted — 20260808000001_honeycombs_core_schema is not on prod. Everything after it is not on prod either.`);
+  }
+  if (known.status !== 200) die(2, `known-good probe (entries.id) answered ${known.status}/${known.code ?? '??'}, expected 200 — not a missing-object code, so this is the instrument, not a verdict.`);
   if (fabCol.code !== '42703') die(2, `fabricated column answered ${fabCol.status}/${fabCol.code ?? '??'}, expected 42703 — the missing-column signal is not trustworthy in this run.`);
-  if (fabFn.code !== 'PGRST202') die(2, `fabricated rpc answered ${fabFn.status}/${fabFn.code ?? '??'}, expected PGRST202 — the missing-function signal is not trustworthy in this run.`);
-  console.log('  ok      entries.id -> 200; fabricated column -> 42703; fabricated rpc -> PGRST202');
+  console.log('  ok      fabricated rpc -> PGRST202 (proves key+URL+PostgREST); entries.id -> 200; fabricated column -> 42703');
 
   // Probe in version order.
   const rows = [];
@@ -240,7 +281,14 @@ const main = async () => {
   if (missing.length) {
     die(1, `prod is missing ${missing.length} migration(s), earliest ${missing[0].version}. Everything at or after it is not on prod.`);
   }
-  console.log(`\n  ${rows.length} migration(s): ${rows.filter((r) => r.status === 'LIVE').length} probed live, ${rows.filter((r) => r.status === 'IMPLIED').length} implied by order, ${unverified.length} unverified (after last probe). Prod is not behind this tree.`);
+  // Exit 0 demands the LAST row be live: order vouching only points backwards,
+  // so an UNVERIFIED tail — which is what a deploy dying right after the last
+  // probeable migration produces — can never be spoken for. An earlier draft
+  // printed "prod is not behind this tree" over exactly that state.
+  if (unverified.length) {
+    die(3, `the tip is unverifiable from the anon surface: ${unverified.length} migration(s) after the last live probe (${unverified.map((r) => r.version).join(', ')}) have no probeable object. Whether prod has them is unknown to this script.`);
+  }
+  console.log(`\n  ${rows.length} migration(s): ${rows.filter((r) => r.status === 'LIVE').length} probed live, ${rows.filter((r) => r.status === 'IMPLIED').length} implied by a later live probe, tip probed live. Prod is not behind this tree.`);
 };
 
 main().catch((e) => die(2, `unexpected failure: ${e.stack ?? e.message}`));
