@@ -47,8 +47,10 @@
 // WHAT IS STILL EXCLUDED, with direction. Non-copy JSX attributes
 // (testID, style, variant) are not collected — `testID="demo-toggle"` is
 // not something a user reads, and taking it would red the demo gate on a
-// test id. TEXT_ATTRS is therefore a NAMED LIST and has a list's hole: a
-// copy-bearing attribute nobody has added to it ships unseen.
+// test id. TEXT_ATTRS is therefore a NAMED LIST — but it is no longer an
+// UNBOUNDED hole: check-copy-rules §A2 partitions every attribute name in
+// the tree that carries a string literal into TEXT_ATTRS or its own
+// NOT_COPY_ATTRS, so an unclassified name reds. See TEXT_ATTRS below.
 //
 // OVER-INCLUSION, and why it is the safe direction here. `jsx-expr` takes
 // every string inside a child expression, including operands of a
@@ -129,14 +131,38 @@ const POSITION_SET = new Set(POSITIONS);
 // findings and an assertion name may only state one of them.
 export class PositionVocabularyError extends Error {}
 
-// Attributes a user reads or hears. A named list — see the header.
-const TEXT_ATTRS = new Set([
+// Attributes a user reads or hears. Exported so check-copy-rules can assert
+// against THIS set rather than a second copy of it — a gate matching names
+// off a typed list proves a property of the list, not of the walker.
+//
+// It is still a NAMED LIST, and it shipped with the hole a named list has:
+// `title` was here and `eyebrow` was not, so ScreenHeader.js:20-24 rendered
+// one collected string and one invisible one, from the same call site,
+// through the same <Text> (Sage, thread 4510c5c8). What was outside both
+// gates: LoadState's `body`/`actionLabel`/`staleLabel`/`staleActionLabel`
+// and four `retryAccessibilityLabel`s — i.e. THE WHOLE §23 ERROR-STATE
+// SURFACE on all three screens that carry it, plus `eyebrow` and App.js's
+// `gratitudeText`. 21 strings, measured at 6c0c4b8.
+//
+// The list is no longer the whole defence: check-copy-rules now partitions
+// EVERY attribute name that carries a string literal into this set or its
+// own NOT_COPY_ATTRS, and an unclassified name reds. So a copy-bearing
+// attribute added in November cannot ship unseen — it can only ship after
+// somebody has written down which half it belongs to.
+export const TEXT_ATTRS = new Set([
   'placeholder',
   'accessibilityLabel',
   'accessibilityHint',
   'accessibilityRoleDescription',
+  'retryAccessibilityLabel',
   'title',
   'label',
+  'eyebrow',
+  'body',
+  'actionLabel',
+  'staleLabel',
+  'staleActionLabel',
+  'gratitudeText',
 ]);
 
 const SKIP_KEYS = new Set([

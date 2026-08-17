@@ -94,7 +94,9 @@ import { FORBIDDEN } from './forbidden-words.mjs';
 import {
   POSITIONS,
   PositionVocabularyError,
+  TEXT_ATTRS,
   collectRenderedStrings,
+  walkWithAncestry,
 } from './lib/rendered-strings.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -136,6 +138,14 @@ const check = (label, got, want) => {
 // question "does a user read a forbidden word" is indifferent to which slot
 // the word sits in, and that indifference is the reason it may spread its
 // scope automatically where the demo gate may not.
+// App.js IS IN THE UNIVERSE, and it wasn't. This gate walked src/ only while
+// check-demo-content-callsites walked `App.js + src/**` — two gates over the
+// same tree disagreeing about what the tree IS, which is the divergence one
+// shared walker was supposed to end. It holds exactly one prose string
+// (`gratitudeText="I am grateful for this beautiful day."`, App.js:220, a
+// hardcoded line handed to the Evening route) and that string was outside
+// this gate for a reason TEXT_ATTRS could not fix: adding the attribute name
+// recovers nothing in a file nobody reads. Two holes, one symptom.
 const files = [];
 (function walkDir(dir) {
   for (const name of fs.readdirSync(dir).sort()) {
@@ -144,8 +154,11 @@ const files = [];
     else if (/\.jsx?$/.test(name)) files.push(p);
   }
 })(SRC);
+files.push(path.join(ROOT, 'App.js'));
+files.sort();
 
 const copy = [];
+const parsed = [];
 const parseErrors = [];
 const vocabularyErrors = [];
 for (const file of files) {
@@ -163,6 +176,7 @@ for (const file of files) {
     parseErrors.push(`${rel}: ${e.message}`);
     continue;
   }
+  parsed.push({ rel, ast });
   try {
     for (const s of collectRenderedStrings(ast, { file: rel, positions: POSITIONS })) {
       copy.push({ file: rel, line: s.line, position: s.position, text: s.value });
@@ -178,6 +192,13 @@ console.log(`\n--- A. the universe this gate is standing over ---`);
 // reported green over zero strings is the failure this section exists to make
 // impossible.
 check('source files found under src/', files.length > 0, true);
+// Named, because the file universe is otherwise unpinned and reverting it is
+// a one-line edit no other row observes — the same shape as the vocabulary
+// pin below, one layer out. This gate and check-demo-content-callsites must
+// stand over the same tree; if App.js is ever legitimately dropped, delete
+// this row in the same commit (SELF-DELETING CONTROL, the demo gate's
+// convention).
+check('App.js is in the file universe (both gates read the same tree)', files.some((f) => path.basename(f) === 'App.js'), true);
 check('every file parsed', parseErrors, []);
 check('copy strings collected', copy.length > 0, true);
 
@@ -232,6 +253,103 @@ for (const position of POSITIONS) {
     true
   );
 }
+
+// --- A2. TEXT_ATTRS is a partition, not a list -------------------------
+//
+// The `prop` position is decided by a NAMED LIST in the walker, and a named
+// list has a list's hole: `title` was on it and `eyebrow` was not, so
+// ScreenHeader.js rendered one collected string and one invisible one from
+// the same call site through the same <Text>. Twenty-one strings were
+// outside both gates that way, including LoadState's entire error-state
+// surface on all three screens that carry it (Sage, thread 4510c5c8).
+//
+// Adding the names fixes today. This section is what stops it recurring:
+// every attribute name in the tree that carries a string literal must be
+// CLASSIFIED — copy (walker's TEXT_ATTRS) or not-copy (below) — and an
+// unclassified name reds. A new copy-bearing prop can then ship only after
+// somebody has written down which half it is in.
+//
+// TWO NETS, AND NEITHER IS THE OTHER'S FLOOR, because they fail in
+// different directions:
+//
+//   NAME-level (row 1) catches a NEW attribute. It is the stronger net
+//   because it does not read the string at all — which is what makes it
+//   see `staleActionLabel="Refresh"`. A prose heuristic cannot: nothing
+//   syntactic separates "Refresh" from "contain", "round" or "handled".
+//   Sage's sweep, filtered on prose shape, reported 17 strings and named
+//   six props; the same sweep run at NAME level reports 21 and seven, and
+//   the missing name is exactly the one whose values are single words.
+//   A HEURISTIC OVER VALUES CANNOT ENUMERATE A CLASS DEFINED BY ROLE.
+//
+//   VALUE-level (row 2) catches an OLD attribute that starts carrying copy
+//   — `tone="danger"` today, `tone="Something went wrong"` in November.
+//   Name-level is blind to that by construction, since the name is already
+//   classified. This is the direction an exemption list usually leaks in.
+//
+// Read against TEXT_ATTRS itself rather than a second copy of the names:
+// a gate matching a typed list proves a property of the list.
+const NOT_COPY_ATTRS = new Set([
+  // RN / component API enums and identifiers
+  'accessibilityRole', 'autoCapitalize', 'icon', 'importantForAccessibility',
+  'key', 'keyboardShouldPersistTaps', 'keyboardType', 'mode', 'name',
+  'pointerEvents', 'preset', 'resizeMode', 'returnKeyType', 'size', 'stage',
+  'tint', 'tone',
+  // SVG geometry and paint
+  'cx', 'cy', 'fill', 'fillRule', 'height', 'offset', 'patternTransform',
+  'patternUnits', 'preserveAspectRatio', 'r', 'stopOpacity', 'strokeLinecap',
+  'viewBox', 'width', 'x', 'x1', 'x2', 'y', 'y1', 'y2',
+]);
+
+// The three attributes that are prose-SHAPED and still not copy. Named, so
+// row 2 does not have to guess, and small enough that the exemption is
+// reviewable rather than a door: SVG geometry is whitespace-separated
+// numbers by grammar, not by authorship.
+const GEOMETRY_ATTRS = ['preserveAspectRatio', 'viewBox'];
+
+// Deliberately weak — see the two-nets note. It only has to be true of
+// authored sentences, because a single-word copy value is row 1's job.
+const looksLikeProse = (s) => /\s/.test(s) || /[.?!…]$/.test(s);
+
+const attrStrings = [];
+for (const { rel, ast } of parsed) {
+  walkWithAncestry(ast.program, (node) => {
+    if (node.type !== 'JSXAttribute' || typeof node.name?.name !== 'string') return;
+    const v = node.value;
+    const lit =
+      v?.type === 'StringLiteral' ? v
+      : v?.type === 'JSXExpressionContainer' && v.expression?.type === 'StringLiteral' ? v.expression
+      : null;
+    if (!lit) return;
+    attrStrings.push({ rel, line: node.loc?.start.line, name: node.name.name, value: lit.value });
+  });
+}
+
+console.log(`\n--- A2. every attribute name carrying a string is classified ---`);
+// Universe control first, per the runner's requirement: a sweep that found
+// nothing would satisfy both rows below by being empty.
+check('JSX attributes carrying string literals were found', attrStrings.length > 0, true);
+check(
+  'every attribute name carrying a string literal is classified as copy or not-copy',
+  [...new Set(
+    attrStrings
+      .filter((a) => !TEXT_ATTRS.has(a.name) && !NOT_COPY_ATTRS.has(a.name))
+      .map((a) => `${a.rel}:${a.line} ${a.name}="${a.value}"`)
+  )].sort(),
+  []
+);
+check(
+  'no attribute classified not-copy carries a prose-shaped string (except SVG geometry)',
+  attrStrings
+    .filter((a) => NOT_COPY_ATTRS.has(a.name) && !GEOMETRY_ATTRS.includes(a.name) && looksLikeProse(a.value))
+    .map((a) => `${a.rel}:${a.line} ${a.name}="${a.value}"`)
+    .sort(),
+  []
+);
+check(
+  'the prose-shaped not-copy exemption is exactly SVG geometry',
+  [...GEOMETRY_ATTRS].sort(),
+  ['preserveAspectRatio', 'viewBox'].sort()
+);
 // Files, not just strings: one screen contributing everything would pass the
 // count above.
 const filesWithCopy = new Set(copy.map((c) => c.file));
