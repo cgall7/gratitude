@@ -17,6 +17,7 @@ import { PlantSeed } from './src/screens/PlantSeed';
 import { SeedsInbox } from './src/screens/SeedsInbox';
 import { PollinateWrapped } from './src/screens/PollinateWrapped';
 import { MainTabs } from './src/navigation/MainTabs';
+import { ErrorBoundary } from './src/components/ErrorBoundary';
 import { AuthProvider } from './src/contexts/AuthContext';
 import { OnboardingState } from './src/services/onboardingState';
 import { supabase, isSupabaseConfigured } from './src/services/supabase';
@@ -51,6 +52,11 @@ export default function App() {
   const [splashHidden, setSplashHidden] = useState(false);
   const navigationRef = useRef(null);
   const appState = useRef(AppState.currentState);
+  // Bumped by ErrorBoundary's reset. Changing a subtree's `key` is what
+  // forces React to unmount and remount it fresh, rather than reconcile
+  // onto the same instances that just threw — a plain setState re-render
+  // wouldn't touch component state a crash left in a bad shape.
+  const [resetKey, setResetKey] = useState(0);
 
   useEffect(() => {
     Font.loadAsync(fontAssets).then(() => setFontsLoaded(true));
@@ -87,104 +93,106 @@ export default function App() {
   }
 
   return (
-    <AuthProvider>
-      <NavigationContainer ref={navigationRef} onReady={onLayoutRootView}>
-        <Stack.Navigator
-          initialRouteName={initialRoute}
-          screenOptions={{
-            headerShown: false,
-            cardStyle: { backgroundColor: theme.colors.background }
-          }}
-        >
-          <Stack.Screen name="Onboarding">
-            {(props) => (
-              <OnboardingFlow
-                {...props}
-                startAt={props.route.params?.startAt}
-                onDone={() => props.navigation.replace('Main')}
-                splashHidden={splashHidden}
-              />
-            )}
-          </Stack.Screen>
+    <ErrorBoundary onReset={() => setResetKey((k) => k + 1)}>
+      <AuthProvider key={resetKey}>
+        <NavigationContainer ref={navigationRef} onReady={onLayoutRootView}>
+          <Stack.Navigator
+            initialRouteName={initialRoute}
+            screenOptions={{
+              headerShown: false,
+              cardStyle: { backgroundColor: theme.colors.background }
+            }}
+          >
+            <Stack.Screen name="Onboarding">
+              {(props) => (
+                <OnboardingFlow
+                  {...props}
+                  startAt={props.route.params?.startAt}
+                  onDone={() => props.navigation.replace('Main')}
+                  splashHidden={splashHidden}
+                />
+              )}
+            </Stack.Screen>
 
-          <Stack.Screen name="Lock">
-            {(props) => (
-              <LockScreen
-                {...props}
-                onOpen={() => props.navigation.navigate('Input')}
-              />
-            )}
-          </Stack.Screen>
+            <Stack.Screen name="Lock">
+              {(props) => (
+                <LockScreen
+                  {...props}
+                  onOpen={() => props.navigation.navigate('Input')}
+                />
+              )}
+            </Stack.Screen>
 
-          <Stack.Screen name="Input">
-            {(props) => (
-              <InputScreen
-                {...props}
-                onUnlock={async (text) => {
-                  // InputScreen stopped saving itself when the pre-auth
-                  // onboarding paths started buffering its text instead
-                  // (P0-2 fix, thread 19e90cf8). This is the one caller with
-                  // a real session already — it owns the write now.
-                  await EntryStore.saveEntry(new Date(), text, tagEntry(text));
-                  props.navigation.replace('Main');
-                }}
-              />
-            )}
-          </Stack.Screen>
+            <Stack.Screen name="Input">
+              {(props) => (
+                <InputScreen
+                  {...props}
+                  onUnlock={async (text) => {
+                    // InputScreen stopped saving itself when the pre-auth
+                    // onboarding paths started buffering its text instead
+                    // (P0-2 fix, thread 19e90cf8). This is the one caller with
+                    // a real session already — it owns the write now.
+                    await EntryStore.saveEntry(new Date(), text, tagEntry(text));
+                    props.navigation.replace('Main');
+                  }}
+                />
+              )}
+            </Stack.Screen>
 
-          <Stack.Screen name="Main" component={MainTabs} />
+            <Stack.Screen name="Main" component={MainTabs} />
 
-          <Stack.Screen name="Legal" component={LegalScreen} options={{ presentation: 'modal' }} />
+            <Stack.Screen name="Legal" component={LegalScreen} options={{ presentation: 'modal' }} />
 
-          {/* Opened by the account door beside the tab capsule (MainTabs
-              Option C). A modal, not a tab: it's the app's only route to
-              sign-out and the legal documents, and it's opened about twice
-              a year. */}
-          <Stack.Screen name="Account" component={AccountScreen} options={{ presentation: 'modal' }} />
+            {/* Opened by the account door beside the tab capsule (MainTabs
+                Option C). A modal, not a tab: it's the app's only route to
+                sign-out and the legal documents, and it's opened about twice
+                a year. */}
+            <Stack.Screen name="Account" component={AccountScreen} options={{ presentation: 'modal' }} />
 
-          {/* Project 7 (Gratitude Notes, no-tip variant). Both modal: Notes
-              opens from the Honeycomb tab's header, Compose opens from
-              Notes' header, neither is a tab of its own yet — that's a
-              design placement call, not an engineering one. */}
-          <Stack.Screen name="Notes" component={NotesInbox} options={{ presentation: 'modal' }} />
-          <Stack.Screen name="ComposeNote" component={ComposeNote} options={{ presentation: 'modal' }} />
+            {/* Project 7 (Gratitude Notes, no-tip variant). Both modal: Notes
+                opens from the Honeycomb tab's header, Compose opens from
+                Notes' header, neither is a tab of its own yet — that's a
+                design placement call, not an engineering one. */}
+            <Stack.Screen name="Notes" component={NotesInbox} options={{ presentation: 'modal' }} />
+            <Stack.Screen name="ComposeNote" component={ComposeNote} options={{ presentation: 'modal' }} />
 
-          {/* Project 8 (Seeds). 8.2 plants, 8.4 lists — a planted seed is no
-              longer invisible. 8.8's reveal choreography is still @Pixel's:
-              the sealed -> bloomed transition happens on SeedsInbox today
-              (§22.2's refetch), it just does not yet have a beat. Modal for
-              the same reason Compose is: where Seeds finally lives in the IA
-              is Project 10's call. */}
-          <Stack.Screen name="PlantSeed" component={PlantSeed} options={{ presentation: 'modal' }} />
-          <Stack.Screen name="Seeds" component={SeedsInbox} options={{ presentation: 'modal' }} />
+            {/* Project 8 (Seeds). 8.2 plants, 8.4 lists — a planted seed is no
+                longer invisible. 8.8's reveal choreography is still @Pixel's:
+                the sealed -> bloomed transition happens on SeedsInbox today
+                (§22.2's refetch), it just does not yet have a beat. Modal for
+                the same reason Compose is: where Seeds finally lives in the IA
+                is Project 10's call. */}
+            <Stack.Screen name="PlantSeed" component={PlantSeed} options={{ presentation: 'modal' }} />
+            <Stack.Screen name="Seeds" component={SeedsInbox} options={{ presentation: 'modal' }} />
 
-          {/* Project 10: Wrapped is no longer a tab (Colin's ruling — it
-              lives in the Garden). It has to be registered somewhere or the
-              screen ships unreachable, and a root-stack modal is the same
-              treatment Notes/Seeds/Compose get for the same reason.
+            {/* Project 10: Wrapped is no longer a tab (Colin's ruling — it
+                lives in the Garden). It has to be registered somewhere or the
+                screen ships unreachable, and a root-stack modal is the same
+                treatment Notes/Seeds/Compose get for the same reason.
 
-              `onComplete` is what makes it a screen rather than a trap: with
-              the prop undefined, `PollinateWrapped.js:147` sends the last
-              slide back to slide 0 forever — survivable when a tab bar sat
-              underneath it, not now that a modal covers the bar. Tapping past
-              the last beat returns you to the Garden. */}
-          <Stack.Screen name="Wrapped" options={{ presentation: 'modal' }}>
-            {(props) => (
-              <PollinateWrapped {...props} onComplete={() => props.navigation.goBack()} />
-            )}
-          </Stack.Screen>
+                `onComplete` is what makes it a screen rather than a trap: with
+                the prop undefined, `PollinateWrapped.js:147` sends the last
+                slide back to slide 0 forever — survivable when a tab bar sat
+                underneath it, not now that a modal covers the bar. Tapping past
+                the last beat returns you to the Garden. */}
+            <Stack.Screen name="Wrapped" options={{ presentation: 'modal' }}>
+              {(props) => (
+                <PollinateWrapped {...props} onComplete={() => props.navigation.goBack()} />
+              )}
+            </Stack.Screen>
 
-          <Stack.Screen name="Evening">
-            {(props) => (
-              <EveningMirror
-                {...props}
-                gratitudeText="I am grateful for this beautiful day."
-                onClose={() => props.navigation.navigate('Main')}
-              />
-            )}
-          </Stack.Screen>
-        </Stack.Navigator>
-      </NavigationContainer>
-    </AuthProvider>
+            <Stack.Screen name="Evening">
+              {(props) => (
+                <EveningMirror
+                  {...props}
+                  gratitudeText="I am grateful for this beautiful day."
+                  onClose={() => props.navigation.navigate('Main')}
+                />
+              )}
+            </Stack.Screen>
+          </Stack.Navigator>
+        </NavigationContainer>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }
