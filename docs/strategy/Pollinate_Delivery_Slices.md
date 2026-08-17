@@ -306,9 +306,9 @@
 | ---- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | --- | --------------------- |
 | 12.1 | Subscription engine              | In-app purchase (StoreKit 2 / Play Billing). Monthly ($2.99) + annual ($29.99) plans.                                     | M   | ios, android, backend |
 | 12.2 | Paywall screen                   | Beautiful paywall: what you get, pricing ($2.99/month or $29.99/year), "Upgrade to Pollinate Plus." Shown when user hits a free-tier limit. | M   | ios, android, design  |
-| 12.3 | Freemium free tier               | New users automatically get free tier. No trial period, no card required. Free tier: 1 hive, 1 friend, 1 seed, daily journal (full), yearly review only, 1 package/hive/year, full feed access, receive unlimited. | M   | ios, android, backend |
+| 12.3 | Freemium free tier               | New users automatically get free tier. No trial period, no card required. Free tier: 1 hive, 1 friend, 1 seed, daily journal (full), yearly review only, 1 send/hive/year (2026-08-17: gate moved from seal to send; sealing stays unconditional), full feed access, receive unlimited. | M   | ios, android, backend |
 | 12.4 | Upgrade prompts & limits         | When free user hits a limit (e.g., tries to create 2nd hive, add 2nd friend), show paywall. Free tier remains functional within limits. Soft gates, not hard walls. | M   | backend, ios, android |
-| 12.5 | Feature gating logic             | Free = receive unlimited, 1 hive, 1 friend, 1 seed, daily journal (full), yearly review only, 1 package/hive/year, full feed access. Paid (Pollinate Plus) = unlimited hives, friends, seeds, monthly/yearly/manual reviews, unlimited packages, Cash App gifting, premium themes. | S   | backend, ios, android |
+| 12.5 | Feature gating logic             | Free = receive unlimited, 1 hive, 1 friend, 1 seed, daily journal (full), yearly review only, 1 send/hive/year, full feed access. Paid (Pollinate Plus) = unlimited hives, friends, seeds, monthly/yearly/manual reviews, unlimited sends, Cash App gifting, premium themes. **The gate meters `send_hive` calls, never `sealed_at`** (ruled 2026-08-17: pricing gates the send, never the seal) — sealing a hive is always free and unconditional regardless of tier. | S   | backend, ios, android |
 | 12.6 | Demo mode → production migration | Flip `demo_mode = false`. Enable paywall. Enable Cash App gifting. Remove demo flags.                                      | S   | backend               |
 | 12.7 | Subscription management          | Settings: view plan, manage subscription, cancel, restore purchases.                                                       | S   | ios, android, backend |
 | 12.8 | Revenue tracking                 | Track: free → paid conversions, churn, MRR, ARPU, gift attach rate.                                                        | M   | backend, analytics    |
@@ -317,8 +317,8 @@
 > **Monetization model (decided per PRD v3.1):**
 >
 > - **Freemium subscription.** Free tier with limited features. Paid tier "Pollinate Plus" at $2.99/month or $29.99/year.
-> - **Free tier:** Receive unlimited, 1 hive, 1 friend, 1 seed, daily journal (full), yearly review only, 1 package/hive/year, full feed access.
-> - **Paid tier (Pollinate Plus):** Unlimited hives, friends, seeds, monthly/yearly/manual reviews, unlimited packages, Cash App gifting, premium themes.
+> - **Free tier:** Receive unlimited, 1 hive, 1 friend, 1 seed, daily journal (full), yearly review only, 1 send/hive/year (sealing itself is unconditional, 2026-08-17), full feed access.
+> - **Paid tier (Pollinate Plus):** Unlimited hives, friends, seeds, monthly/yearly/manual reviews, unlimited sends, Cash App gifting, premium themes.
 > - **Cash App gifting:** Users generate gratitude notes with Cash App payment links, shared via iMessage. Pollinate is NOT a money transmitter — it generates links, doesn't handle funds.
 > - **Transaction fees (MDK/Lightning):** Deferred to Slice 3+ pending legal research. Not part of Slice 2 launch.
 

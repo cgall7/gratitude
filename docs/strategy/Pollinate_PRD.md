@@ -87,7 +87,7 @@ Pollinate is not a utility app. It's an **emotional experience.** Every interact
 ### Persona C: "The Daily Practitioner"
 - Any age. Wants a daily gratitude practice that isn't lonely.
 - Starts with the journal. Discovers private hives. Gets hooked when they take their first "trip down memory lane" and realize how much they've written about someone they love.
-- Free tier is enough for them initially. They upgrade when they want more hives, monthly reviews, and unlimited packages.
+- Free tier is enough for them initially. They upgrade when they want more hives, monthly reviews, and unlimited sends.
 
 ---
 
@@ -184,7 +184,7 @@ The review prompt is the app's core re-engagement mechanic. It's not a notificat
 | Private hives | 1 hive, 1 recipient | Unlimited hives, unlimited recipients |
 | Entries per hive | Unlimited | Unlimited |
 | Review cadence | Yearly only | Monthly, yearly, or manual |
-| Package & send | 1 package per hive per year | Unlimited packages |
+| Send | 1 send per hive per year (2026-08-17: gate moved from seal to send; sealing is unconditional) | Unlimited sends |
 
 #### Acceptance Criteria
 

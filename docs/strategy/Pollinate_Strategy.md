@@ -18,7 +18,7 @@ We sit at the intersection of three proven markets — gratitude apps ($1.3B), s
 
 **Delivery is a spectrum, not a gate (added 2.1).** A Private Hive must be worth keeping even if its person can never install the app — a young child, a grandparent, someone you've lost. The hive is a letter drawer, not an outbox: it is valuable at zero deliveries, because the compiling itself is the practice. Delivery paths, in order of arrival: **(1) send in-app** (Slice 1) — the full bloom; **(2) send as a link** (post-Slice 1) — a beautiful web-read moment that doubles as the viral loop, since the recipient's first experience of Pollinate is the strongest thing we make; **(3) keep, or export as a keepsake** (later) — for the person who will never install anything. The moat is accumulated *time*, not features — no competitor can copy a year of someone's entries.
 
-**Business model:** Freemium. The free tier gives users one private hive, one friend connection, one seed, full daily journal access, and a yearly review. **Pollinate Plus** ($2.99/month or $29.99/year) unlocks unlimited hives, friends, seeds, monthly review cadence, and unlimited packages. Gifting happens via Cash App payment links shared through iMessage — Pollinate generates a gratitude note and a Cash App $cashtag link, the user sends it via iMessage, and Pollinate never touches money. We are not a money transmitter.
+**Business model:** Freemium. The free tier gives users one private hive, one friend connection, one seed, full daily journal access, a yearly review, and one send per hive per year — sealing a hive is always free and unconditional, regardless of tier (2026-08-17). **Pollinate Plus** ($2.99/month or $29.99/year) unlocks unlimited hives, friends, seeds, monthly review cadence, and unlimited sends. Gifting happens via Cash App payment links shared through iMessage — Pollinate generates a gratitude note and a Cash App $cashtag link, the user sends it via iMessage, and Pollinate never touches money. We are not a money transmitter.
 
 > **Build Slices:**
 > - **Slice 1 (Demo Mode):** Journal + private hives + social seeds + honeycomb + feed. No money. TestFlight / internal testing. Validates the core emotional and social loop.
@@ -120,7 +120,7 @@ Pollinate is a **freemium consumer app**. The primary revenue stream is subscrip
 | Friend connections | 1 friend | Unlimited |
 | Seeds (time capsules) | 1 seed | Unlimited |
 | Review cadence | Yearly only | Monthly |
-| Packages (curated hive entries sent to friends) | 1 per year | Unlimited |
+| Sends (curated hive entries sent to friends; sealing itself is unconditional and never gated, 2026-08-17) | 1 per year | Unlimited |
 | Honeycomb visualization | ✓ | ✓ |
 | Social feed | ✓ | ✓ |
 | Garden / recap / history | ✓ | ✓ |
@@ -319,7 +319,7 @@ No single competitor covers social gratitude + Private Hives (practice-as-gift) 
 |---|---|---|---|
 | Low daily journal/hive entry rate | Medium | High | Make journaling frictionless — quick entry flow, prompts/suggestions, streak-free design. Private Hives add motivation: you're writing FOR someone, not just for yourself. The social feed and review prompts are the motivators, not a streak nag. |
 | Low seed plant rate | Medium | High | Auto-suggest seeds from contacts/birthdays. Make planting a seed as easy as sending a note. |
-| Freemium conversion too low | Medium | High | Ensure free tier is useful but upgrade triggers are natural (second hive, monthly reviews, more packages). Test paywall placement and messaging. The emotional payoff of receiving a package should drive recipients to start their own hive and eventually upgrade. |
+| Freemium conversion too low | Medium | High | Ensure free tier is useful but upgrade triggers are natural (second hive, monthly reviews, more sends). Test paywall placement and messaging. The emotional payoff of receiving a package should drive recipients to start their own hive and eventually upgrade. |
 | Regulatory uncertainty if we pursue transaction fees | High (if pursued) | High | Defer all transaction fee work to Slice 3+. Require formal legal counsel before any engineering investment. Cash App link model (Slice 2) carries zero regulatory risk. |
 | User acquisition cost too high | Low | High | Community-led growth (seeded groups). Viral loop: receive package → download → start hive → send to others. Low CAC. No money friction in core loop. |
 | Big Tech launches a competitor | Low | High | Network effects + data accumulation + Private Hives mechanic + brand coherence are hard to replicate quickly. We'll have a head start. |
