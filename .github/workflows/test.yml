@@ -6,17 +6,22 @@ on:
   pull_request:
     branches: [main]
 
-# Four of the 23 gates stand up embedded Postgres on fixed ports
-# (54329-54332 — see scripts/check-*-rls.mjs) so they can run concurrently
-# with each other inside one `npm test`. That only holds within a single
-# run: two runs of this workflow on the same ref racing each other would
-# collide on those same ports. `group` scopes the lock to the ref (so main
-# and each PR branch queue independently) and `cancel-in-progress` drops a
-# stale run in favor of the newest push rather than letting both hold the
-# ports at once.
+# Four gates stand up embedded Postgres on fixed ports — 54329 seeds-rls,
+# 54330 hive-state-rls, 54331 share-visibility, 54332 private-hives-seal.
+# The distinct ports are NOT for this workflow: run-checks.mjs runs gates
+# sequentially (`await run(gate)`), so no two hold a port at once inside one
+# `npm test`, and each GitHub-hosted job is a new VM, so two runs cannot
+# collide either. The ports matter LOCALLY — two worktrees running `npm test`
+# at the same time DO collide, and a fifth PG gate must take 54333 rather
+# than reuse one of these. Enumerated here because the old pointer
+# (`check-*-rls.mjs`) finds only two of the four.
+#
+# This block is a CI-minutes optimisation, nothing more. cancel-in-progress is
+# scoped OFF for main: back-to-back merges would otherwise cancel the earlier
+# run and leave a commit on main with no completed verdict.
 concurrency:
   group: test-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   test:
