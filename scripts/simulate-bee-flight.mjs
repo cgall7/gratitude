@@ -1,9 +1,9 @@
-// Sunbeam §31 — simulate the idle flight sequencer and report what it does.
+// Sunbeam §32 — simulate the idle flight sequencer and report what it does.
 //
 //   node scripts/simulate-bee-flight.mjs
 //
 // This is a PROBE, not a gate: it prints a session's behaviour and asserts the
-// properties the §31 scope's acceptance test asks for. The durable rows belong
+// properties the §32 scope's acceptance test asks for. The durable rows belong
 // in `check-bee-attitude` once the choreography lands (R106 — owed).
 //
 // It exists because "never the same lap twice" and "1 part airborne to 2 parts

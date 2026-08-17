@@ -162,7 +162,7 @@ export const composePhaseEasing = (split, easeA, easeB) => (w) => {
   return 0.5 + 0.5 * easeB((w - split) / (1 - split));
 };
 
-// §31 — the same construction for N segments instead of two.
+// §32 — the same construction for N segments instead of two.
 //
 // The sequencer's verbs (dart / hover / settle) each want their own easing,
 // and the scope says "never one global ease again". But `buildAttitude` takes
