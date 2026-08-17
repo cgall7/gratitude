@@ -13,11 +13,11 @@ The ritual, in order:
 3. **Hand-classify every hit.** The retired noun keeps legitimate uses (metric labels, schema-state prose like `packaged`→`sent`, open media-scope questions). Publish the sweep as one pipeline with both yields labelled — the bare grep and the filtered count are different numbers (2026-08-17 package→send pass at `e4269e9`: bare 81, filtered 9, all 9 classified legitimate):
 
    ```sh
-   git grep -nEi 'package' -- docs/strategy/ \
+   git grep -nEi 'package' -- docs/strategy/ ':!docs/strategy/README.md' \
      | grep -Ei 'upgrade|free tier|paid|plus|unlimited|limit|tier|more |per year|gate'
    ```
 
-   (Substitute the retired token and its tier/gate context words for the ruling at hand.)
+   (Substitute the retired token and its tier/gate context words for the ruling at hand.) **The instrument does not count its own documentation**: this README is excluded, because every ruling recorded here adds its retired token to the corpus — the sweep's example command literally contains the string it searches for. Without the exclusion the bare yield drifts upward with each entry (83 at `fda5f79` against the 81 documented above), and a future entry that writes a retired token beside a context word would inflate the *filtered* count, the number people act on.
 4. **The verdict line reads "N hits, all classified legitimate" — never "zero hits."** Zero means the sweep is broken, not that the docs are clean.
 
 - [`Pollinate_The_Ruling.md`](./Pollinate_The_Ruling.md) — **read this first.** Colin's answer to the scope/alignment memo: the journal is the foundation (not legacy), the tab bar is `Today | Hive | Wallet | Garden`, private hives live in Today, Wrapped moves to Garden, money is deferred to Slice 2, and the two P0 engineering fixes (run the migrations; move journal storage to Supabase).
