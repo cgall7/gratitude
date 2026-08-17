@@ -8,6 +8,15 @@
 //
 //   npm run check:legacy-journal-identity
 //
+// PORTABLE REQUIREMENT — any gate that dynamically imports a src/ module
+// reaching EntryStore (directly or transitively) must set
+// `globalThis.__DEV__ ??= false` before the import: EntryStore imports
+// constants/demoMode for its seedDemoData capability guard, and demoMode
+// reads React Native's __DEV__ global, which Node doesn't define. Without
+// the shim the import throws a bare ReferenceError with no pointer here.
+// The shim goes in the GATE, never in demoMode.js — reshaping that
+// constant reds check-demo-mode-env's AST pins.
+//
 // WHY THIS RUNS THE REAL FUNCTION AGAINST FAKES INSTEAD OF READING IT.
 //
 // check-legacy-journal.mjs already gates the pure decision logic
@@ -62,6 +71,13 @@ registerHooks({
     return next(url, ctx);
   },
 });
+
+// EntryStore (imported by the migration module) now imports
+// constants/demoMode for the seedDemoData capability guard, and demoMode
+// reads React Native's __DEV__ global, which Node doesn't define. False =
+// production posture; this gate's subject (migration identity) never
+// touches the demo capability, so the value is inert here.
+globalThis.__DEV__ ??= false;
 
 const { migrateLegacyJournal } = await import(
   pathToFileURL(path.join(ROOT, 'src/services/legacyJournalMigration.js')).href
