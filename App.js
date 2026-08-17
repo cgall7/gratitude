@@ -16,6 +16,9 @@ import { NotesInbox } from './src/screens/NotesInbox';
 import { ComposeNote } from './src/screens/ComposeNote';
 import { PlantSeed } from './src/screens/PlantSeed';
 import { SeedsInbox } from './src/screens/SeedsInbox';
+import { CreateHiveFlow } from './src/screens/CreateHive';
+import { HiveDetailScreen } from './src/screens/HiveDetail';
+import { ComposeHiveEntryScreen } from './src/screens/ComposeHiveEntry';
 import { PollinateWrapped } from './src/screens/PollinateWrapped';
 import { MainTabs } from './src/navigation/MainTabs';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
@@ -225,6 +228,14 @@ export default function App() {
             </Stack.Screen>
 
             <Stack.Screen name="Main" component={MainTabs} />
+
+            {/* Private Hives (8b.2/8b.3, hero — PLANS/Pollinate_Delivery_Slices.md
+                Project 8b). Pushed from Today's hive shelf via getParent(),
+                same as Lock/Input above: a flow you go deeper into, not a
+                utility sheet, so no `presentation: 'modal'`. */}
+            <Stack.Screen name="CreateHive" component={CreateHiveFlow} />
+            <Stack.Screen name="HiveDetail" component={HiveDetailScreen} />
+            <Stack.Screen name="ComposeHiveEntry" component={ComposeHiveEntryScreen} />
 
             <Stack.Screen name="Legal" component={LegalScreen} options={{ presentation: 'modal' }} />
 

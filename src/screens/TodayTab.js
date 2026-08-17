@@ -3,12 +3,15 @@ import { StyleSheet, View, Text, ActivityIndicator, ScrollView } from 'react-nat
 import { useFocusEffect } from '@react-navigation/native';
 import { theme } from '../constants/theme';
 import { EntryStore } from '../services/EntryStore';
+import { HiveStore } from '../services/HiveStore';
 import { FlyingBee } from '../components/FlyingBee';
 import { PerchAnchor, PerchField, usePerchSet } from '../components/PerchAnchor';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { StreakBadge } from '../components/StreakBadge';
 import { StaggeredItem } from '../components/StaggeredItem';
+import { HiveCard } from '../components/HiveCard';
+import { StartHiveDoorCard } from '../components/StartHiveDoorCard';
 import { currentStreak, nextMilestone } from '../utils/dateRanges';
 import { TAB_CLEARANCE } from '../navigation/tabBarLayout';
 
@@ -41,6 +44,8 @@ export const TodayTab = ({ navigation }) => {
   // Membership only: the coordinates are measured at the moment of choosing,
   // so scrolling this list does not touch this value and does not re-render.
   const perches = usePerchSet();
+  const [hives, setHives] = useState([]);
+  const [hivesError, setHivesError] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -88,6 +93,32 @@ export const TodayTab = ({ navigation }) => {
           setTotal(0);
         } finally {
           if (!cancelled) setLoading(false);
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }, [])
+  );
+
+  // Independent of the journal fetch above and on its own error state — a
+  // failed hive list must not blank out an already-loaded journal (or vice
+  // versa), same reasoning as the `error` flag above: a read failure and a
+  // genuine zero-hives state are different facts and get different copy.
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      (async () => {
+        try {
+          const list = await HiveStore.listHives();
+          if (cancelled) return;
+          setHivesError(false);
+          setHives(list);
+        } catch (err) {
+          if (cancelled) return;
+          console.warn('TodayTab: failed to load hives', err);
+          setHivesError(true);
+          setHives([]);
         }
       })();
       return () => {
@@ -225,6 +256,37 @@ export const TodayTab = ({ navigation }) => {
             </PerchAnchor>
           </StaggeredItem>
         )}
+
+        {/* Private Hives shelf (8b.2/8b.3, WP-1 §26.1). Indices 1–2 above
+            are the journal's; this is the next cascade step, so the two
+            shelves settle in reading order. `hivesError` never blanks the
+            shelf into nothing — the door card still renders, since it's a
+            local navigation target with no data dependency, same reasoning
+            as the journal's own error branch not hiding its CTA. */}
+        <StaggeredItem index={3}>
+          <PerchAnchor id="hive-shelf" on="right" at={0.5}>
+          <View style={styles.hiveShelf}>
+            <Text style={styles.shelfLabel}>PRIVATE HIVES</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.hiveRow}
+            >
+              {hives.map((hive) => (
+                <HiveCard
+                  key={hive.id}
+                  hive={hive}
+                  onPress={() => navigation.getParent()?.navigate('HiveDetail', { hiveId: hive.id })}
+                />
+              ))}
+              <StartHiveDoorCard onPress={() => navigation.getParent()?.navigate('CreateHive')} />
+            </ScrollView>
+            {hivesError && (
+              <Text style={styles.hiveErrorText}>We couldn't reach your hives right now.</Text>
+            )}
+          </View>
+          </PerchAnchor>
+        </StaggeredItem>
       </ScrollView>
       </PerchField>
     </View>
@@ -329,5 +391,22 @@ const styles = StyleSheet.create({
     color: theme.colors.inkSoft,
     textAlign: 'center',
     marginTop: 20,
+  },
+  hiveShelf: {
+    marginTop: 28,
+  },
+  shelfLabel: {
+    ...theme.type.label,
+    color: theme.colors.inkSoft,
+    marginBottom: 12,
+  },
+  hiveRow: {
+    gap: 12,
+    paddingRight: 8,
+  },
+  hiveErrorText: {
+    ...theme.type.bodySm,
+    color: theme.colors.inkSoft,
+    marginTop: 12,
   },
 });
