@@ -72,7 +72,7 @@ export const HiveStore = {
     const { data, error } = await client
       .from('private_hives')
       .insert({ owner_id: ownerId, subject_name: name, cover_theme: coverTheme, review_cadence: reviewCadence })
-      .select('id, subject_name, cover_theme, review_cadence, created_at')
+      .select('id, subject_name, cover_theme, review_cadence, sealed_at, created_at')
       .single();
     if (error) throw error;
     return data;
@@ -89,7 +89,7 @@ export const HiveStore = {
     const ownerId = await requireUserId(client);
     const { data: hives, error } = await client
       .from('private_hives')
-      .select('id, subject_name, cover_theme, review_cadence, created_at')
+      .select('id, subject_name, cover_theme, review_cadence, sealed_at, created_at')
       .eq('owner_id', ownerId)
       .order('created_at', { ascending: false });
     if (error) throw error;
@@ -112,6 +112,7 @@ export const HiveStore = {
       subjectName: h.subject_name,
       coverTheme: h.cover_theme,
       reviewCadence: h.review_cadence,
+      sealedAt: h.sealed_at,
       createdAt: h.created_at,
       entryCount: counts.get(h.id) ?? 0,
     }));
@@ -122,7 +123,7 @@ export const HiveStore = {
     const ownerId = await requireUserId(client);
     const { data, error } = await client
       .from('private_hives')
-      .select('id, subject_name, cover_theme, review_cadence, created_at')
+      .select('id, subject_name, cover_theme, review_cadence, sealed_at, created_at')
       .eq('owner_id', ownerId)
       .eq('id', hiveId)
       .maybeSingle();
@@ -133,6 +134,7 @@ export const HiveStore = {
       subjectName: data.subject_name,
       coverTheme: data.cover_theme,
       reviewCadence: data.review_cadence,
+      sealedAt: data.sealed_at,
       createdAt: data.created_at,
     };
   },
@@ -155,10 +157,17 @@ export const HiveStore = {
     return (data ?? []).map(toHiveEntry);
   },
 
-  // Author can add entries to any (unsealed) hive at any time — no
-  // one-row-per-day dedupe. `entries_one_journal_per_day`'s unique index is
-  // `where hive_id is null` on purpose (20260815000001's own note), so a
-  // hive is its own per-day space with no such cap.
+  // No one-row-per-day dedupe — `entries_one_journal_per_day`'s unique
+  // index is `where hive_id is null` on purpose (20260815000001's own
+  // note), so a hive is its own per-day space with no such cap.
+  //
+  // This call does not check sealedAt itself — `entries_insert_own`
+  // (20260815000005) rejects the write at the database once a hive is
+  // sealed, with `and h.sealed_at is null` in its WITH CHECK. That refusal
+  // is a standard Postgres RLS violation (SQLSTATE 42501), not a network
+  // failure — callers must gate the UI (HiveDetailScreen hides "+ Add
+  // Entry" once `sealedAt` is set) and must not report a 42501 the way
+  // they'd report a dropped connection.
   async addHiveEntry(hiveId, date, text, themeTag) {
     const client = requireSupabase();
     const userId = await requireUserId(client);

@@ -112,13 +112,19 @@ export const HiveDetailScreen = ({ navigation, route }) => {
         )}
       />
 
-      <View style={styles.footer}>
-        <PrimaryButton
-          onPress={() => navigation.navigate('ComposeHiveEntry', { hiveId, subjectName: hive.subjectName })}
-        >
-          + Add Entry
-        </PrimaryButton>
-      </View>
+      {hive.sealedAt ? (
+        <View style={styles.footer}>
+          <Text style={styles.sealedNote}>This hive is sealed — entries are read-only.</Text>
+        </View>
+      ) : (
+        <View style={styles.footer}>
+          <PrimaryButton
+            onPress={() => navigation.navigate('ComposeHiveEntry', { hiveId, subjectName: hive.subjectName })}
+          >
+            + Add Entry
+          </PrimaryButton>
+        </View>
+      )}
     </View>
   );
 };
@@ -207,5 +213,10 @@ const styles = StyleSheet.create({
     left: 24,
     right: 24,
     bottom: 32,
+  },
+  sealedNote: {
+    ...theme.type.bodySm,
+    color: theme.colors.inkSoft,
+    textAlign: 'center',
   },
 });

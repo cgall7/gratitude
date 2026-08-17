@@ -34,6 +34,7 @@
     "check:copy-rules": "node scripts/check-copy-rules.mjs",
     "check:onboarding-flow": "node scripts/check-onboarding-flow.mjs",
     "check:private-hives-seal": "node scripts/check-private-hives-seal.mjs",
+    "check:private-hives-client-seal": "node scripts/check-private-hives-client-seal.mjs",
     "check:resolve-initial-route": "node scripts/check-resolve-initial-route.mjs",
     "check:date-ranges-utils": "node scripts/check-date-ranges-utils.mjs",
     "check:hive-state-utils": "node scripts/check-hive-state-utils.mjs",

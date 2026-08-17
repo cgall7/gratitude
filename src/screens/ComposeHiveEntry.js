@@ -14,19 +14,24 @@ export const ComposeHiveEntryScreen = ({ navigation, route }) => {
   const { hiveId, subjectName } = route.params;
   const [text, setText] = useState('');
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState(false);
+  const [error, setError] = useState(null);
 
   const handleSave = async () => {
     if (saving || !text.trim()) return;
     setSaving(true);
-    setError(false);
+    setError(null);
     try {
       const body = text.trim();
       await HiveStore.addHiveEntry(hiveId, new Date(), body, tagEntry(body));
       navigation.goBack();
     } catch (err) {
       console.warn('ComposeHiveEntryScreen: failed to save entry', err);
-      setError(true);
+      // SQLSTATE 42501 (insufficient_privilege) is Postgres's row-level-
+      // security violation code — here that's entries_insert_own's
+      // `sealed_at is null` clause. It's a permanent refusal, not a
+      // dropped connection, so it gets its own copy rather than the retry
+      // prompt below.
+      setError(err?.code === '42501' ? 'sealed' : 'unknown');
     } finally {
       setSaving(false);
     }
@@ -56,7 +61,10 @@ export const ComposeHiveEntryScreen = ({ navigation, route }) => {
           autoFocus
           maxLength={10000}
         />
-        {error && (
+        {error === 'sealed' && (
+          <Text style={styles.errorText}>This hive has been sealed and can't accept new entries.</Text>
+        )}
+        {error === 'unknown' && (
           <Text style={styles.errorText}>Couldn't save this entry. Check your connection and try again.</Text>
         )}
         <PrimaryButton onPress={handleSave} disabled={!text.trim() || saving} style={styles.cta}>
