@@ -87,7 +87,7 @@ Pollinate is not a utility app. It's an **emotional experience.** Every interact
 ### Persona C: "The Daily Practitioner"
 - Any age. Wants a daily gratitude practice that isn't lonely.
 - Starts with the journal. Discovers private hives. Gets hooked when they take their first "trip down memory lane" and realize how much they've written about someone they love.
-- Free tier is enough for them initially. They upgrade when they want more hives, monthly reviews, and unlimited sends.
+- Free tier is enough for them initially. They upgrade when they want more hives and monthly reviews (send limit pending Colin's ruling — see §5.1).
 
 ---
 
