@@ -13,9 +13,9 @@
 -- §1 exactly -- golden-honey is NOT one of them, §1's own note reserves it
 -- for the sealed-state wax seal badge (§9), never a creation-time cover
 -- choice, and §1's own Default line names sunlit-honey.
--- PLANS/PRIVATE_HIVES_COVER_THEMES.md names a different six-theme set --
--- that file predates the design-language doc Deezine posted as "ready for
--- implementation" today and is superseded by it; not used here.
+-- PLANS/PRIVATE_HIVES_COVER_THEMES.md predates the design-language doc
+-- Deezine posted as "ready for implementation" today and is superseded by
+-- it; not used here.
 alter table public.private_hives
   add column cover_theme text not null default 'sunlit-honey',
   add column review_cadence text not null default 'yearly';
