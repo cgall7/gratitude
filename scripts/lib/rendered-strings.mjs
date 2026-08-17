@@ -83,7 +83,7 @@
 //       seam, so no matcher can fire on a join that would not fire on the
 //       fragments; three templates, all in `alert`/`jsx-expr`.
 //
-//   The demo gate's set: 105 → 180 strings, and this is the finding rather
+//   The demo gate's set: 105 → 225 strings, and this is the finding rather
 //   than the bookkeeping. The old extractor required the
 //   JSXExpressionContainer to be the string's IMMEDIATE parent, which only
 //   `{'a literal'}` satisfies — so every string rendered through a
@@ -91,7 +91,29 @@
 //   'Send'}`, `{tab === 'today' ? 'Today' : 'Last 7 days'}`, and 72 more.
 //   Walking outward to the nearest settling frame takes them. /demo/i hits
 //   before and after: the same 2, both already guarded — so rule 1's
-//   verdict is unchanged and it now stands over a universe 71% larger.
+//   verdict is unchanged and it now stands over a universe 114% larger.
+//   Decomposed from the gate's own array, because the first published
+//   figure (180) was jsx-text + jsx-expr and silently dropped the third
+//   position the same change added:
+//
+//     jsx-text 105 + jsx-expr 75 + prop 45 = 225
+//
+// THE VOCABULARY IS PINNED, AND HERE IS WHY A BEHAVIOURAL CONTROL CANNOT
+// DO IT. Every instrument in both gates is derived from POSITIONS — the
+// per-position control loops, the demo gate's `POSITIONS.filter(…)`, the
+// classifier's own refusal to emit an undeclared position. So the edit
+// that deletes a member from POSITIONS *and* from `positionFor` is
+// coherent: the two halves still agree, every derived control simply has
+// one fewer row, and both gates report a clean verdict over a universe
+// they quietly shrank (Sage measured it, thread 4510c5c8: dropping
+// `jsx-expr` takes 75 strings out of each gate — 33% of rule 1 — with zero
+// reds). An enumerator over the classifier's source cannot see it either,
+// for the same reason: agreement is exactly what the coherent edit
+// preserves.
+//
+// So check-copy-rules pins the literal five. It is a TRIPWIRE, NOT A
+// PROOF — the same instrument, and the same admission, as the demo gate's
+// note about its inclusions being a judgement.
 
 export const POSITIONS = ['jsx-text', 'jsx-expr', 'prop', 'alert', 'constant'];
 const POSITION_SET = new Set(POSITIONS);

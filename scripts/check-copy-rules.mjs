@@ -193,6 +193,38 @@ check('copy strings collected', copy.length > 0, true);
 // name — a file that will not parse and a walker whose two halves disagree
 // are different findings.
 check('every position the collector emits is declared in POSITIONS', vocabularyErrors, []);
+// THE MINUEND. The row above ties the classifier to the vocabulary; this
+// one pins the vocabulary itself, and it is the only assertion in either
+// gate that POSITIONS is not free to shrink. Everything else here is
+// DERIVED from POSITIONS — the loop below, and the demo gate's
+// `POSITIONS.filter(…)` — so deleting a member from both the list and the
+// classifier is a coherent edit that leaves every derived control agreeing
+// with itself over a smaller universe. Measured by Sage at 257aa2f:
+// deleting `jsx-expr` takes 75 strings out of each gate, 33% of rule 1's,
+// and both gates exit 0.
+//
+// It lives HERE rather than beside the demo gate's exclusion pin because
+// only this gate's universe IS the whole vocabulary. That pin reads
+// `RULE_1_OUT_OF_SCOPE`, which is a literal and does not move when
+// POSITIONS does, so a pin on rule 1's own scope would cover the three
+// positions it includes and be blind to the two it excludes — deleting
+// `alert` would still cost this corpus 34 strings in silence.
+//
+// A tripwire, not a proof: no behavioural control can catch a scope that
+// narrows itself, since narrowing removes the very rows that would object.
+// Shrinking this list is legitimate — it just has to be typed here, next
+// to what it costs.
+//
+// Sorted on both sides, because the property is MEMBERSHIP and POSITIONS'
+// order carries no meaning: the walker's header lists the five in reading
+// order, and a gate that reds when someone reorders a comment-matching
+// list is red-on-correct-code with no defect behind it. `POSITIONS
+// reordered` is a should-pass mutation on this branch and stays one.
+check(
+  'the position vocabulary is exactly the five (shrinking it shrinks every derived control — deliberate edit here)',
+  [...POSITIONS].sort(),
+  ['jsx-text', 'jsx-expr', 'prop', 'alert', 'constant'].sort()
+);
 for (const position of POSITIONS) {
   check(
     `position "${position}" is represented in the collected set`,

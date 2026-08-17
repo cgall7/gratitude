@@ -231,6 +231,15 @@ check('rendered-string universe is non-empty', allStrings.length > 0, true);
 // list, and this row reds naming it — both /demo/i controls below are
 // jsx-text strings, so a gate narrowed to jsx-text alone would otherwise
 // report a clean verdict over a universe it had quietly halved.
+//
+// THIS PINS THE SUBTRAHEND ONLY. Rule 1's universe is POSITIONS minus this
+// list, and POSITIONS is pinned in check-copy-rules (section A, "the
+// position vocabulary is exactly the five") — one literal, because that
+// gate's universe is the whole vocabulary and this one's is a difference.
+// Without that row, deleting a position from the walker's vocabulary AND
+// its classifier leaves this pin reading `['alert','constant']`, still
+// true, while the universe it subtracts from is 33% smaller (Sage,
+// 257aa2f). Two halves of one sentence; the other half is over there.
 check('rule 1 excludes exactly the positions no lexical guard can reach', RULE_1_OUT_OF_SCOPE, ['alert', 'constant']);
 
 // One control per position asked for. This catches the WALKER failing to
