@@ -4,6 +4,13 @@ import { DEMO_CONTENT } from '../constants/demoMode';
 // Hidden dev toggle (Pixel §9 gate plan) — lets Colin flip the onboarding
 // opener for demos without shipping a visible setting. Never referenced in
 // copy, excluded from frozen-copy checks.
+//
+// WHOLLY demo-only, by design: check-demo-content-callsites enumerates
+// every method on the DevSettings export and requires each to consult
+// DEMO_CONTENT in its body. A non-demo setting does not belong here — if
+// one needs to live beside the flow toggle, move it to its own service
+// (onboardingState.js is the precedent) rather than exempting it from the
+// gate.
 const FLOW_KEY = 'dev:onboardingFlow';
 
 export const DevSettings = {

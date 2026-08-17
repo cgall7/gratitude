@@ -51,7 +51,14 @@
 //          Per-method is available here because the entire module is the
 //          demo toggle — every accessor of the demo-only persisted key is
 //          in scope by construction, so a clearOnboardingFlow written in
-//          November is covered without anyone registering it.
+//          November is covered without anyone registering it. That premise
+//          — the module is WHOLLY demo-only — is enforced by nothing but
+//          this note (Sage, thread 4510c5c8), so the response to its red
+//          is pre-authorised here: a non-demo setting does not belong in
+//          devSettings. If one legitimately needs to live beside the flow
+//          toggle, MOVE it to its own service — onboardingState.js is the
+//          precedent and says so in its header — and never exempt it here.
+//          An exemption is what this enumerator replaced.
 //        - EntryStore.seedDemoData stays a NAMED entry: a demo capability
 //          living in a module that is NOT dev-only, so nothing structural
 //          marks it. That is the residual, stated.
