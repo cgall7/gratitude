@@ -3872,7 +3872,11 @@ for (const [file, { anchors, paddingH }] of perchSets) {
 // direction the others cannot:
 //
 //   every top-level `StaggeredItem` on a screen that declares a perch set
-//   contains, or is contained by, a `PerchAnchor`.
+//   is contained by a `PerchAnchor`, or contains one that renders in EVERY
+//   state the step itself renders in.
+//
+// That last clause is not decoration — see `anchorsInEveryState` below for
+// the green-and-wrong shape it exists to catch.
 //
 // ONE DIRECTION, NOT A BIJECTION, and the difference is not a detail. The
 // obvious reading is Bumble's `check-migration-sentinels` shape, which
@@ -3918,7 +3922,11 @@ for (const [file, { anchors, paddingH }] of perchSets) {
     // WRAPS it — both are live shapes in this repo (TodayTab nests the anchor
     // inside; HoneycombTab wraps `HoneycombGrid` from outside). Checking only
     // the subtree would red on a correct screen.
-    const hasAnchorInSubtree = (node) => {
+    //
+    // PRESENCE ONLY. This one answers "is there an anchor down there at all",
+    // which is not the property the row asserts — it exists so a failure can
+    // name WHICH defect it found (no anchor, or an anchor on some renders).
+    const hasAnchorSomewhere = (node) => {
       let found = false;
       const walk = (n) => {
         if (found || !n || typeof n !== 'object') return;
@@ -3932,6 +3940,55 @@ for (const [file, { anchors, paddingH }] of perchSets) {
       walk(node);
       return found;
     };
+    // AN ANCHOR IS ONLY AN ANCHOR IN THE STATES IT RENDERS IN.
+    //
+    // Sage's second finding (2026-08-17), and it is K3's and K4's lesson
+    // arriving a third time inside the row I wrote BECAUSE of it: THE
+    // INVARIANT IS ABOUT THE WORST RENDER STATE, NOT THE DECLARED SET. The
+    // obvious way to anchor the hive shelf is to do it only when there is
+    // something on it —
+    //
+    //     {hives.length > 0
+    //        ? <PerchAnchor id="hive-shelf" …><View style={styles.hiveShelf}/></PerchAnchor>
+    //        : <View style={styles.hiveShelf}/>}
+    //
+    // — and a presence walk finds the anchor and goes green. The state it is
+    // wrong in is `hives.length === 0`: the first-run state, which is the
+    // exact state the shelf ruling turned on. The row built to catch that
+    // region would have passed the version of it that ships the defect.
+    //
+    // So `anchored` is not "an anchor exists below". It is: AN ANCHOR RENDERS
+    // IN EVERY STATE THIS STEP RENDERS IN. Descending through a
+    // `ConditionalExpression` therefore costs BOTH arms, and a
+    // `LogicalExpression` is never certain, because its JSX operand is
+    // precisely the one that may not render.
+    //
+    // THIS IS A DIFFERENT QUESTION FROM THE `conditional` FLAG BELOW, and the
+    // footer proves they must stay two questions. `conditional` describes the
+    // step's OWN ancestry — whether the `StaggeredItem` is itself inside a
+    // branch. Index 2 is a conditional step holding an unconditional anchor,
+    // which is CORRECT and must stay green. This asks about the path BETWEEN
+    // the step and its anchor. Collapsing them would red the footer.
+    //
+    // WHAT IT CANNOT SEE: a branch that is not syntax. A component that
+    // declines to render its children (`<Modal visible={x}>`) hides the same
+    // hole behind a prop, and no AST walk reaches it. Neither host does that
+    // today; if one ever does, this row will say yes and be wrong, and the
+    // honest place to catch it is the call site.
+    const anchorsInEveryState = (n) => {
+      if (!n || typeof n !== 'object') return false;
+      if (Array.isArray(n)) return n.some(anchorsInEveryState);
+      if (n.type === 'JSXElement' && n.openingElement?.name?.name === 'PerchAnchor') return true;
+      if (n.type === 'ConditionalExpression') {
+        return anchorsInEveryState(n.consequent) && anchorsInEveryState(n.alternate);
+      }
+      if (n.type === 'LogicalExpression') return false;
+      for (const k of Object.keys(n)) {
+        if (k === 'loc' || k.endsWith('Comments')) continue;
+        if (anchorsInEveryState(n[k])) return true;
+      }
+      return false;
+    };
     const descend = (node) => {
       if (!node || typeof node !== 'object') return;
       if (Array.isArray(node)) return node.forEach(descend);
@@ -3944,6 +4001,14 @@ for (const [file, { anchors, paddingH }] of perchSets) {
         const idxAttr = node.openingElement.attributes.find(
           (a) => a.type === 'JSXAttribute' && a.name.name === 'index',
         );
+        // UPWARD, DOMINANCE IS FREE — and the asymmetry with the subtree walk
+        // above is the point, not an oversight. If a `PerchAnchor` is an
+        // ANCESTOR of the step, then every state in which the step renders is
+        // a state in which the anchor rendered, because nothing renders
+        // without its ancestors. A branch between them decides only whether
+        // the STEP renders, and a step that does not render needs nowhere to
+        // land. Downward that implication fails, which is why the walk below
+        // the step counts branch nodes and this one does not.
         const wrapped = stack.some(
           (a) =>
             a !== node &&
@@ -3953,7 +4018,10 @@ for (const [file, { anchors, paddingH }] of perchSets) {
         steps.push({
           line: node.openingElement.loc.start.line,
           index: idxAttr?.value?.expression?.value ?? idxAttr?.value?.value ?? '?',
-          anchored: wrapped || hasAnchorInSubtree(node),
+          anchored: wrapped || anchorsInEveryState(node),
+          // Not the verdict — the discriminator that lets the failure say
+          // which of the two defects this step has.
+          anchorSomewhere: wrapped || hasAnchorSomewhere(node),
           conditional: stack.some(
             (a) => a !== node && (a.type === 'ConditionalExpression' || a.type === 'LogicalExpression'),
           ),
@@ -3977,18 +4045,33 @@ for (const [file, { anchors, paddingH }] of perchSets) {
       );
     } else if (orphans.length === 0) {
       ok(
-        `${path.basename(file)} every cascade step is reachable ` +
-          `(${steps.map((s) => `index ${s.index}${s.conditional ? ' (conditional)' : ''}`).join(', ')})`,
+        `${path.basename(file)} every cascade step reaches an anchor in every state it renders in ` +
+          `(${steps.map((s) => `index ${s.index}${s.conditional ? ' (conditional step)' : ''}`).join(', ')})`,
       );
     } else {
+      // TWO DEFECTS, NAMED APART. "No anchor" and "an anchor on some renders"
+      // are fixed by different edits, and the second is the one that looks
+      // finished, so a message that merged them would send the reader to the
+      // wrong place.
+      const detail = orphans
+        .map(
+          (s) =>
+            `index ${s.index} at :${s.line}` +
+            `${s.conditional ? ' (conditional step)' : ''} — ` +
+            (s.anchorSomewhere
+              ? 'its anchor is inside a branch, so it is absent in at least one render state'
+              : 'no anchor at all'),
+        )
+        .join('; ');
       bad(
-        `${path.basename(file)} every cascade step is reachable`,
-        `${orphans.length} of ${steps.length} cascade step(s) carry no anchor: ` +
-          `${orphans.map((s) => `index ${s.index} at :${s.line}${s.conditional ? ' (conditional)' : ''}`).join(', ')}. ` +
-          'A top-level StaggeredItem is a region that reads as a place on the screen, and one with no ' +
-          '<PerchAnchor> is a place the bee can never visit — the other K rows cannot see this, because ' +
-          'what is missing is the node they enumerate. Either wrap it, or land the ruling that says it ' +
-          'is deliberately unreachable.',
+        `${path.basename(file)} every cascade step reaches an anchor in every state it renders in`,
+        `${orphans.length} of ${steps.length} cascade step(s) fail: ${detail}. ` +
+          'A top-level StaggeredItem is a region that reads as a place on the screen, and one the bee ' +
+          'cannot reach is dead surface — the other K rows cannot see this, because what is missing is ' +
+          'the node they enumerate. An anchor that renders only on some states is the same defect wearing ' +
+          'a green face: it is absent exactly in the state it is absent in, and that state is usually the ' +
+          'empty one a new user sees first. Either anchor it unconditionally, or land the ruling that says ' +
+          'it is deliberately unreachable, at the call site where a reviewer meets it.',
       );
     }
   }
