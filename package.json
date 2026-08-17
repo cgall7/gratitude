@@ -13,6 +13,7 @@
     "check:seeds-contract": "node scripts/check-seeds-contract.mjs",
     "check:plant-seed": "node scripts/check-plant-seed.mjs",
     "check:load-state": "node scripts/check-load-state.mjs",
+    "check:migration-sentinels": "node scripts/check-migration-sentinels.mjs",
     "check:seed-view": "node scripts/check-seed-view.mjs",
     "check:hive-state-rls": "node scripts/check-hive-state-rls.mjs",
     "check:streaks": "node scripts/check-streaks.mjs",
@@ -38,7 +39,8 @@
     "check:hive-state-utils": "node scripts/check-hive-state-utils.mjs",
     "test": "node scripts/run-checks.mjs",
     "deploy:migrations": "bash scripts/deploy-migrations.sh",
-    "check:legal-consent-gate": "node scripts/check-legal-consent-gate.mjs"
+    "check:legal-consent-gate": "node scripts/check-legal-consent-gate.mjs",
+    "preflight:prod-schema": "node scripts/prod-schema-check.mjs"
   },
   "dependencies": {
     "@expo-google-fonts/dancing-script": "^0.4.2",
