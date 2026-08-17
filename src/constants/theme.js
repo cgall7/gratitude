@@ -16,14 +16,37 @@ const colors = {
   accent: '#FFD200', // Marigold — THE one accent. Active states, celebration badge, key highlights.
   accentDeep: '#FF7A00', // Warm amber — hero numerals, emphasis on cream (replaces `gold`).
   accentBurst: '#FFEA00', // Hottest yellow on the board. Motion only — bursts, pops, bee trail. Never a static fill, text, or background.
-  // Golden Honey — the adaptive icon's locked gold (§13.1), and the field
-  // every KEEPSAKE sits on: the Seal that opens Wrapped, the Year Card that
-  // closes it, and the month-theme flip. Deliberately NOT `accent`: the two
-  // are only 1.179:1 apart, close enough that a keepsake next to an accent
-  // fill reads as a printing error rather than a second colour. Promoted to
-  // a token in §17.5 after living as a hand-copied literal in three files.
-  // Ink on this field is 10.01:1; `accentDeep` is 1.53:1 and must never
-  // carry text here (R15).
+  // Golden Honey — the adaptive icon's locked gold (§13.1), and the KEEPSAKE
+  // REGISTER: the field a finished, kept thing stands on. Today that is the
+  // Seal that opens Wrapped, the Year Card that closes it, and the month-theme
+  // flip. Deliberately NOT `accent`: the two are only 1.179:1 apart, close
+  // enough that a keepsake next to an accent fill reads as a printing error
+  // rather than a second colour. Promoted to a token in §17.5 after living as
+  // a hand-copied literal in three files.
+  //
+  // §29.1 — ADMISSION. Gold is a MATERIAL, not an emphasis. A surface may wear
+  // it only if all three hold:
+  //   1. FINISHED  — no further authoring by the user is expected of it.
+  //   2. KEPT      — it persists as an artifact, not as a view of live data.
+  //   3. SINGULAR  — a specific thing with an identity, not a summary of things.
+  // A streak count fails (2). A balance fails (2) and (3). An in-progress
+  // private hive fails (1); a sealed one passes all three.
+  //
+  // Material is a property of the object, so it does NOT change when a second
+  // object of the same kind arrives — WP-2's "at most one gold surface per
+  // screen" is WITHDRAWN (§29.1). A count rule makes the register a function of
+  // position in a list, and then gold means "the first one", which is a rank.
+  // Three sealed hives are three gold cards. What survives the withdrawal: gold
+  // may never carry EMPHASIS (emphasis is relative, material is not), and GOLD
+  // MAY NOT BE THE GROUND — it sits on a non-gold page and the cream must still
+  // read as the page.
+  //
+  // TEXT ON THIS FIELD IS SINGLE-TIER. `ink` is 10.01:1 and is the only legal
+  // text colour here. `inkSoft` is 3.69:1 and FAILS 4.5:1; `accentDeep` is
+  // 1.53:1; white is 1.71:1 (R15, remeasured §29.2). So hierarchy on a gold
+  // surface comes from size, weight and position — never from colour (§23.9.2b).
+  // Ground pairs, ΔE00 (§20.7: ΔE for ground-on-ground, WCAG for ink-on-ground):
+  // vs `background` 21.14, vs `surface` 30.82, vs `washYellow` 19.63.
   goldField: '#F0C023',
   washYellow: '#FFF3C4', // The warm ground — Sunbeam's default full-bleed wash, activation staging included (R50). A role, not a screen.
   washPeach: '#FFE9D9', // Retired as a surface (§17.2/R50). Avatar identity swatch ONLY (sub-40pt); no new uses at any size.
