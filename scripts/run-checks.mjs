@@ -67,6 +67,21 @@
 // Exit code is 1 if any gate failed, 0 otherwise. Authorised skips do not
 // fail the run — the opt-out is deliberate and documented — but they are
 // impossible to miss in the summary.
+//
+// HOW TO READ THAT EXIT CODE, because this repo has now got it wrong three
+// times in three different costumes and each one produced a published
+// figure that was a different command's status:
+//
+//   node scripts/x.mjs | tail       -> `$?` is TAIL's status
+//   printf '%s %s' "$(basename $1)" "$?"
+//                                   -> command substitution expands BEFORE
+//                                      `$?`, so the column reports basename
+//   the runner's own summary row    -> this file's rendering of what the
+//                                      gates said, not a status
+//
+// The only reading that is the thing itself: run the command, capture `$?`
+// on its very next line, and print it on its own. Any figure quoted into a
+// review should come from that and say so.
 
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
