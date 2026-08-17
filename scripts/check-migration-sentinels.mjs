@@ -19,13 +19,14 @@
 // deploy a migration that does not exist (the calibration-list phantom from
 // the 2026-08-17 prod probes, as a standing hazard).
 //
-// SCOPE OF THE CLAIM. This is an existence check on names plus a shape check
-// on entries — it does NOT validate that a sentinel probes the right object
+// SCOPE OF THE CLAIM. This is an existence check on names, a shape check on
+// entries, and a rejection of `order` where the SQL proves a column surface
+// exists — it does NOT validate that a sentinel probes the right object
 // for its migration's SQL. A sentinel pointing at a column the migration
 // never touched is green here and wrong; that half only falls out of running
 // the real preflight against prod. Existence is the cheap half, and this
 // gate says so rather than pretending otherwise.
-import { readdirSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SENTINELS } from './lib/prod-schema-sentinels.mjs';
@@ -105,6 +106,40 @@ for (const [version, probe] of Object.entries(SENTINELS)) {
     bad(`SENTINELS['${version}'] (${probe.kind})`, `missing field(s): ${missing.join(', ')}`);
   } else {
     ok(`${version} sentinel shape is probeable (${probe.kind})`);
+  }
+}
+
+// `order` must not be an escape hatch (Sage, 2026-08-17): any entry
+// satisfies the checks above by writing `kind: 'order'`, and an order row is
+// exactly the migration the preflight has zero power over. A migration whose
+// SQL creates a column surface — CREATE TABLE, ADD COLUMN, or the
+// COLUMN-keyword-less `ALTER TABLE x ADD y type` — always has a nameable
+// column to probe, and that holds regardless of grants: column resolution
+// precedes the privilege check (42703 beats 42501), so even an ungranted
+// brand-new table is probeable as LIVE. `order` is never the honest kind for
+// one of these.
+//
+// SQL comments are stripped first so prose ("-- we could add column later")
+// cannot red a legitimate order entry. The bare-ADD form excludes the ADD
+// variants that create no column (CONSTRAINT / PRIMARY / UNIQUE / CHECK /
+// FOREIGN / EXCLUDE) by enumeration; a keyword missing from that list fails
+// LOUD — a false red on an order entry — not silent, which is the survivable
+// direction for an exception list. Necessary, not sufficient: this rejects a
+// demonstrably wrong `order`, it cannot confirm a `column` sentinel points
+// at the right column.
+const COLUMN_SURFACE = /create\s+table|add\s+column|alter\s+table[^;]*?\badd\s+(?!constraint\b|primary\b|unique\b|check\b|foreign\b|exclude\b)/i;
+const stripSqlComments = (sql) => sql.replace(/\/\*[\s\S]*?\*\//g, '').replace(/--.*$/gm, '');
+for (const [version, probe] of Object.entries(SENTINELS)) {
+  if (probe.kind !== 'order' || !diskSet.has(version)) continue;
+  const sql = stripSqlComments(readFileSync(resolve(MIGRATIONS_DIR, `${version}.sql`), 'utf8'));
+  if (COLUMN_SURFACE.test(sql)) {
+    bad(
+      `SENTINELS['${version}'] is 'order' but its SQL creates a column surface`,
+      'CREATE TABLE / ADD COLUMN always yields a probeable column (42703-vs-42501 resolution order makes ' +
+        'this grant-independent) — replace the order entry with a column sentinel.',
+    );
+  } else {
+    ok(`${version} order entry has no column surface in its SQL`);
   }
 }
 
