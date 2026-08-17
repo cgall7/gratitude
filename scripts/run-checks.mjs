@@ -363,6 +363,19 @@ if (failed.length) {
   console.log('\n' + c(31, `  RED: ${failed.map((r) => r.name).join(', ')}`));
 }
 
-const ok = failed.length === 0 && driftErrors.length === 0;
+// A skip is a LOCAL affordance — a machine that genuinely cannot run embedded
+// Postgres. CI is where the assertion has to be real, so CI does not get to
+// authorise one. Without this, `npm test` exits 0 with the four Postgres
+// security gates not run, and the only thing between that and a green REQUIRED
+// check is a comment in test.yml. `isSet` already accepts 'true', which is what
+// Actions sets CI to.
+const skippedInCI = skips.length > 0 && isSet('CI');
+if (skippedInCI) {
+  console.log('\n' + c(31,
+    '  CI DOES NOT GET TO SKIP. The gates above did not run, and this is a ' +
+    'required check — a skip here is indistinguishable from coverage.'));
+}
+
+const ok = failed.length === 0 && driftErrors.length === 0 && !skippedInCI;
 console.log(`\n  SUITE EXIT=${ok ? 0 : 1}\n`);
 process.exit(ok ? 0 : 1);
