@@ -50,6 +50,13 @@
 // `eas.json` and this script both read the value; neither is where a
 // developer looks to find the switch. Asserted below so the flag can't go
 // undiscoverable again the way it did between 73b29f8 and this fix.
+//
+// This only asserts the NAME is listed, not that the accepted values are
+// documented (Sage, same thread). The comparison below is `=== 'true'`,
+// exact and case-sensitive, so a bare `EXPO_PUBLIC_DEMO_MODE=` is enough to
+// pass this check while leaving `=TRUE`, `=1`, `=yes` all silently off with
+// no error anywhere. The explanatory note above the var in .env.example is
+// the thing that prevents that, and nothing here checks the note.
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readFile } from 'node:fs/promises';
