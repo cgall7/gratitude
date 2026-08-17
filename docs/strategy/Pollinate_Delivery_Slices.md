@@ -161,7 +161,7 @@
 >
 > **Enforcement is derived, not enumerated** (amended 2026-08-17, per Sage's correction the same day). This block previously enforced the rule as a list of four versions, `…000003`–`…000006`. The list went stale within hours of being written: the branch added `20260817000002` (unmerged, on `fizz/private-hives-rails` only) carrying `private_hives.cover_theme` — a column `HiveStore.js` already selects and the list never named — so the gate was satisfiable while the app still `400`'d. A merge gate stated as a list of names has to be re-enumerated every time the branch adds a migration; a gate derived from the branch's tip does not.
 >
-> **The gate:** the branch merges when a sentinel column from its **tip migration** is live on prod — probe it via PostgREST with the anon key; `200` = merge, anything else = hold. Migrations apply in version order, so the tip implies the tail. As of tip `24b2665` the sentinel is `private_hives.cover_theme`:
+> **The gate:** the branch merges when a sentinel column from its **tip migration** is live on prod — probe it via PostgREST with the anon key; `200` = merge, anything else = hold. Migrations apply in version order, so the tip implies the tail. The sentinel is a column added by the newest file in `supabase/migrations/` on the merging branch, not a pinned commit — a SHA pin rots the moment the branch is rebased (caught 2026-08-17: the previous version of this line cited a commit that a rebase had already orphaned off every ref). Currently, on `fizz/private-hives-rails`, that file is `20260817000002_private_hives_cover_and_cadence.sql` and the sentinel is `private_hives.cover_theme`:
 >
 > ```sh
 > curl -s -o /dev/null -w '%{http_code}\n' \
