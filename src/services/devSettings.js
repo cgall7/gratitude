@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { DEMO_CONTENT } from '../constants/demoMode';
 
 // Hidden dev toggle (Pixel §9 gate plan) — lets Colin flip the onboarding
 // opener for demos without shipping a visible setting. Never referenced in
@@ -26,6 +27,12 @@ export const DevSettings = {
     return resolved;
   },
   async setOnboardingFlow(flow) {
+    // The capability guard, not just the entry point (Sage, thread
+    // 4510c5c8): the write is what outlives the gesture — a 'C' written by
+    // a demo build persists in AsyncStorage and decides the flow forever
+    // after. In a production build this no-ops, so no caller — present or
+    // future — can persist a demo flow choice.
+    if (!DEMO_CONTENT) return;
     await AsyncStorage.setItem(FLOW_KEY, flow === 'C' ? flow : 'B');
   },
 };

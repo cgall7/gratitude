@@ -1,6 +1,7 @@
 import { supabase } from './supabase';
 import { toISODate } from '../utils/dateRanges';
 import { buildDemoEntries } from '../utils/demoSeed';
+import { DEMO_CONTENT } from '../constants/demoMode';
 
 // Supabase-backed as of P0-2 (thread 19e90cf8) — was a single AsyncStorage
 // key with no user_id, so a year of entries lived on exactly one phone and
@@ -127,6 +128,13 @@ export const EntryStore = {
   // journal entry for yet, never overwrites what a tester actually wrote
   // (R12: Pixel).
   async seedDemoData(days = 180) {
+    // The capability guard, not just the button (Sage, thread 4510c5c8):
+    // the CoreRitual button that calls this is DEMO_CONTENT-gated, but the
+    // handler sits lexically outside that guard, and a future caller with a
+    // neutral label would silently acquire seeding. Guarded here, any such
+    // caller is inert in a production build. Returns 0 — the same "nothing
+    // to insert" result the merge path already produces.
+    if (!DEMO_CONTENT) return 0;
     const client = requireSupabase();
     const userId = await requireUserId(client);
     const demo = buildDemoEntries(days);

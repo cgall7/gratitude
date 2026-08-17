@@ -63,6 +63,13 @@ registerHooks({
   },
 });
 
+// EntryStore (imported by the migration module) now imports
+// constants/demoMode for the seedDemoData capability guard, and demoMode
+// reads React Native's __DEV__ global, which Node doesn't define. False =
+// production posture; this gate's subject (migration identity) never
+// touches the demo capability, so the value is inert here.
+globalThis.__DEV__ ??= false;
+
 const { migrateLegacyJournal } = await import(
   pathToFileURL(path.join(ROOT, 'src/services/legacyJournalMigration.js')).href
 );

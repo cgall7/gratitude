@@ -17,6 +17,7 @@ import { EntryStore } from '../services/EntryStore';
 import { dominantTheme } from '../utils/themeTagger';
 import { recentMonths, currentStreak, longestStreak } from '../utils/dateRanges';
 import { DevVersionTag } from '../components/DevVersionTag';
+import { DEMO_CONTENT } from '../constants/demoMode';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { StreakBadge } from '../components/StreakBadge';
 import { StaggeredItem } from '../components/StaggeredItem';
@@ -338,7 +339,13 @@ export const RecapTab = () => {
 
       <WrappedCard />
 
-      <DevVersionTag />
+      {/* Dev/pitch builds only. The version label itself is harmless, but
+          five taps on it opens the onboarding flow picker — the fifth demo
+          affordance (Pixel, thread 4510c5c8), and Garden is a permanent
+          shipping tab. If production support ever needs a visible version
+          number, that's a new always-rendered label WITHOUT the gesture,
+          not an ungating of this one. */}
+      {DEMO_CONTENT && <DevVersionTag />}
     </ScrollView>
   );
 };

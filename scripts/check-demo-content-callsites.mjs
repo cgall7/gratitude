@@ -15,7 +15,7 @@
 // reachable; here a constant derived but not applied). This gate asserts
 // the constants are USED, so the fix cannot reopen in one line unnoticed.
 //
-// TWO ENUMERATORS AND A NAMED LIST — in strength order, weakest last:
+// THREE ENUMERATORS AND A NAMED LIST — in strength order, weakest last:
 //
 //   1. RENDERED-STRING RULE (structural, scales): any rendered string
 //      matching /demo/i must sit inside a DEMO_CONTENT guard. The two
@@ -34,28 +34,43 @@
 //      tester's feed), whatever the surrounding code calls itself. Covers
 //      HoneycombTab's merge and any future importer, unregistered.
 //
-//   3. NAMED, NOT ENUMERATED — stated plainly: the two entries below are a
-//      LIST, and a list has the hole an enumerator closes. A new
-//      non-self-identifying, non-demoHive affordance — a toggle with a
-//      neutral label, a seeding call behind a "Fill sample entries" button
-//      — is caught by NOTHING here, and this gate will read green while it
-//      ships. Direction: green-on-a-trap. That residual is the price of
-//      not inventing a semantic classifier for "demo-ness"; when a third
-//      named entry shows up, that is the moment to look for the structural
-//      property the three share.
+//   3. DEV-ONLY IMPORT RULE (structural over a named module list): every
+//      file importing a dev-only module (services/devSettings,
+//      utils/demoSeed, constants/demoHive) must reference DEMO_CONTENT
+//      outside its imports. This replaced the original seedDemoData caller
+//      REGISTRY after Sage found the structural property the named entries
+//      share (thread 4510c5c8): demo affordances are HANDLER-bound — the
+//      function sits lexically beside the JSX, never inside the guard — so
+//      widening any string universe can't reach them, but the capability
+//      they invoke lives in a nameable module, and importing one is the
+//      structural marker. Paired with the capability guards IN
+//      setOnboardingFlow and seedDemoData (each no-ops unless
+//      DEMO_CONTENT), which this gate also asserts by name: deleting a
+//      capability guard deletes the file's flag reference too, so the same
+//      mutation reds both layers. Zero exemptions — that matters, because
+//      an exemption is where the next affordance hides.
+//
+//      Residuals, direction stated: (a) the MODULE list is itself named —
+//      a NEW dev-only fixture module ships uncovered until listed here;
+//      green-on-a-trap. (b) file-level "references the flag" is coarser
+//      than per-read guarding — a file with one legitimate reference and a
+//      second, unguarded affordance passes rule 3; rules 1/2 and the named
+//      entries are what stand in front of that.
+//
+//   4. NAMED, NOT ENUMERATED — these are a LIST, and a list has the hole
+//      an enumerator closes. A demo affordance that never says "demo",
+//      reads no demoHive data, and imports no dev-only module is caught by
+//      NOTHING here; green-on-a-trap.
 //
 //        a. FlowToggle (Onboarding.js): the A/B flow picker. Label text
 //           ("Flow A"/"Flow B"/"Flow C") never says "demo", so rule 1 is
 //           blind to it. Every <FlowToggle> JSX usage must be guarded.
-//        b. EntryStore.seedDemoData: the capability behind CoreRitual's
-//           gated button (demoSeed.js -> buildDemoEntries -> 180 days of
-//           fabricated entries). Its call sites are hard to guard-check
-//           lexically (the handler function sits outside the guarded JSX),
-//           so it gets a REGISTRY instead: the files allowed to say the
-//           name are pinned, and a new caller lands red for conscious
-//           review rather than silently acquiring seeding. A rename of the
-//           method evades this — rule 1 still covers the button's label,
-//           nothing covers a renamed capability with a neutral caller.
+//        b. DevVersionTag (RecapTab.js): the fifth affordance (Pixel,
+//           thread 4510c5c8) — its only rendered string is a version
+//           number, its "demo" strings are Alert args rule 1 deliberately
+//           excludes. Every <DevVersionTag> JSX usage must be guarded, so
+//           production renders no five-tap picker surface at all; rule 3
+//           and the capability guard sit behind it in depth.
 //
 // SELF-DELETING CONTROLS: the walker-control assertions below ("finds
 // 'Load demo data'", "FlowToggle is used at least once", "some file
@@ -166,37 +181,87 @@ for (const { rel, ast } of parsed) {
 check('walker control: at least one file imports from constants/demoHive', hiveImporters.length > 0, true);
 check(`every reference to a constants/demoHive import is inside a ${FLAG} guard`, unguardedHiveReads, []);
 
-// --- Named 3a: FlowToggle usages are guarded ------------------------------
-const flowToggleUses = [];
-const unguardedFlowToggles = [];
-for (const { rel, ast } of parsed) {
-  walkWithAncestry(ast.program, (node, ancestors) => {
-    if (node.type !== 'JSXElement') return;
-    const name = node.openingElement.name;
-    if (name.type !== 'JSXIdentifier' || name.name !== 'FlowToggle') return;
-    flowToggleUses.push(rel);
-    if (!isUnderGuard(ancestors, FLAG)) {
-      unguardedFlowToggles.push(`${rel}:${node.loc.start.line}`);
-    }
-  });
-}
-check('walker control: FlowToggle is rendered at least once', flowToggleUses.length > 0, true);
-check(`every <FlowToggle> usage is inside a ${FLAG} guard`, unguardedFlowToggles, []);
+// --- Rule 3: dev-only module importers reference the flag -----------------
+// Per-module controls, not one total (Pixel's M8 lesson, check-copy-rules
+// §A: a universe can lose one member and the total still looks healthy):
+// each module asserts its own importer count, so a module dropping out of
+// the universe is a named red, not a silent shrink. Legitimately deleting
+// one of these modules reds its control; per the SELF-DELETING CONTROLS
+// note above, that red is authorisation to drop the list entry.
+const DEV_ONLY_MODULES = [
+  ['services/devSettings', /(^|\/)services\/devSettings$/],
+  ['utils/demoSeed', /(^|\/)utils\/demoSeed$/],
+  ['constants/demoHive', DEMO_HIVE],
+];
 
-// --- Named 3b: seedDemoData caller registry -------------------------------
-// Guard-checking is the wrong instrument here (the handler that calls it is
-// lexically outside the guarded JSX), so the assertion is narrower and
-// honest about it: only these files may say the name, and a new one is a
-// red demanding review, not a silent grant.
-const SEED_CALLERS = ['src/screens/CoreRitual.js', 'src/services/EntryStore.js'];
-const seedFiles = new Set();
-for (const { rel, ast } of parsed) {
-  walkWithAncestry(ast.program, (node) => {
-    if (node.type === 'Identifier' && node.name === 'seedDemoData') seedFiles.add(rel);
+const referencesFlagOutsideImports = (ast) => {
+  let found = false;
+  walkWithAncestry(ast.program, (node, ancestors) => {
+    if (node.type !== 'Identifier' || node.name !== FLAG) return;
+    if (ancestors.some((a) => a.node.type === 'ImportDeclaration')) return;
+    found = true;
   });
+  return found;
+};
+
+for (const [label, pattern] of DEV_ONLY_MODULES) {
+  const importers = parsed.filter(({ ast }) =>
+    ast.program.body.some(
+      (stmt) => stmt.type === 'ImportDeclaration' && pattern.test(stmt.source.value)
+    )
+  );
+  check(`walker control: at least one file imports ${label}`, importers.length > 0, true);
+  check(
+    `every importer of ${label} references ${FLAG} (no exemptions)`,
+    importers.filter(({ ast }) => !referencesFlagOutsideImports(ast)).map(({ rel }) => rel),
+    []
+  );
 }
-check('seedDemoData appears only in its registered files (CoreRitual, EntryStore)',
-  [...seedFiles].sort(), SEED_CALLERS);
+
+// --- Rule 3's depth layer: the capability guards themselves ---------------
+// setOnboardingFlow's write outlives the gesture (a persisted 'C' decides
+// the flow forever after); seedDemoData is the seeding capability behind
+// any button. Each must consult the flag in its own body, so a future
+// caller with a neutral label is inert in a production build. Pinned to
+// the ObjectMethod shape on this tree — a refactor to another shape reds
+// this and extends it here, red-on-correct-code, never green-on-a-trap.
+const methodReferencesFlag = (rel, methodName) => {
+  const entry = parsed.find((p) => p.rel === rel);
+  if (!entry) return 'file-missing';
+  let method = null;
+  walkWithAncestry(entry.ast.program, (node) => {
+    if (node.type === 'ObjectMethod' && !node.computed && node.key.name === methodName) method = node;
+  });
+  if (!method) return 'method-missing';
+  let found = false;
+  walkWithAncestry(method.body, (node) => {
+    if (node.type === 'Identifier' && node.name === FLAG) found = true;
+  });
+  return found;
+};
+check(`DevSettings.setOnboardingFlow consults ${FLAG} in its body`,
+  methodReferencesFlag('src/services/devSettings.js', 'setOnboardingFlow'), true);
+check(`EntryStore.seedDemoData consults ${FLAG} in its body`,
+  methodReferencesFlag('src/services/EntryStore.js', 'seedDemoData'), true);
+
+// --- Named 4a/4b: FlowToggle and DevVersionTag usages are guarded ---------
+for (const componentName of ['FlowToggle', 'DevVersionTag']) {
+  const uses = [];
+  const unguarded = [];
+  for (const { rel, ast } of parsed) {
+    walkWithAncestry(ast.program, (node, ancestors) => {
+      if (node.type !== 'JSXElement') return;
+      const name = node.openingElement.name;
+      if (name.type !== 'JSXIdentifier' || name.name !== componentName) return;
+      uses.push(rel);
+      if (!isUnderGuard(ancestors, FLAG)) {
+        unguarded.push(`${rel}:${node.loc.start.line}`);
+      }
+    });
+  }
+  check(`walker control: ${componentName} is rendered at least once`, uses.length > 0, true);
+  check(`every <${componentName}> usage is inside a ${FLAG} guard`, unguarded, []);
+}
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
