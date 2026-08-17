@@ -110,11 +110,35 @@ check(`${LEGAL} declares a FILL object`, fillNode !== null, true);
 // and the publish flag must read through ONE predicate; this gate is a
 // third reader, so it pins the shape it is mirroring. A change to
 // isPublished reds here and is copied down, rather than the two drifting.
-const legalSource = await readFile(path.join(ROOT, LEGAL), 'utf8');
+//
+// Pinned on the AST NODE, not on the file's text. A substring match over
+// source is satisfied by PROSE ABOUT the predicate as readily as by the
+// predicate — and a refactor's most likely comment is the old expression
+// quoted above the new one ("was: …"). That is this repo's own recurring
+// defect (a gate row that went red on its own justifying comment, §28.9),
+// and it is worth avoiding here specifically because this pin is the
+// licence for a mirror: if it can pass while the source changed, the
+// mirror drifts with the gate reporting that it hasn't.
+const isPublishedInit = (() => {
+  let found = null;
+  walkWithAncestry(legalAst.program, (node) => {
+    if (
+      node.type === 'VariableDeclarator' &&
+      node.id.type === 'Identifier' &&
+      node.id.name === 'isPublished' &&
+      node.init
+    ) found = node.init;
+  });
+  return found;
+})();
+const isPublishedSource =
+  isPublishedInit && isPublishedInit.start != null
+    ? (await readFile(path.join(ROOT, LEGAL), 'utf8')).slice(isPublishedInit.start, isPublishedInit.end)
+    : null;
 check(
   `${LEGAL}'s isPublished still has the shape this gate mirrors`,
-  legalSource.includes("typeof value === 'string' && value.trim() !== ''"),
-  true
+  isPublishedSource,
+  "(value) => typeof value === 'string' && value.trim() !== ''"
 );
 
 const fillEntries = [];
@@ -208,6 +232,68 @@ check(
 check(
   `legal copy is unpublished, or \`canSubmit\` requires \`${CONSENT_BINDING}\``,
   READY === false || (canSubmitNames !== null && canSubmitNames.has(CONSENT_BINDING)),
+  true
+);
+
+// --- Row 3: consent is OBTAINABLE, not merely required ----------------
+//
+// Rows 1 and 2 both push in one direction — "the submit path must consult
+// consent" — and the end of that ladder is a state where nothing lets the
+// user give it. Measured on this gate at 87b7a0d, walking the transition
+// one edit at a time:
+//
+//   published, nothing else            row 1 RED    row 2 RED
+//   + import only                      row 1 RED    row 2 RED
+//   + a real consult of the symbol      row 1 GREEN  row 2 RED
+//   + canSubmit requires the binding    row 1 GREEN  row 2 GREEN   ← and
+//     with NO checkbox rendered                                      SIGNUP
+//                                                                    IS DEAD
+//
+// `const [agreedToTerms] = useState(false)` with no control satisfies both
+// rows and makes `canSubmit` permanently false for sign-up. The gate would
+// report the transition complete on the one day it speaks, while nobody can
+// create an account. A gate whose only possible utterance is a false
+// all-clear is worse than one that stays red.
+//
+// The predicate needs no new name and no shape guess — it is ROW 1's OWN
+// IDIOM applied to the second symbol: a rendered control necessarily
+// references the binding again (a `value=`/`checked=` prop, or a toggle in
+// an `onPress`), so requiring one reference beyond the declaration and
+// beyond `canSubmit`'s initialiser separates "wired" from "reachable".
+//
+// Residual, stated: a reference that reads the binding without offering a
+// way to change it (a stray log) satisfies this. That is a shape nobody
+// writes on purpose, and unlike the lock-out it is not the natural
+// half-finished state of the edit this gate exists to interrupt.
+// EXCLUDED BY NODE IDENTITY, NOT BY NODE TYPE — and the difference is the
+// whole row. The first draft excluded "anything under a VariableDeclarator",
+// meaning to name two places; in this file every screen component is
+// `const X = (props) => (…)`, so that ancestor test excludes EVERY
+// identifier in the tree. It passed the lock-out mutation it was written
+// for and failed the fixed future, which is the only reason it was caught:
+// a row verified solely against the state it must red on has no evidence it
+// can ever go green.
+const excludedNodes = new Set();
+if (canSubmitInits.length === 1) excludedNodes.add(canSubmitInits[0].init);
+walkWithAncestry(onboardingAst.program, (node) => {
+  // The binding site itself: `const [agreedToTerms, …] = …`. Only the `id`
+  // side — an initialiser that mentions the binding is a real reference.
+  if (node.type === 'VariableDeclarator' && node.id) {
+    const ids = identifiersIn(node.id);
+    if (ids.has(CONSENT_BINDING)) excludedNodes.add(node.id);
+  }
+});
+
+const consentSites = [];
+walkWithAncestry(onboardingAst.program, (node, ancestors) => {
+  if (node.type !== 'Identifier' || node.name !== CONSENT_BINDING) return;
+  if (ancestors.some((a) => excludedNodes.has(a.node))) return;
+  consentSites.push(`${ONBOARDING}:${node.loc.start.line}`);
+});
+
+check(
+  `legal copy is unpublished, or \`${CONSENT_BINDING}\` is reachable (referenced outside its declaration and \`canSubmit\`)`,
+  READY === false || consentSites.length > 0,
   true
 );
 
