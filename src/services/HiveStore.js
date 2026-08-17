@@ -32,11 +32,14 @@ const requireUserId = async (client) => {
   return user.id;
 };
 
-// GUIDES/PRIVATE_HIVE_DESIGN_LANGUAGE.md §1 — the five ids the create-flow
-// theme picker and 20260817000002's check constraint both agree on.
-export const COVER_THEMES = ['golden-honey', 'sunlit-honey', 'wildflower', 'starlight', 'cream-gold'];
+// GUIDES/PRIVATE_HIVE_DESIGN_LANGUAGE.md §1 — the four selectable ids the
+// create-flow theme picker and 20260817000002's check constraint both agree
+// on. `golden-honey` is not one of them — §1's own note reserves it for the
+// sealed-state visual (§9's wax seal badge), never a cover a hive is created
+// with.
+export const COVER_THEMES = ['sunlit-honey', 'wildflower', 'starlight', 'cream-gold'];
 export const REVIEW_CADENCES = ['monthly', 'yearly', 'manual'];
-const DEFAULT_COVER_THEME = 'golden-honey';
+const DEFAULT_COVER_THEME = 'sunlit-honey';
 const DEFAULT_REVIEW_CADENCE = 'yearly';
 
 const toHiveEntry = (row) => ({
