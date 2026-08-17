@@ -7,14 +7,18 @@
 // blank page.
 //
 // THE SPARK REGISTER IS A COMPOSITION CONTRACT, NOT A STYLE PREFERENCE.
-// A spark is never rendered alone: CoreRitual.js:176 sets the input to
-// `I am grateful for ${spark}.` and IdeasAccordion feeds the same shape
-// (`I'm grateful for ${spark}.`, Onboarding.js). So a spark must be a
+// A spark is never rendered alone: both of IdeasAccordion's mounts hand the
+// tapped spark straight into a sentence — CoreRitual sets the input to
+// `I am grateful for ${spark}.`, Onboarding's Write beat to
+// `I'm grateful for ${spark}.`. So a spark must be a
 // LOWERCASE NOUN PHRASE — anything else lands mid-sentence as a capital,
 // and a leading preposition ("in a gesture") lands as broken grammar the
 // user then has to repair before they can write. Measured over this file:
-// 60/60 sparks are lowercase, 0/60 lead with a preposition. That is the
-// contract; check:copy-rules cannot see it, so it is written here.
+// 72/72 sparks are lowercase, 0/72 lead with a preposition, and no spark
+// string appears twice (a repeated chip in a four-chip row reads as a
+// rendering bug). check:copy-rules cannot see any of that — its walker asks
+// whether a word is allowed, not whether a fragment composes — so the
+// contract is written here and asserted in check:onboarding-flow section D.
 export const DAILY_PROMPTS = [
   {
     question: "Who made you smile this week?",
@@ -136,8 +140,26 @@ export const FIRST_DAYS_PROMPTS = [
   },
   {
     // B2 — the turn: receiving the day, not reviewing it.
+    //
+    // The question carries the turn; the chips do not have to. Day 1 was the
+    // only all-abstract deck of the three, and abstraction is what loses to a
+    // blank page — so all four are now things a day hands you, not categories
+    // of thing. The first recut kept the categories ('a song', 'a walk') and
+    // was rejected for it: the file already renders both of those grounded
+    // ("a song from high school on the radio", "my walk to work"), so the
+    // generic form is the deck saying worse what it already says well.
+    //
+    // 'an ease' also failed the read-aloud test the contract above implies:
+    // "I am grateful for an ease." is strained English in a way "a breath"
+    // is not, because ease does not take an article in that frame. Every
+    // replacement was said aloud inside the template before it landed.
     question: 'What let the day land with you today?',
-    sparks: ['a presence', 'an ease', 'a moment', 'a breath'],
+    sparks: [
+      'the commute home',
+      'my first shower of the day',
+      'the end of the workday',
+      'a few minutes to myself',
+    ],
   },
   {
     // B3 — peace as the byproduct, never the reason.

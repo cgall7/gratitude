@@ -362,6 +362,21 @@ check(
   allSparks.filter((s) => /^(in|on|at|with|by|for|from|to|of)\b/i.test(s)),
   []
 );
+// A repeated chip reads as a rendering bug, not as a second suggestion —
+// and the row a user sees is four chips wide, so a duplicate inside one deck
+// is visible in a single glance. The decks are duplicate-free today and that
+// state was held by nothing: the first recut of B2 proposed a spark already
+// sitting in the same array, and it survived on a reviewer's eyes. Enumerated
+// globally rather than per-deck, because day 1 and day 40 are two screens the
+// same user sees, and the assertion reports the STRINGS, not a count, so the
+// failure names the chip instead of the arithmetic.
+const sparkCounts = new Map();
+for (const s of allSparks) sparkCounts.set(s, (sparkCounts.get(s) ?? 0) + 1);
+check(
+  'no spark string appears twice across the decks (a repeated chip reads as a bug)',
+  [...sparkCounts].filter(([, n]) => n > 1).map(([s]) => s),
+  []
+);
 check(
   'every prompt carries at least one spark',
   [...DAILY_PROMPTS, ...FIRST_DAYS_PROMPTS].filter((p) => !p.sparks?.length).map((p) => p.question),

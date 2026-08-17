@@ -302,9 +302,10 @@ const CelebrationStep = ({ step, onNext }) => (
 // conditional one could ("That was about someone" is false for rain on the
 // roof), so it asks, and the tap is the answer.
 //
-// COPY. "Who's this year for?" and "Not this time" are ratified (Deezine,
-// through Lumen). Three deviations from the posted design, each with its
-// reason, all reversible in one string:
+// COPY. Every string on this beat is ratified (Deezine, 2026-08-17). Three of
+// them started as deviations from the posted design and were ratified as
+// written; the reasons stay here, because a ratified string with a lost reason
+// is the one a later pass reverts by accident:
 //
 //   placeholder  "A name" — the design said "A name, a thought, or leave it
 //     blank". `subject_name` is a label for a person; a hive named after a
