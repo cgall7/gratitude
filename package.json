@@ -13,6 +13,7 @@
     "check:seeds-contract": "node scripts/check-seeds-contract.mjs",
     "check:plant-seed": "node scripts/check-plant-seed.mjs",
     "check:load-state": "node scripts/check-load-state.mjs",
+    "check:migration-sentinels": "node scripts/check-migration-sentinels.mjs",
     "check:seed-view": "node scripts/check-seed-view.mjs",
     "check:hive-state-rls": "node scripts/check-hive-state-rls.mjs",
     "check:streaks": "node scripts/check-streaks.mjs",
