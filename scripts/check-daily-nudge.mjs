@@ -20,8 +20,10 @@
 // this spec does not decide" section, not §6) is the same shape as rows 2/8
 // in reverse: the call site exists (`App.js`'s `rearmDailyNudge`), but the
 // value it would ship is a deliberately-unshippable sentinel
-// (`src/constants/nudgeCopy.js`). That row FAILS ON PURPOSE until Deezine's
-// real strings land — §7: "half A does not ship without it."
+// (`src/constants/nudgeCopy.js`). That row FAILS ON PURPOSE while the
+// `__OWNED_BY_` sentinel is present — §7: "half A does not ship without it."
+// The predicate is a string check, not an authorship check; it cannot see
+// who replaced the sentinel or whether real copy landed.
 //
 // `scripts/run-checks.mjs` enumerates `scripts/check-*.mjs` off disk — there
 // is no separate registration step, and no way for this file to opt itself
@@ -556,11 +558,11 @@ console.log('\nG. copy ownership (§7 — not wired into run-checks.mjs, see hea
   const copyMod = await importModule(copySrc);
   const sentinelled = [copyMod.NUDGE_TITLE, copyMod.NUDGE_BODY].some((v) => typeof v === 'string' && v.startsWith('__OWNED_BY_'));
   if (!sentinelled) {
-    ok('NUDGE_TITLE / NUDGE_BODY are no longer the unowned sentinel — half A is copy-complete');
+    ok('NUDGE_TITLE / NUDGE_BODY no longer hold the __OWNED_BY_ sentinel');
   } else {
     bad(
-      "NUDGE_TITLE / NUDGE_BODY are not Deezine's real copy yet",
-      '§7: "half A does not ship without it." src/constants/nudgeCopy.js still holds the sentinel — this is the expected, intentional state of this row until that PR lands.',
+      'NUDGE_TITLE / NUDGE_BODY still hold the __OWNED_BY_ sentinel — copy has not landed',
+      '§7: "half A does not ship without it." This predicate is a string check, not an authorship check — it is the expected, intentional state of this row until real copy lands.',
     );
   }
 }

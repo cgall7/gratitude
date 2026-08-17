@@ -4,14 +4,14 @@
 // EveningMirror defect on the highest-visibility surface we have. Half A
 // does not ship without it."
 //
-// These are Deezine's strings, not mine. `NUDGE_TITLE` / `NUDGE_BODY` below
-// are a deliberately-unshippable sentinel, not a placeholder someone could
-// mistake for a draft: `scripts/check-daily-nudge.mjs` fails while either
-// value still matches it, and `src/services/dailyNudge.js`'s `reconcile()`
-// requires real strings to be passed in at all — this file existing with the
-// sentinel in it does not make the feature schedulable.
+// These are Deezine's strings — event `5fb43947`, 2026-08-17T06:08:25Z,
+// Collab on projects. Ratified by Sage's ruling (same channel, 06:38:26Z)
+// over a reviewer-authored round 5 that had been circularly cleared by its
+// own author; round 5 is withdrawn, not a rejected revision of this pair.
 //
-// Register: never an imperative, never "don't forget", never a streak
-// threat. The app noticed the day and did not notice a line in it.
-export const NUDGE_TITLE = '__OWNED_BY_DEEZINE__';
-export const NUDGE_BODY = '__OWNED_BY_DEEZINE__';
+// Register, §7: the app noticed the day and did not notice a line in it —
+// a stance, not a vocabulary. Never an imperative, never "don't forget",
+// never a streak threat, and never a want imported into the reader ("your
+// day awaits" constructs an unfulfilled obligation; this pair does not).
+export const NUDGE_TITLE = 'A day worth noticing';
+export const NUDGE_BODY = 'What did it show you?';
