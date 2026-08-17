@@ -359,5 +359,48 @@ check(
   true
 );
 
+// --- THE LADDER ENDS HERE, AND HERE IS WHY IT ISN'T FINISHED ----------
+//
+// Rows 3 and 4 were each added because the row before them had a green
+// state where nobody could create an account. Row 5 is available right now.
+// Measured at 593be0c, all four rows green, 11 passed, 0 failed, exit 0:
+//
+//   const [agreedToTerms, setAgreedToTerms] = useState(false);
+//   <Text … onPress={() => setAgreedToTerms(false)}>          // only ever false
+//
+// Setter declared, referenced, called — and `agreedToTerms` can never be
+// true, so `canSubmit` is permanently false for sign-up. Close that and row
+// 6 is `setAgreedToTerms(someConstantFalse)`; close that and row 7 is a
+// control rendered under `{false && …}`; and so on. EVERY ROW FROM 3 DOWN
+// IS A SYNTACTIC PROXY FOR ONE SEMANTIC PROPERTY — *can this state ever
+// become true* — and reachability is not a question an AST walk answers.
+// A ladder built rung by rung against half-finished edits has no last rung.
+//
+// So the rows are kept and the ladder is CLOSED, on a division of labour
+// rather than on exhaustion:
+//
+//   ROWS 1-2 cover the defect THE RUNNING APP CANNOT REVEAL. A published
+//   Privacy Policy with no consent affirmation looks completely correct on
+//   a device: signup works, the links resolve, nothing is visibly wrong.
+//   It ships. That is the whole reason this gate exists, and those two rows
+//   are complete for it — the symbol is consulted, and the submit path
+//   depends on the answer.
+//
+//   ROWS 3-4 cover the two cheapest rungs of a DIFFERENT defect — sign-up
+//   bricked — which the running app reveals in one launch, unambiguously,
+//   to anyone. They are kept because they are free at the moment the red
+//   fires and they name the next edit for whoever is mid-transition. They
+//   are NOT a guarantee that consent is obtainable.
+//
+// **DO NOT ADD ROW 5.** The instrument for rows 5..n is opening the app and
+// tapping the control, and a ladder that keeps growing acquires the one
+// property this whole gate exists to deny: it starts reading as complete.
+// An incomplete check that looks exhaustive is a false all-clear one level
+// up from the one row 3 was written to prevent.
+//
+// If you are reading this because a row fired: rows 1-2 are the legal
+// defect and must be fixed in code. Rows 3-4 are telling you the edit is
+// half-finished — finish it, then RUN THE APP and create an account.
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
