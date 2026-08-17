@@ -30,13 +30,23 @@ SplashScreen.preventAutoHideAsync();
 // Demo-mode only (Colin, 2026-08-09): every time the app comes back to the
 // foreground it should reopen at onboarding, even if someone finished it
 // or was sitting on Main a minute ago — the pitch should always be fresh
-// for whoever's about to see it. Flip this off once the app is past the
-// demo phase. This flag now gates BOTH demo behaviours: the
+// for whoever's about to see it. This flag now gates BOTH demo behaviours: the
 // foreground-resume reset below, and forcing every cold launch to start at
 // Onboarding. With it off, cold launches route on the persisted completion
 // flag / live session instead (resolveInitialRoute), so flipping this one
 // constant really is the whole switch.
-const DEMO_MODE = true;
+//
+// Driven by `eas.json`'s per-profile `EXPO_PUBLIC_DEMO_MODE` (Sage, thread
+// 14492cf2), not a literal — a hardcoded `true` shipped demo mode to every
+// TestFlight build regardless of profile. Two traps this derivation avoids:
+// Expo's inline-env-vars babel plugin only rewrites a direct
+// `process.env.X` member read, so destructuring `{ EXPO_PUBLIC_DEMO_MODE }`
+// from `process.env` resolves to `undefined` at runtime and silently kills
+// the flag; and the inlined value is always a string, so a bare truthiness
+// check makes the explicit `"false"` production profile sets truthy. The
+// `=== 'true'` comparison is what makes an absent var (development profile,
+// no env block) resolve safely to `false`.
+const DEMO_MODE = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
 
 // Cold-launch routing, only consulted when DEMO_MODE is off. Completed
 // onboarding on this device, or an existing signed-in session (fresh

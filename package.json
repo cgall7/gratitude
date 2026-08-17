@@ -25,6 +25,7 @@
     "check:bee-attitude": "node scripts/check-bee-attitude.mjs",
     "check:type-floor": "node scripts/check-type-floor.mjs",
     "check:reexport-bindings": "node scripts/check-reexport-bindings.mjs",
+    "check:demo-mode-env": "node scripts/check-demo-mode-env.mjs",
     "test": "node scripts/run-checks.mjs",
     "deploy:migrations": "bash scripts/deploy-migrations.sh"
   },
