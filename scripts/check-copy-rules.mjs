@@ -323,10 +323,16 @@ for (const position of POSITIONS) {
 // the evidence the residual is real and the instruments are not — an
 // exemption is where the next affordance hides, which is the rule this
 // whole section exists to keep.
+// `id` and `on` are PerchAnchor's (§32) and nothing renders either: `id` keys
+// `chooseAnchor`'s anti-repeat memory, `on` is the 'left' | 'right' side enum.
+// Filed here rather than left unclassified because row 1 reds on an unknown
+// name — and unlike `name`, neither has a second meaning to collide with:
+// `check-bee-attitude` row K2 already asserts ids are unique and sides legal,
+// so these two are constrained by a gate that knows what they are.
 const NOT_COPY_ATTRS = new Set([
   // RN / component API enums and identifiers
-  'accessibilityRole', 'autoCapitalize', 'icon', 'importantForAccessibility',
-  'key', 'keyboardShouldPersistTaps', 'keyboardType', 'mode', 'name',
+  'accessibilityRole', 'autoCapitalize', 'icon', 'id', 'importantForAccessibility',
+  'key', 'keyboardShouldPersistTaps', 'keyboardType', 'mode', 'name', 'on',
   'pointerEvents', 'preset', 'resizeMode', 'returnKeyType', 'size', 'stage',
   'tint', 'tone',
   // SVG geometry and paint
