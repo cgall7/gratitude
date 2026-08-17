@@ -1,4 +1,4 @@
-// Sunbeam §31 — the idle flight sequencer.
+// Sunbeam §32 — the idle flight sequencer.
 //
 // ┌─ NOT WIRED YET, AND HERE IS HOW TO TELL THAT FROM ORPHANED ─────────┐
 // │ This module has NO importer in `src/` or `App.js`. That is the      │
@@ -90,7 +90,7 @@
 // and everything is lost by importing it. `builders` is threaded in from the
 // call site; the gate passes the same ones it imported separately.
 
-// §31.1 — the reference speed, and why it is stated per DIAGONAL.
+// §32.1 — the reference speed, and why it is stated per DIAGONAL.
 //
 // Every speed in §28 is derived from the cruise: the approach is
 // `APPROACH_SPEED_RATIO x cruiseSpeedPxS(PATH, width, height, LOOP_MS)`, and
