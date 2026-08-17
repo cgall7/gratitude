@@ -9,10 +9,10 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../constants/theme';
-import { DURATIONS, useReducedMotion } from '../constants/motion';
 import { PressableScale } from '../components/PressableScale';
 import { StaggeredItem } from '../components/StaggeredItem';
 import { PrimaryButton } from '../components/PrimaryButton';
@@ -92,35 +92,6 @@ const StepShell = ({ step, stage, wash, onBack, showMap = true, children }) => {
   );
 };
 
-// The theme has one obvious move: things arriving. Light blooms behind the
-// icon *before* the words land, so the screen performs its own argument —
-// you receive it rather than read it. Reuses the Lock screen's GlowOrb (real
-// radial gradient, no hard circular edge) and collapses to a flat fade under
-// Reduce Motion.
-const ArrivingLight = ({ size = 180 }) => {
-  const reduced = useReducedMotion();
-  const anim = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    Animated.timing(anim, {
-      toValue: 1,
-      duration: reduced ? DURATIONS.reducedMotionFade : 900,
-      useNativeDriver: true,
-    }).start();
-  }, [reduced]);
-
-  const scale = anim.interpolate({ inputRange: [0, 1], outputRange: [reduced ? 1 : 0.55, 1] });
-
-  return (
-    <Animated.View
-      pointerEvents="none"
-      style={[styles.beliefGlow, { opacity: anim, transform: [{ scale }] }]}
-    >
-      <GlowOrb size={size} intensity={0.55} breathe />
-    </Animated.View>
-  );
-};
-
 // §13.3: the bee flies an inward spiral arc and settles at the wordmark's
 // center once per app open — a flight-path preset on the shared FlyingBee
 // engine, not a second bee. `hasArcedThisLaunch` is a module-level flag
@@ -145,6 +116,7 @@ let hasArcedThisLaunch = false;
 // someone who already has an account. The demo skip stays DEMO_CONTENT-gated
 // and below both.
 const LandingStep = ({ step, onNext, onSignIn, onSkipDemo, splashHidden }) => {
+  const { width } = useWindowDimensions();
   // Starting the arc on mount used to spend its whole flight behind the
   // still-visible splash (§13.3 follow-up, Pixel/Sage 2026-08-12: "once per
   // app open" means once VISIBLY, and an arc spent behind the splash is
@@ -162,12 +134,19 @@ const LandingStep = ({ step, onNext, onSignIn, onSkipDemo, splashHidden }) => {
 
   return (
     <StepShell step={step} stage="welcome" wash={theme.colors.washYellow}>
+      {/* THE GATE'S OWN LIGHT, not a smaller cousin of it. First attempt
+          reused the belief screens' ArrivingLight — a 180pt orb absolutely
+          positioned at left:-68/top:-68 of whatever contained it. On the
+          Landing that container is the centred content column, so it
+          rendered as a yellow blob in the top-left corner: a style that
+          only ever made sense inside the layout it was written for.
+          CoreRitual's LockScreen runs `size={width * 1.6}` at `top:
+          -width * 0.35`, which reads as light across the whole screen
+          rather than as a pale shape; if this is the same face as the
+          gate, it wears the gate's exact treatment. ArrivingLight had no
+          other consumer once the belief screens went, and is deleted. */}
+      <GlowOrb size={width * 1.6} breathe intensity={0.55} style={{ top: -width * 0.35 }} />
       <View style={styles.centerFill}>
-        {/* The gate's light, on the gate's face. Behind the wordmark rather
-            than behind an icon (its other call site was the belief screens,
-            which are gone) — the bee arcs through it and settles on the
-            mark. */}
-        <ArrivingLight size={200} />
         <View style={styles.wordmarkArcAnchor}>
           <Text style={styles.wordmark}>Pollinate</Text>
           {showArc && (
@@ -773,13 +752,6 @@ const styles = StyleSheet.create({
   // both axes). Absolute + pointerEvents none: it never affects layout, and
   // the spill past the screen edge is intentional — light falling in, not a
   // shape sitting on the wash.
-  beliefGlow: {
-    position: 'absolute',
-    left: -68,
-    top: -68,
-    width: 180,
-    height: 180,
-  },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
