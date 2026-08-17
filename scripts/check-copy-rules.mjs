@@ -40,16 +40,13 @@
 // looked. So this walks all of `src/` and filters by POSITION: a string is
 // copy if it reaches a user's eyes or a screen reader, wherever it lives.
 //
-// The positions, and each one is here because something real occupies it:
+// The five positions, and what each one holds, are documented at the walker:
+// scripts/lib/rendered-strings.mjs. This gate asks for ALL of them, because
+// its question — does a user read a forbidden word — is indifferent to which
+// slot the word sits in. The demo-content gate asks the same walker for two
+// of them, because its question is not.
 //
-//   JSXText              <Text>Pause.</Text>
-//   JSX child expression <Text>{saved ? 'Saved' : 'Save'}</Text>
-//   copy-bearing prop    placeholder="Today I was given…", accessibilityLabel
-//   Alert.alert(...)     the confirm dialogs
-//   src/constants/*      the prompt deck, the spark chips, the legal pages —
-//                        authored prose that no screen file contains
-//
-// That last one is over-inclusive on purpose: it takes any prose-shaped string
+// `constant` is over-inclusive on purpose: it takes any prose-shaped string
 // in `src/constants/`, which sweeps up a few things nobody reads. A false
 // member of the copy set costs one re-read. A missing member costs the whole
 // point of the gate. The over-inclusion is paid for in (2), not by narrowing
@@ -57,7 +54,11 @@
 //
 // (2) THE MATCHER IS PER-WORD, BECAUSE ONE RULE CANNOT FIT ALL TWELVE.
 //
-// Three matching rules, run over the 451 real copy strings at f0df9c2:
+// Three matching rules, run over the real copy strings — 451 at f0df9c2 with
+// this gate's own collector, 446 at b5e7754 once it moved to the shared
+// walker (five strings, all of them a double count or a sentence collected
+// in halves; the walker header has both effects measured, and no string was
+// lost). All three arms return the same hits over either corpus:
 //
 //   raw substring          4 hits, all false — "single", "Using",
 //                          "advertising", "consequential" all contain `sin`
@@ -90,6 +91,11 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse } from '@babel/parser';
 import { FORBIDDEN } from './forbidden-words.mjs';
+import {
+  POSITIONS,
+  PositionVocabularyError,
+  collectRenderedStrings,
+} from './lib/rendered-strings.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SRC = path.join(ROOT, 'src');
@@ -107,9 +113,10 @@ const check = (label, got, want) => {
 
 // --- A. Collect the copy -----------------------------------------------
 
-// THE COLLECTOR'S POSITION VOCABULARY, declared once and used twice: `push`
-// refuses a position that is not in it, and section A derives one control per
-// member from it. Neither half is decoration.
+// THE COLLECTOR LIVES IN scripts/lib/rendered-strings.mjs, and its POSITION
+// VOCABULARY is declared there once and used twice: the walker refuses to
+// emit a position that is not in POSITIONS, and section A below derives one
+// control per member of it. Neither half is decoration.
 //
 // The first draft named the controls in a hand-written list of four, and the
 // collector emitted five. Sage measured the gap (2026-08-17): disabling
@@ -123,113 +130,12 @@ const check = (label, got, want) => {
 // two sets are tied together instead. A position cannot exist without a
 // control, and a control cannot exist without a position — one goes red
 // either way. This is section A's own argument applied to section A.
-const POSITIONS = ['jsx-text', 'jsx-expr', 'prop', 'alert', 'constant'];
-const POSITION_SET = new Set(POSITIONS);
-const emittedPositions = new Set();
-const undeclaredPositions = new Set();
-
-const TEXT_ATTRS = new Set([
-  'placeholder',
-  'accessibilityLabel',
-  'accessibilityHint',
-  'accessibilityRoleDescription',
-  'title',
-  'label',
-]);
-
-// A colour or a font token is not prose. Everything else prose-shaped in
-// src/constants/ is taken.
-const isProse = (v) => /\s/.test(v) && /[a-z]{2}/.test(v) && !/^(rgba?\(|#[0-9a-f]{3,8}\b)/i.test(v);
-
-function collect(src, file) {
-  const out = [];
-  const ast = parse(src, { sourceType: 'module', plugins: ['jsx', 'typescript'] });
-
-  const push = (value, node, position) => {
-    // Recorded before the emptiness test: a position whose every string
-    // happens to be blank has still been collected FROM, and section A must
-    // be able to tell that apart from a position nothing reached.
-    emittedPositions.add(position);
-    if (!POSITION_SET.has(position)) undeclaredPositions.add(position);
-    const v = String(value ?? '').replace(/\s+/g, ' ').trim();
-    if (v) out.push({ file, line: node.loc?.start.line, position, text: v });
-  };
-
-  // Every string literal reachable from a node without descending into a
-  // nested JSX element — that element's own children get collected in their
-  // own right, and taking them here would double-count them.
-  const strings = (node) => {
-    const acc = [];
-    const rec = (n) => {
-      if (!n || typeof n !== 'object') return;
-      if (Array.isArray(n)) return n.forEach(rec);
-      if (!n.type) return;
-      if (n.type === 'StringLiteral') return acc.push(n);
-      if (n.type === 'TemplateLiteral') {
-        n.quasis.forEach((q) => acc.push({ value: q.value.cooked, loc: q.loc }));
-        return n.expressions.forEach(rec);
-      }
-      if (n.type === 'JSXElement' || n.type === 'JSXFragment') return;
-      for (const k of Object.keys(n)) if (k !== 'loc') rec(n[k]);
-    };
-    rec(node);
-    return acc;
-  };
-
-  // Hand-rolled walk: @babel/traverse is not installed in this tree, and
-  // @babel/parser alone is (check-stat-scope's precedent).
-  const seen = new Set();
-  const walk = (node, inJsxChildren) => {
-    if (!node || typeof node !== 'object' || seen.has(node)) return;
-    if (Array.isArray(node)) return node.forEach((n) => walk(n, inJsxChildren));
-    if (!node.type) return;
-    seen.add(node);
-
-    if (node.type === 'JSXText') push(node.value, node, 'jsx-text');
-
-    if (node.type === 'JSXAttribute' && TEXT_ATTRS.has(node.name?.name)) {
-      const v = node.value;
-      if (v?.type === 'StringLiteral') push(v.value, v, 'prop');
-      if (v?.type === 'JSXExpressionContainer') {
-        strings(v.expression).forEach((s) => push(s.value, s, 'prop'));
-      }
-    }
-
-    if (node.type === 'JSXExpressionContainer' && inJsxChildren) {
-      strings(node.expression).forEach((s) => push(s.value, s, 'jsx-expr'));
-    }
-
-    if (
-      node.type === 'CallExpression' &&
-      node.callee?.type === 'MemberExpression' &&
-      node.callee.object?.name === 'Alert'
-    ) {
-      node.arguments.forEach((a) => strings(a).forEach((s) => push(s.value, s, 'alert')));
-    }
-
-    for (const key of Object.keys(node)) {
-      if (key === 'loc' || key.endsWith('Comments')) continue;
-      const isChildren =
-        (node.type === 'JSXElement' || node.type === 'JSXFragment') && key === 'children';
-      walk(node[key], isChildren);
-    }
-  };
-  walk(ast.program, false);
-
-  // Authored decks live in src/constants/ as plain literals with no JSX.
-  if (path.dirname(file).endsWith(path.join('src', 'constants'))) {
-    const rec = (n) => {
-      if (!n || typeof n !== 'object') return;
-      if (Array.isArray(n)) return n.forEach(rec);
-      if (n.type === 'StringLiteral' && isProse(n.value)) push(n.value, n, 'constant');
-      for (const k of Object.keys(n)) if (k !== 'loc') rec(n[k]);
-    };
-    rec(ast.program);
-  }
-
-  return out;
-}
-
+//
+// This gate asks for ALL of POSITIONS rather than a written-out list of
+// five, so a position added at the walker arrives here already covered: the
+// question "does a user read a forbidden word" is indifferent to which slot
+// the word sits in, and that indifference is the reason it may spread its
+// scope automatically where the demo gate may not.
 const files = [];
 (function walkDir(dir) {
   for (const name of fs.readdirSync(dir).sort()) {
@@ -241,13 +147,29 @@ const files = [];
 
 const copy = [];
 const parseErrors = [];
+const vocabularyErrors = [];
 for (const file of files) {
   const rel = path.relative(ROOT, file);
+  // Two try blocks, not one, so each row's name stays true of everything it
+  // reports. Unreadable is not the same as passing (check-type-floor's
+  // rule); a walker whose classifier and vocabulary disagree is a third
+  // thing again; and a bad argument at this call site is a defect in the
+  // gate rather than in the tree, so it dies loudly instead of being filed
+  // under either.
+  let ast;
   try {
-    copy.push(...collect(fs.readFileSync(file, 'utf8'), rel));
+    ast = parse(fs.readFileSync(file, 'utf8'), { sourceType: 'module', plugins: ['jsx', 'typescript'] });
   } catch (e) {
-    // Unreadable is not the same as passing (check-type-floor's rule).
     parseErrors.push(`${rel}: ${e.message}`);
+    continue;
+  }
+  try {
+    for (const s of collectRenderedStrings(ast, { file: rel, positions: POSITIONS })) {
+      copy.push({ file: rel, line: s.line, position: s.position, text: s.value });
+    }
+  } catch (e) {
+    if (!(e instanceof PositionVocabularyError)) throw e;
+    vocabularyErrors.push(`${rel}: ${e.message}`);
   }
 }
 
@@ -263,7 +185,14 @@ check('copy strings collected', copy.length > 0, true);
 // others — and the total would still look healthy. Derived from POSITIONS,
 // never hand-listed: see the note beside it for the 34 strings that walked
 // out of a hand-listed version of this loop.
-check('every position the collector emits is declared', [...undeclaredPositions], []);
+//
+// The other direction of the same tie: the walker throws rather than
+// filtering when its classifier emits a position POSITIONS does not
+// declare, because an undeclared position is in nobody's requested set and
+// would otherwise leave silently. This row reports that throw under its own
+// name — a file that will not parse and a walker whose two halves disagree
+// are different findings.
+check('every position the collector emits is declared in POSITIONS', vocabularyErrors, []);
 for (const position of POSITIONS) {
   check(
     `position "${position}" is represented in the collected set`,

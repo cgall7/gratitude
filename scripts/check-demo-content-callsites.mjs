@@ -25,7 +25,19 @@
 //      covered without anyone registering it, as long as it names itself.
 //      Extraction is scripts/lib/rendered-strings.mjs, shared with the
 //      copy gate (one walker, two questions) — its header states what
-//      counts as rendered and the exclusions' directions.
+//      counts as rendered and the exclusions' directions. This gate asks
+//      it for TEXT POSITIONS ONLY (jsx-text, jsx-expr); the reason it must
+//      not take `alert` is measured at the call site below.
+//
+//      SCOPE IS NOW STATED HERE RATHER THAN DECIDED THERE, and that alone
+//      changed this rule's reach. The walker used to require the
+//      JSXExpressionContainer to be a string's IMMEDIATE parent — a shape
+//      only `{'a literal'}` has — so every string rendered through a
+//      ternary was outside rule 1's universe. Measured at b5e7754:
+//      105 strings before, 180 after, +74 of them conditional labels
+//      (`{sending ? 'Sending…' : 'Send'}` and 72 more), nothing lost. The
+//      /demo/i hits are the same 2 before and after, both guarded, so the
+//      verdict did not move — the universe it is a verdict OVER did.
 //
 //   2. DEMO-DATA IMPORT RULE (structural, scales): every reference to a
 //      binding imported from constants/demoHive must sit inside a
@@ -119,6 +131,7 @@ import {
   walkWithAncestry,
   collectRenderedStrings,
   isUnderGuard,
+  PositionVocabularyError,
 } from './lib/rendered-strings.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -162,11 +175,50 @@ for (const rel of files) {
 check('every enumerated file parses', parseFailures, []);
 
 // --- Rule 1: rendered strings saying "demo" are guarded -------------------
+// TEXT POSITIONS ONLY, and the exclusion of `alert` is measured rather than
+// inherited (Sage, thread 4510c5c8). Collecting Alert arguments here and
+// asking the same guard question returns three hits, two of them false:
+// CoreRitual's "Demo data loaded" and "Couldn't load demo data" are the
+// success and failure copy of a seeding button that IS correctly gated —
+// the alert fires from a handler, which is never lexically inside the guard
+// that wraps the button. Rule 1 would go red on correct code to catch one
+// affordance that rules 3/4b already cover in depth. So this gate takes two
+// positions and the copy gate takes five: the walker enumerates positions,
+// the question chooses them, and each caller states its own choice at the
+// call site rather than inheriting whatever the collector happened to pick.
+const RULE_1_POSITIONS = ['jsx-text', 'jsx-expr'];
 const allStrings = [];
+const vocabularyErrors = [];
 for (const { rel, ast } of parsed) {
-  for (const s of collectRenderedStrings(ast)) allStrings.push({ rel, ...s });
+  try {
+    for (const s of collectRenderedStrings(ast, { file: rel, positions: RULE_1_POSITIONS })) {
+      allStrings.push({ rel, ...s });
+    }
+  } catch (e) {
+    // Narrow, so the row's name stays true of everything it reports: parse
+    // failures were already collected above, and anything else — a bad
+    // argument at this call site — is a defect in the gate rather than in
+    // the tree, and should die loudly instead of being renamed.
+    if (!(e instanceof PositionVocabularyError)) throw e;
+    vocabularyErrors.push(`${rel}: ${e.message}`);
+  }
 }
+check('every position the collector emits is declared in POSITIONS', vocabularyErrors, []);
 check('rendered-string universe is non-empty', allStrings.length > 0, true);
+// One control per position ASKED FOR, derived from RULE_1_POSITIONS rather
+// than written out — otherwise the scope statement above is a comment with
+// nothing behind it. Narrowing this rule back to jsx-text alone (which is
+// what the walker used to give it, in effect) leaves both /demo/i controls
+// below satisfied, because both of those strings are jsx-text: the gate
+// would report a clean verdict over a universe it had quietly halved. Same
+// shape as check-copy-rules §A's per-position controls, and the same reason.
+for (const position of RULE_1_POSITIONS) {
+  check(
+    `position "${position}" is represented in rule 1's universe`,
+    allStrings.some((s) => s.position === position),
+    true
+  );
+}
 
 const demoStrings = allStrings.filter((s) => /demo/i.test(s.value));
 const unguardedDemoStrings = demoStrings
