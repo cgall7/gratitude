@@ -6,7 +6,7 @@ import { SPRINGS, DURATIONS, useReducedMotion } from '../constants/motion';
 
 // §14.2 progress hook: 7 honey drops across the top of Wrapped, one fills
 // per beat — always visible, always promising the finale. Standalone so
-// PollinateWrapped.js can mount it above whichever beat is on screen.
+// GratitudeWrapped.js can mount it above whichever beat is on screen.
 const DROP_SIZE = 14;
 const DROP_PATH = 'M12 2 C12 2 4 12 4 16 C4 20 8 22 12 22 C16 22 20 20 20 16 C20 12 12 2 12 2 Z';
 

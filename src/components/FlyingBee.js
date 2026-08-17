@@ -74,14 +74,17 @@ const PRESETS = {
   // Inward spiral: in from off-right, over the top, down the left edge,
   // under, then tightening up into the anchor's center. Fades over the
   // last stretch so the settle reads as the bee alighting, not vanishing.
+  // Re-authored §12.2 for Welcome's 220×100 wordmark anchor: the original
+  // full-screen spiral drew a flat zigzag when scaled to short-wide proportions.
+  // Adjusted waypoints for 2.2:1 aspect ratio — same easing and opacity profile.
   loginArc: {
     track: buildTrack(
       [
-        { x: 1.08, y: 0.1 },
-        { x: 0.55, y: -0.12 },
-        { x: 0.1, y: 0.4 },
-        { x: 0.58, y: 0.92 },
-        { x: 0.5, y: 0.5 },
+        { x: 0.82, y: 0.3 },   // off-right, upper-middle
+        { x: 0.5, y: 0.1 },    // over top-center
+        { x: 0.18, y: 0.5 },   // down left side
+        { x: 0.5, y: 0.9 },    // under-bottom approach
+        { x: 0.5, y: 0.5 },    // settle at center
       ],
       { closed: false }
     ),

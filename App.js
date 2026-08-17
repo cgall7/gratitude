@@ -11,8 +11,6 @@ import { LockScreen, InputScreen } from './src/screens/CoreRitual';
 import { EveningMirror } from './src/screens/EveningMirror';
 import { LegalScreen } from './src/screens/Legal';
 import { AccountScreen } from './src/screens/Account';
-import { NotesInbox } from './src/screens/NotesInbox';
-import { ComposeNote } from './src/screens/ComposeNote';
 import { MainTabs } from './src/navigation/MainTabs';
 import { AuthProvider } from './src/contexts/AuthContext';
 import { OnboardingState } from './src/services/onboardingState';
@@ -170,13 +168,6 @@ export default function App() {
               sign-out and the legal documents, and it's opened about twice
               a year. */}
           <Stack.Screen name="Account" component={AccountScreen} options={{ presentation: 'modal' }} />
-
-          {/* Project 7 (Gratitude Notes, no-tip variant). Both modal: Notes
-              opens from the Honeycomb tab's header, Compose opens from
-              Notes' header, neither is a tab of its own yet — that's a
-              design placement call, not an engineering one. */}
-          <Stack.Screen name="Notes" component={NotesInbox} options={{ presentation: 'modal' }} />
-          <Stack.Screen name="ComposeNote" component={ComposeNote} options={{ presentation: 'modal' }} />
 
           <Stack.Screen name="Evening">
             {(props) => (
