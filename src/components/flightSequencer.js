@@ -239,7 +239,7 @@ export const STUB_GRAMMAR = {
 // anti-repeat depth it asked for. Those are two different sentences and the
 // first draft of this comment ran them together; `check-bee-attitude` H4 went
 // red on it within the minute (it asserted the aperiodicity threshold tracks
-// depth, and it does not). Both properties now have their own row, H4 and H5.
+// depth, and it does not). Both properties now have their own row, J4 and J5.
 //
 // **The floor of 1 is not defensive, it is a `slice` guard.** `Math.min(2, 0)`
 // is 0 at two anchors and `recent.slice(-0)` returns the WHOLE array, not the
@@ -293,6 +293,55 @@ export const meanHopPx = (anchors) => {
     }
   }
   return n > 0 ? total / n : null;
+};
+
+// R122 — HOW OFTEN THE BEE TURNS AROUND, WHICH IS A PROPERTY OF THE ANCHOR SET
+// AND NOT OF THE ENGINE.
+//
+// The perch contract §32 hands the host is `{ key, on, at }`: a side of an
+// element and a fraction along it, resolved against the element's measured
+// frame. I claimed the collinearity problem dissolved as a consequence of that
+// — distinct sides give distinct x for free. It does not. Every TodayTab
+// anchor is a full-width block in one 24pt-padded column, so `on: 'left'`
+// resolves to x = 24 for ALL of them and `on: 'right'` to x = 369 for all of
+// them. The x-spread comes from ASSIGNING DIFFERENT SIDES, which is a property
+// of the table someone fills in, and the natural authoring order — three
+// anchors written top to bottom, all on the left — reproduces the original
+// defect THROUGH the new contract. "For free" was a hope about how the table
+// gets written, and a contract whose safe use depends on taste is not a
+// contract.
+//
+// The floor is derivable, so it is not taste. `facingFor` flips the bee at
+// `|dx| >= size` — the bee's own box, 44 at `DEFAULT_SIZE`. If the whole
+// anchor set spans LESS than one box in x, then no pair in it can clear that
+// threshold, so no hop can ever flip the facing, so the bee holds one facing
+// for the entire life of that render state and flies a straight vertical line
+// through it. That is an implication, not a threshold: extent < size => every
+// |dx| < size => `facingFor` returns `held` on every segment of every sortie.
+//
+// What this is NOT: sufficient. A rate above zero says a turn is reachable,
+// not that the flight reads as varied — a set with one wide pair and four
+// stacked ones passes here and still looks like a column. The floor rejects
+// the case that is mechanically a screensaver; how much spread a storyboard
+// AIMS for is Deezine's, and this is the number to aim with.
+//
+// It is deliberately not wired into `resolveGrammar`. Null there means "there
+// is nothing to compute" — one anchor has no hop and no dwell repairs it. A
+// column has a perfectly computable flight that happens to be a bad one, which
+// is a defect in a declared table and belongs where tables are checked, not in
+// a branch that silently removes the bee from a shipped screen.
+export const facingFlipRate = (anchors, size) => {
+  if (!anchors || anchors.length < 2 || !(size > 0)) return null;
+  let flips = 0;
+  let n = 0;
+  for (const a of anchors) {
+    for (const b of anchors) {
+      if (a === b) continue;
+      if (Math.abs(b.x - a.x) / size >= 1) flips += 1;
+      n += 1;
+    }
+  }
+  return n > 0 ? flips / n : null;
 };
 
 // airborne / (airborne + dwell) = target  =>  dwell = airborne/target - airborne.
