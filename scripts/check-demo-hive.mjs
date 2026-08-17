@@ -27,6 +27,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { registerHooks } from 'node:module';
+import { FORBIDDEN_WORDS } from './forbidden-words.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (rel) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
@@ -139,10 +140,12 @@ check('crosses a month boundary backwards', at('2026-09-02').at(-1).entryDate, '
 check('crosses a year boundary backwards', at('2027-01-03').at(-1).entryDate, '2026-12-28');
 
 // --- 4. §15 word gate: word-boundary AND raw substring ---
-const FORBIDDEN = [
-  'God', 'Jesus', 'Lord', 'pray', 'scripture', 'church',
-  'faith', 'blessed', 'worship', 'sin', 'hallelujah', 'ritual',
-];
+// The list is shared with check-copy-rules via scripts/forbidden-words.mjs —
+// one rule, two subjects. This gate's subject is the demo fixture set; that
+// gate's subject is the copy on real screens. Both arms below stay local:
+// raw substring is affordable over nineteen strings we wrote ourselves and is
+// red on four legal-page sentences the moment it meets real copy.
+const FORBIDDEN = FORBIDDEN_WORDS;
 // Everything that renders: the gratitude line and the display name.
 const copy = shares.flatMap((s) => [s.content, s.author.display_name]);
 check('every string in the set is checked', copy.length, shares.length * 2);

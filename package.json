@@ -27,6 +27,7 @@
     "check:reexport-bindings": "node scripts/check-reexport-bindings.mjs",
     "check:demo-mode-env": "node scripts/check-demo-mode-env.mjs",
     "check:demo-content-callsites": "node scripts/check-demo-content-callsites.mjs",
+    "check:copy-rules": "node scripts/check-copy-rules.mjs",
     "test": "node scripts/run-checks.mjs",
     "deploy:migrations": "bash scripts/deploy-migrations.sh"
   },
