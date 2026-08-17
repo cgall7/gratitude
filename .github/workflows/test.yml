@@ -1,0 +1,37 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Four of the 23 gates stand up embedded Postgres on fixed ports
+# (54329-54332 — see scripts/check-*-rls.mjs) so they can run concurrently
+# with each other inside one `npm test`. That only holds within a single
+# run: two runs of this workflow on the same ref racing each other would
+# collide on those same ports. `group` scopes the lock to the ref (so main
+# and each PR branch queue independently) and `cancel-in-progress` drops a
+# stale run in favor of the newest push rather than letting both hold the
+# ports at once.
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # No SKIP_PG_GATES here on purpose — the whole point of this workflow
+      # is to run the four Postgres RLS suites that only ever ran when a
+      # human remembered to `npm test` locally.
+      - run: npm test
