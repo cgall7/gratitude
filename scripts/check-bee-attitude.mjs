@@ -2868,7 +2868,7 @@ let tickPropName = null;
 }
 
 // =========================================================================
-// H. §32 — the anti-repeat rule preserves a CHOICE, not a destination
+// J. §32 — the anti-repeat rule preserves a CHOICE, not a destination
 // =========================================================================
 //
 // R121. `flightSequencer.js`'s own comment rejects "a shuffle of the full
@@ -2885,7 +2885,7 @@ let tickPropName = null;
 // Rewriting the clamp expression to something equivalent leaves every row
 // green, which is the point; rewriting it to something weaker does not.
 //
-// THE BOUNDARY IS DERIVED, NOT LISTED. H4 and H5 do not assert "3 anchors
+// THE BOUNDARY IS DERIVED, NOT LISTED. J4 and J5 do not assert "3 anchors
 // work" — they measure where the behaviour changes and check that against
 // arithmetic. A hardcoded pass-list has the hole it closes (R85(f)): raise
 // `antiRepeatDepth` and a list of cases would keep passing while the
@@ -2917,7 +2917,7 @@ let tickPropName = null;
   );
   const { chooseAnchor, makeRng, STUB_GRAMMAR } = seq;
   // The depth under test comes from the module, so raising `antiRepeatDepth`
-  // moves the boundary H4 asserts instead of leaving it pinned to a literal.
+  // moves the boundary J4 asserts instead of leaving it pinned to a literal.
   const SHIPPED_DEPTH = STUB_GRAMMAR.antiRepeatDepth;
   const DEPTHS = [...new Set([1, 2, 3, SHIPPED_DEPTH])].sort((a, b) => a - b);
   const COUNTS = [2, 3, 4, 5, 6];
@@ -2993,7 +2993,7 @@ let tickPropName = null;
   }
   const cases = COUNTS.length * DEPTHS.length * SEEDS;
 
-  // --- H1: no anchor is ever chosen twice in a row -----------------------
+  // --- J1: no anchor is ever chosen twice in a row -----------------------
   //
   // The row the floor of 1 exists for. `Math.min(depth, n - 2)` is 0 at two
   // anchors and `[..].slice(-0)` returns the WHOLE array, so an unfloored
@@ -3001,7 +3001,7 @@ let tickPropName = null;
   // fallback and picks the incumbent 48.2% of the time — a dart, a descent
   // and a settle flown to the point the bee is already on.
   {
-    const NAME = 'H1 §32 chooseAnchor never returns the incumbent, swept';
+    const NAME = 'J1 §32 chooseAnchor never returns the incumbent, swept';
     const guilty = [];
     for (const [key, r] of sweep) if (r.selfRepeats > 0) guilty.push(`${key} (${r.selfRepeats})`);
     if (guilty.length) {
@@ -3016,9 +3016,9 @@ let tickPropName = null;
     }
   }
 
-  // --- H2: above the invariant, the sequence is aperiodic ----------------
+  // --- J2: above the invariant, the sequence is aperiodic ----------------
   {
-    const NAME = 'H2 §32 no observable period at three anchors or more, any depth';
+    const NAME = 'J2 §32 no observable period at three anchors or more, any depth';
     const guilty = [];
     for (const n of COUNTS) {
       for (const depth of DEPTHS) {
@@ -3041,7 +3041,7 @@ let tickPropName = null;
     }
   }
 
-  // --- H3: below the invariant, the degeneracy is DECLARED ---------------
+  // --- J3: below the invariant, the degeneracy is DECLARED ---------------
   //
   // Stated positively, so silence means one thing. Two anchors with no
   // self-repeat is forced alternation — arithmetic, not a defect, and not
@@ -3049,7 +3049,7 @@ let tickPropName = null;
   // change that "fixes" it (by reintroducing self-repeats, the only way out)
   // fails here as well as at H1, instead of quietly looking like progress.
   {
-    const NAME = 'H3 §32 two anchors alternate, and that is the documented floor';
+    const NAME = 'J3 §32 two anchors alternate, and that is the documented floor';
     const { periods, tails } = sweep.get(`2:${SHIPPED_DEPTH}`);
     const seen = [...periods];
     if (seen.length === 1 && seen[0] === 2 && tails.size === 2) {
@@ -3063,14 +3063,14 @@ let tickPropName = null;
     }
   }
 
-  // --- H4: the choice threshold is 3, and it does NOT move with depth ----
+  // --- J4: the choice threshold is 3, and it does NOT move with depth ----
   //
   // Derived rather than listed: for each depth, find the smallest anchor
   // count at which periodicity disappears. It is 3 for every depth, and that
   // independence IS the clamp — the requested depth is the thing that gives
   // way, never the pool. Raise `antiRepeatDepth` and this row must not move.
   {
-    const NAME = 'H4 §32 the aperiodicity threshold is 3 and is independent of depth';
+    const NAME = 'J4 §32 the aperiodicity threshold is 3 and is independent of depth';
     const guilty = [];
     const found = [];
     for (const depth of DEPTHS) {
@@ -3092,7 +3092,7 @@ let tickPropName = null;
     }
   }
 
-  // --- H5: the requested depth IS honoured wherever it can be ------------
+  // --- J5: the requested depth IS honoured wherever it can be ------------
   //
   // The other half, and the one the module's invariant is actually about.
   // The enforced depth is read off the output — the shortest gap between two
@@ -3101,7 +3101,7 @@ let tickPropName = null;
   // condition under which a host gets the anti-repeat it asked for, rather
   // than as a claim about whether the bee has anywhere to go.
   {
-    const NAME = 'H5 §32 enforced anti-repeat depth = max(1, min(depth, n-2)), measured';
+    const NAME = 'J5 §32 enforced anti-repeat depth = max(1, min(depth, n-2)), measured';
     const guilty = [];
     for (const n of COUNTS) {
       for (const depth of DEPTHS) {
@@ -3117,6 +3117,154 @@ let tickPropName = null;
     } else {
       const full = COUNTS.filter((n) => n >= SHIPPED_DEPTH + 2);
       ok(`${NAME} — ${cases} sequences agree; at the shipped depth ${SHIPPED_DEPTH} the full depth is honoured from ${full[0]} anchors up (n >= antiRepeatDepth + 2), and traded down below that`);
+    }
+  }
+
+  // --- J6: the flip boundary is `facingFor`'s, derived from both modules ---
+  //
+  // R122. `facingFlipRate` exists because the perch contract `{ key, on, at }`
+  // does NOT make a spread out of nothing: every TodayTab anchor is a
+  // full-width block in one padded column, so `on: 'left'` three times
+  // resolves to one x and the bee flies a vertical line. The floor is the
+  // point below which that is MECHANICAL — under one bee-box of x-extent no
+  // pair can clear `facingFor`'s threshold, so the facing cannot change.
+  //
+  // Neither side of this row is typed. The boundary is found by sweeping
+  // `facingFlipRate` until it leaves zero, and the thing it is compared
+  // against is found by sweeping `facingFor` itself. Change the threshold in
+  // `beeAttitude.js` and both move together; change only one and this goes
+  // red, which is the whole reason the comparison is between two sweeps
+  // rather than between a sweep and a literal.
+  {
+    const NAME = 'J6 §32 the anchor-spread floor is facingFor\'s own threshold, both swept';
+    const SIZE = BEE_SIZE; // FlyingBee.js's DEFAULT_SIZE, read off source above
+    let rateBoundary = null;
+    for (let d = 0; d <= SIZE * 3 && rateBoundary === null; d += 1) {
+      const rate = seq.facingFlipRate([{ key: 'a', x: 0, y: 0 }, { key: 'b', x: d, y: 300 }], SIZE);
+      if (rate > 0) rateBoundary = d;
+    }
+    let facingBoundary = null;
+    for (let d = 0; d <= SIZE * 3 && facingBoundary === null; d += 1) {
+      if (facingFor(d, SIZE, -1) === 1) facingBoundary = d;
+    }
+    if (rateBoundary === null || facingBoundary === null) {
+      bad(NAME, `no boundary inside 0..${SIZE * 3}px — rate ${rateBoundary}, facing ${facingBoundary}. ` +
+        'One of the two sweeps never left its starting value, so this row cannot tell.');
+    } else if (rateBoundary !== facingBoundary) {
+      bad(NAME, `facingFlipRate first leaves zero at ${rateBoundary}px, facingFor first flips at ` +
+        `${facingBoundary}px. The floor and the mechanism it is derived from disagree, so a set that ` +
+        'passes the floor can still be one the bee never turns around in.');
+    } else {
+      ok(`${NAME} — both leave zero at ${rateBoundary}px (one ${SIZE}px box); below it every |dx| is ` +
+        'under threshold, so no hop in the set can flip the facing');
+    }
+  }
+
+  // --- J7: and that is true of the flights, not just of the arithmetic ----
+  //
+  // J6 compares two predicates. This one flies the real thing: a column set
+  // and a spread set, through `buildPollinationPlan` and `buildAttitude`.
+  //
+  // THE EVENT IS BETWEEN SORTIES, NOT INSIDE ONE — and the first draft of this
+  // row measured inside one. It summed `buildAttitude`'s `windows`, which is
+  // that module's record of facing changes WITHIN a single flight, and a
+  // sortie travels one way from takeoff to landing, so `windows` is 0 for
+  // every well-formed sortie including the spread ones. The row went red on
+  // its own control within a minute of being written, which is the only
+  // reason it is not green and blind today. A bee turns around when the NEXT
+  // sortie leaves the other way, so the sequence of sorties is the unit.
+  //
+  // The spread half is the control and it is the half that matters: a row
+  // reporting "no turns" for both sets would pass the column half by being
+  // blind rather than by the property holding.
+  {
+    const NAME = 'J7 §32 a column anchor set never flips the facing; a spread one does';
+    const SIZE = BEE_SIZE;
+    const W = 393;
+    const H = 852;
+    const BODY = mascot.MASCOT_WIDTH_FRACTION * SIZE;
+    const dart = EASINGS['Easing.inOut(Easing.ease)'];
+    const settle = EASINGS['Easing.out(Easing.cubic)'];
+    // Fly the real sequencer over the set for 60s and read the facing the
+    // attitude builder actually lands on at each sortie. Chained, because the
+    // question is whether consecutive sorties disagree.
+    const turnsFor = (set) => {
+      const grammar = seq.resolveGrammar({
+        grammar: STUB_GRAMMAR,
+        anchors: set,
+        sortieDurationFor: (hopPx) => flight.buildPollinationPlan({
+          from: { x: 0, y: 0 },
+          target: { x: hopPx, y: 0 },
+          ringStep: Infinity,
+          bodyLengthPx: BODY,
+          width: W,
+          height: H,
+          approachSpeedPxS: seq.referenceSpeedPxS(W, H) * seq.DART_SPEED_RATIO,
+          easeApproach: dart,
+          easeDescent: settle,
+        }).durationMs,
+      });
+      const rng = makeRng(0xB33);
+      const recent = [];
+      let at = { x: set[0].x, y: set[0].y };
+      let facing = null;
+      let turns = 0;
+      let sorties = 0;
+      for (let i = 0; i < 40; i += 1) {
+        const anchor = chooseAnchor(set, recent, rng, grammar.antiRepeatDepth);
+        const plan = flight.buildPollinationPlan({
+          from: at,
+          target: { x: anchor.x, y: anchor.y },
+          ringStep: Infinity,
+          bodyLengthPx: BODY,
+          width: W,
+          height: H,
+          approachSpeedPxS: seq.referenceSpeedPxS(W, H) * seq.DART_SPEED_RATIO,
+          easeApproach: dart,
+          easeDescent: settle,
+        });
+        const att = buildAttitude(plan.path, {
+          width: W,
+          height: H,
+          size: SIZE,
+          closed: false,
+          easing: plan.easing,
+          durationMs: plan.durationMs,
+        });
+        const landed = att.segments[att.segments.length - 1].facing;
+        if (facing !== null && landed !== facing) turns += 1;
+        facing = landed;
+        sorties += 1;
+        at = { x: anchor.x, y: anchor.y };
+        recent.push(anchor.key);
+        if (recent.length > 8) recent.shift();
+      }
+      return { turns, sorties };
+    };
+    // Three full-width cards, all perched on the LEFT edge — Sage's case, and
+    // the one a designer writing anchors in reading order actually produces.
+    const column = [
+      { key: 'badge', x: 24, y: 120 },
+      { key: 'streak', x: 24, y: 300 },
+      { key: 'quote', x: 24, y: 520 },
+    ];
+    const spread = column.map((a, i) => ({ ...a, x: i % 2 === 0 ? 24 : 369 }));
+    const col = turnsFor(column);
+    const spr = turnsFor(spread);
+    const colRate = seq.facingFlipRate(column, SIZE);
+    const spreadRate = seq.facingFlipRate(spread, SIZE);
+    if (col.turns !== 0 || colRate !== 0) {
+      bad(NAME, `the all-left column turned the bee around ${col.turns} times over ${col.sorties} ` +
+        `sorties at a flip rate of ${colRate}. Both should be 0: every pair has |dx| = 0, so this ` +
+        'row is not measuring what it names.');
+    } else if (spr.turns === 0 || !(spreadRate > 0)) {
+      bad(NAME, `the alternating set turned the bee around ${spr.turns} times over ${spr.sorties} ` +
+        `sorties at a flip rate of ${spreadRate}. A row reporting no turns for both sets is blind, ` +
+        'not passing.');
+    } else {
+      ok(`${NAME} — all-left column: rate 0, ${col.turns} turns in ${col.sorties} sorties (he holds ` +
+        `one facing for the whole render state); same three cards alternating sides: rate ` +
+        `${spreadRate.toFixed(2)}, ${spr.turns} turns in ${spr.sorties}`);
     }
   }
 }
