@@ -135,6 +135,45 @@ const smallestEnclosing = (fns, pos) => {
 // `ours.map((request) => cancel(...))` — the literal smallest enclosing
 // node is that anonymous arrow, which is an implementation detail of
 // `reconcile`, not a second function the spec's row is asking about.
+// Parent pointers. `walk` above is a pure descent and cannot answer "what
+// contains this node" for anything but a position range, which is enough for
+// rows 2a/2b/3 (is a call inside a function) and not enough for row 2c (is a
+// function reached from a JSX prop). Same shape as check-bee-attitude's K7
+// walk: only TYPED nodes are linked, so an intermediate array or plain
+// options object never becomes somebody's parent.
+const parentMap = (root) => {
+  const parents = new Map();
+  const visit = (node, parent) => {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) {
+      node.forEach((n) => visit(n, parent));
+      return;
+    }
+    const typed = typeof node.type === 'string';
+    if (typed) parents.set(node, parent);
+    const next = typed ? node : parent;
+    for (const key of Object.keys(node)) {
+      if (key === 'loc' || key.endsWith('Comments')) continue;
+      visit(node[key], next);
+    }
+  };
+  visit(root, null);
+  return parents;
+};
+
+const ancestorChain = (parents, node) => {
+  const chain = [];
+  let cur = parents.get(node);
+  while (cur) {
+    chain.push(cur);
+    cur = parents.get(cur);
+  }
+  return chain;
+};
+
+const isFunctionNode = (n) =>
+  n.type === 'FunctionDeclaration' || n.type === 'FunctionExpression' || n.type === 'ArrowFunctionExpression';
+
 const namedEnclosing = (fns, pos) => {
   let best = null;
   for (const fn of fns) {
@@ -268,18 +307,59 @@ console.log('\nA. the permission ask is fused');
     }
   }
 
-  // Row 2c — a real caller. Half A ships no Celebration screen yet
-  // (`pixel/one-door`, half B), so there is nothing in src/ that calls
-  // `requestPermissionAndEnable` by name. PENDING, not a fail: the fuse
-  // function is correctly shaped and correctly the only caller of the
-  // native API; it simply has no caller of its own yet.
+  // Row 2c — THE FUSE'S CALL SITE, not merely its existence.
   //
-  // A CALL SITE, not a substring match — App.js's own comments name
-  // `requestPermissionAndEnable` in prose (documenting that it is NOT yet
-  // called), and `src.includes(...)` cannot tell a comment from a call. It
-  // did not, in an earlier draft of this gate: this row misreported PASS
-  // off that exact comment before being caught.
-  const fuseCallers = [];
+  // WHAT THIS ROW USED TO CHECK, AND WHY IT WAS NOT ENOUGH. It walked for a
+  // CallExpression named `requestPermissionAndEnable` anywhere in src/ +
+  // App.js and passed on EXISTENCE — while its own name claimed the call
+  // came "from the Celebration 'yes' handler". Sage wrote the exact §2
+  // defect into CelebrationStep:
+  //
+  //   React.useEffect(() => { requestPermissionAndEnable(); }, []);
+  //
+  // an OS permission dialog on mount with no in-app yes anywhere — and this
+  // row resolved to PASS on it, with all 31 gates green. Rows 2a/2b/3 could
+  // not catch it either: every one of them asserts the position of the
+  // NATIVE `requestPermissionsAsync` call, which lives inside dailyNudge.js
+  // and can only move if someone edits half A. They are frozen green no
+  // matter what half B does. Nothing in the suite looked at the CALLER's
+  // position. The spec asked for the stronger row in §A.2 — "that
+  // function's binding name is the one the Celebration 'yes' handler calls
+  // — resolved by walking from the call site" — and half of it got built.
+  //
+  // So the call must be REACHED FROM A JSX EVENT-HANDLER PROP, by a walk,
+  // in either of the only two shapes that can express one:
+  //
+  //   onPress={() => { ... }}      the handler IS the prop's value
+  //   onPress={handleAskForNudge}  the prop names a function defined here
+  //
+  // and must not sit at module scope or inside a mount effect. Same
+  // downward walk as check-bee-attitude's K7, a different tree.
+  //
+  // AN UNRESOLVED CALL SITE IS A FAIL, NEVER A PASS. A shape this row
+  // cannot classify is a shape it cannot vouch for, and the place a check
+  // declines to have an opinion must not look like the place it has a clean
+  // one.
+  //
+  // ZERO CALLERS IS ALSO A FAIL, and this is the row's PENDING being
+  // retired rather than dropped. It used to report PENDING with the reason
+  // "blocked on pixel/one-door merging" — a condition that fired nine
+  // minutes after the row was authored, and then sat green-ish and unread
+  // for twenty-two hours because PENDING is not red. One-door has merged
+  // and half B is this commit, so the ask existing IS the deliverable: its
+  // absence is a regression, not a not-yet.
+  const HANDLER_PROP = /^on[A-Z]/;
+  const EFFECT_HOOKS = new Set(['useEffect', 'useLayoutEffect', 'useInsertionEffect']);
+  const effectCalleeName = (n) => {
+    if (n.type !== 'CallExpression') return null;
+    if (n.callee?.type === 'Identifier') return EFFECT_HOOKS.has(n.callee.name) ? n.callee.name : null;
+    if (n.callee?.type === 'MemberExpression' && n.callee.property?.type === 'Identifier') {
+      return EFFECT_HOOKS.has(n.callee.property.name) ? n.callee.property.name : null;
+    }
+    return null;
+  };
+
+  const fuseSites = [];
   for (const [file, src] of allSrc) {
     if (file === SERVICE_MODULE) continue;
     let ast;
@@ -288,21 +368,107 @@ console.log('\nA. the permission ask is fused');
     } catch {
       continue;
     }
-    let calls = false;
+
+    // Every function reachable from a handler prop in this file, collected
+    // two ways: the arrow written directly in the prop, and every name the
+    // prop's expression mentions (which covers `onPress={handleX}` and
+    // `onPress={() => handleX()}` and `onPress={a ? b : c}` alike).
+    const inlineHandlerFns = new Set();
+    const handlerNames = new Set();
+    walk(ast.program, (n) => {
+      if (n.type !== 'JSXAttribute') return;
+      const propName = n.name?.type === 'JSXIdentifier' ? n.name.name : null;
+      if (!propName || !HANDLER_PROP.test(propName)) return;
+      if (n.value?.type !== 'JSXExpressionContainer') return;
+      const expr = n.value.expression;
+      if (expr?.type === 'ArrowFunctionExpression' || expr?.type === 'FunctionExpression') {
+        inlineHandlerFns.add(expr);
+      }
+      walk(expr, (m) => {
+        if (m.type === 'Identifier') handlerNames.add(m.name);
+      });
+    });
+
+    // Every name mentioned inside a mount-effect callback. A handler can be
+    // correctly wired to a prop AND ALSO called from an effect — the prop
+    // satisfies the walk while the effect still fires the OS dialog on
+    // mount. Reaching a prop is necessary, not sufficient; the effect set is
+    // what makes it both.
+    const effectReferencedNames = new Set();
+    walk(ast.program, (n) => {
+      if (!effectCalleeName(n)) return;
+      walk(n.arguments ?? [], (m) => {
+        if (m.type === 'Identifier') effectReferencedNames.add(m.name);
+      });
+    });
+
+    const fns = enclosingFunctions(ast);
+    const fnByNode = new Map(fns.map((f) => [f.node, f]));
+    const parents = parentMap(ast.program);
+
     walk(ast.program, (n) => {
       if (n.type !== 'CallExpression') return;
-      if (n.callee?.type === 'Identifier' && n.callee.name === 'requestPermissionAndEnable') calls = true;
-      if (n.callee?.type === 'MemberExpression' && n.callee.property?.name === 'requestPermissionAndEnable') calls = true;
+      const isFuse =
+        (n.callee?.type === 'Identifier' && n.callee.name === 'requestPermissionAndEnable') ||
+        (n.callee?.type === 'MemberExpression' && n.callee.property?.name === 'requestPermissionAndEnable');
+      if (!isFuse) return;
+
+      const where = `${path.relative(ROOT, file)}:${n.loc.start.line}`;
+      const chain = ancestorChain(parents, n);
+      const effect = chain.map(effectCalleeName).find(Boolean);
+      const fnAncestors = chain.filter(isFunctionNode);
+
+      let reached = null;
+      let alsoInEffect = null;
+      for (const anc of fnAncestors) {
+        if (inlineHandlerFns.has(anc)) {
+          reached = 'an inline handler prop';
+          break;
+        }
+        const meta = fnByNode.get(anc);
+        if (meta?.name && handlerNames.has(meta.name)) {
+          reached = `the handler prop naming ${meta.name}`;
+          if (effectReferencedNames.has(meta.name)) alsoInEffect = meta.name;
+          break;
+        }
+      }
+
+      fuseSites.push({
+        where,
+        reached,
+        effect: effect ?? null,
+        alsoInEffect,
+        moduleScope: fnAncestors.length === 0,
+      });
     });
-    if (calls) fuseCallers.push(path.relative(ROOT, file));
   }
-  if (fuseCallers.length > 0) {
-    ok(`row 2c — requestPermissionAndEnable is called from a real call site (${fuseCallers.join(', ')})`);
-  } else {
-    pend(
-      'row 2c — requestPermissionAndEnable is called from the Celebration "yes" handler',
-      "no caller yet — Onboarding.js's Celebration screen is half B, blocked on pixel/one-door merging (spec's ratified split). Re-run this gate once that PR lands and expect this row to resolve to pass or fail.",
+
+  if (fuseSites.length === 0) {
+    bad(
+      'row 2c — every requestPermissionAndEnable call site is reached from a JSX event-handler prop',
+      'zero call sites in src/ + App.js — half B\'s Celebration ask is the only caller this function has ever had, so its absence is a removal of the feature, not a not-yet',
     );
+  } else {
+    const broken = fuseSites.filter((s2) => s2.moduleScope || s2.effect || s2.alsoInEffect || !s2.reached);
+    if (broken.length === 0) {
+      ok(
+        `row 2c — every requestPermissionAndEnable call site is reached from a JSX event-handler prop and none sits in a mount effect or at module scope (${fuseSites
+          .map((s2) => `${s2.where} via ${s2.reached}`)
+          .join(', ')})`,
+      );
+    } else {
+      bad(
+        'row 2c — every requestPermissionAndEnable call site is reached from a JSX event-handler prop and none sits in a mount effect or at module scope',
+        broken
+          .map((s2) => {
+            if (s2.moduleScope) return `${s2.where} is a bare module-level call — the OS dialog fires at import`;
+            if (s2.effect) return `${s2.where} is inside a ${s2.effect} callback — the OS dialog fires on mount, with no in-app yes (§2's fuse)`;
+            if (s2.alsoInEffect) return `${s2.where} is reached from a handler prop, but ${s2.alsoInEffect} is ALSO referenced inside a mount effect — the prop wiring is real and the OS dialog still fires on mount`;
+            return `${s2.where} is inside a function this row could not reach from any on* prop — it may be correct, but an unclassifiable call site is not a vouched-for one`;
+          })
+          .join('; '),
+      );
+    }
   }
 }
 
