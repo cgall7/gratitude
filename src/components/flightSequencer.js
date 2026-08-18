@@ -1,26 +1,22 @@
 // Sunbeam §32 — the idle flight sequencer.
 //
-// ┌─ NOT WIRED YET, AND HERE IS HOW TO TELL THAT FROM ORPHANED ─────────┐
-// │ This module has NO importer in `src/` or `App.js`. That is the      │
-// │ engine half of a two-owner piece of work landing first, not a call  │
-// │ site somebody deleted.                                              │
-// │                                                                     │
-// │   consumer   FlyingBee.js — the fixed 5-waypoint `PATH` loop        │
-// │              (LOOP_MS 7000) is what this replaces. Anchors come     │
-// │              from the host screens: TodayTab and HoneycombTab each  │
-// │              declare 3-5, in the §28.2 window-coordinate currency.  │
+// ┌─ WIRED, AND THIS IS NOW THE ONLY IDLE FLIGHT THERE IS ──────────────┐
+// │   consumer   FlyingBee.js. The fixed 5-waypoint `PATH` loop         │
+// │              (LOOP_MS 7000) this replaced is DELETED, not fallen    │
+// │              back to — a fallback is a repeat signature waiting on  │
+// │              the one screen nobody watches. Anchors come from the   │
+// │              host screens through `<PerchAnchor>`, in the §28.2     │
+// │              window-coordinate currency.                            │
 // │   owner      Pixel (engine, this file) / Deezine (choreography —    │
 // │              perch points, dwell ranges, dart-hover-settle timings, │
 // │              trail grammar, loginArc re-author)                     │
 // │   plan       PLANS/BEE_FLIGHT_REDESIGN_SCOPE.md, from Colin's ask   │
-// │              of 2026-08-16                                          │
-// │   exercised  scripts/simulate-bee-flight.mjs — reachable and run    │
-// │              today, just not from the app                           │
-// │                                                                     │
-// │ THE FALSIFIER, because a name and an owner both decay: if that plan │
-// │ is closed or FlyingBee.js's `PATH` loop has been replaced by        │
-// │ something else, this module is dead and should be deleted, not      │
-// │ maintained. Check the plan before you assume either.                │
+// │              of 2026-08-16; choreography in                         │
+// │              GUIDES/BEE_FLIGHT_CHOREOGRAPHY.md                      │
+// │   gated      scripts/check-bee-attitude.mjs sections C, J and K —   │
+// │              C resolves the plans this module builds for the real   │
+// │              declared anchor sets, so the gate flies what the app   │
+// │              flies.                                                 │
 // └─────────────────────────────────────────────────────────────────────┘
 //
 // Colin, 2026-08-16: the idle bee "looks like a windows98 screensaver just
@@ -219,14 +215,70 @@ export const STUB_GRAMMAR = {
 // choice over the anchors that are not in `recent` — not a shuffle of the
 // full set, which would guarantee every anchor is visited once per cycle and
 // reintroduce a period equal to the anchor count.
+//
+// R121 — AN ANTI-REPEAT RULE PRESERVES A DESTINATION; IT HAS TO PRESERVE A
+// CHOICE. The first draft blocked `min(depth, n - 1)` keys, which guarantees
+// the pool is non-EMPTY and guarantees nothing else. At `n = depth + 1` the
+// pool is exactly one anchor, `rng()` multiplies a set of size 1, and the seed
+// only chooses where the cycle starts. Measured against this module over 2000
+// seeds: `n = 3, depth = 2` produced **6 distinct 12-tails** and a period of 3
+// on every one of them — A→B→C→A→B→C. That is the full-set shuffle the comment
+// above rejects by name, arrived at from the other direction, and "the bee's
+// next move is predictable" is Colin's own wording for the defect this module
+// exists to remove.
+//
+// So the block is clamped to `n - 2`, leaving a pool of at least two. Note
+// what that trades and in which direction: **the DEPTH gives way, the POOL
+// never does.** A choice therefore exists from three anchors up for every
+// depth, and `anchors.length >= antiRepeatDepth + 2` is not the condition for
+// having somewhere to go — it is the condition under which a host gets the
+// anti-repeat depth it asked for. Those are two different sentences and the
+// first draft of this comment ran them together; `check-bee-attitude` H4 went
+// red on it within the minute (it asserted the aperiodicity threshold tracks
+// depth, and it does not). Both properties now have their own row, J4 and J5.
+//
+// **The floor of 1 is not defensive, it is a `slice` guard.** `Math.min(2, 0)`
+// is 0 at two anchors and `recent.slice(-0)` returns the WHOLE array, not the
+// empty one — so an unfloored clamp blocks every key the bee has ever visited,
+// empties `eligible`, falls through to `: anchors`, and picks uniformly over
+// everything including himself. Measured: **48.2% of choices (57873/120000)
+// become zero-length sorties** — dart, descent and settle all flown to the
+// point he is already sitting on. The shipped `n - 1` clamp never reaches that
+// fallback at all (0 times in 480000 choices), so this is a hazard the fix
+// introduces and the floor removes, not one it inherits.
+//
+// **Two anchors cannot be repaired here and that is arithmetic, not a gap.**
+// With two anchors and no self-repeat, alternation is forced; every candidate
+// clamp gives period 2. A host with two anchors in a render state has declared
+// a screensaver, and the answer is on the host — a third anchor, or no
+// sequencing. `check-bee-attitude` section H states `n = 2` as the exception
+// so that a red there reads as arithmetic rather than as a regression.
 export const chooseAnchor = (anchors, recent, rng, depth) => {
   if (!anchors || anchors.length === 0) return null;
   if (anchors.length === 1) return anchors[0];
-  const blocked = new Set(recent.slice(-Math.min(depth, anchors.length - 1)));
+  const blocked = new Set(recent.slice(-Math.max(1, Math.min(depth, anchors.length - 2))));
   const eligible = anchors.filter((a) => !blocked.has(a.key));
   const pool = eligible.length > 0 ? eligible : anchors;
   return pool[Math.min(pool.length - 1, Math.floor(rng() * pool.length))];
 };
+
+// §32.2 — an authored anchor is a SIDE and a FRACTION, resolved against the
+// element's own measured frame.
+//
+// It lives in this file rather than beside `<PerchAnchor>` for the reason
+// everything in this file lives here: the gate imports and samples it. A
+// screen's declared anchor set is the input to every J and K row, so the
+// conversion from what the author wrote to what the bee flies to has to be the
+// one the app runs, not a second copy in a checker.
+//
+// Sides only, never corners or a centre — R122. `at` runs top to bottom along
+// the named side, so a set gets its x-extent from ALTERNATING sides and its
+// y-spread from the fractions. A centre-based anchor would collapse both at
+// once on TodayTab, where every element is a full-width block in one column.
+export const resolvePerchPoint = (frame, on, at) => ({
+  x: on === 'right' ? frame.x + frame.width : frame.x,
+  y: frame.y + Math.min(1, Math.max(0, at)) * frame.height,
+});
 
 // --- the dwell, solved rather than typed ---------------------------------
 //
@@ -255,6 +307,55 @@ export const meanHopPx = (anchors) => {
     }
   }
   return n > 0 ? total / n : null;
+};
+
+// R122 — HOW OFTEN THE BEE TURNS AROUND, WHICH IS A PROPERTY OF THE ANCHOR SET
+// AND NOT OF THE ENGINE.
+//
+// The perch contract §32 hands the host is `{ key, on, at }`: a side of an
+// element and a fraction along it, resolved against the element's measured
+// frame. I claimed the collinearity problem dissolved as a consequence of that
+// — distinct sides give distinct x for free. It does not. Every TodayTab
+// anchor is a full-width block in one 24pt-padded column, so `on: 'left'`
+// resolves to x = 24 for ALL of them and `on: 'right'` to x = 369 for all of
+// them. The x-spread comes from ASSIGNING DIFFERENT SIDES, which is a property
+// of the table someone fills in, and the natural authoring order — three
+// anchors written top to bottom, all on the left — reproduces the original
+// defect THROUGH the new contract. "For free" was a hope about how the table
+// gets written, and a contract whose safe use depends on taste is not a
+// contract.
+//
+// The floor is derivable, so it is not taste. `facingFor` flips the bee at
+// `|dx| >= size` — the bee's own box, 44 at `DEFAULT_SIZE`. If the whole
+// anchor set spans LESS than one box in x, then no pair in it can clear that
+// threshold, so no hop can ever flip the facing, so the bee holds one facing
+// for the entire life of that render state and flies a straight vertical line
+// through it. That is an implication, not a threshold: extent < size => every
+// |dx| < size => `facingFor` returns `held` on every segment of every sortie.
+//
+// What this is NOT: sufficient. A rate above zero says a turn is reachable,
+// not that the flight reads as varied — a set with one wide pair and four
+// stacked ones passes here and still looks like a column. The floor rejects
+// the case that is mechanically a screensaver; how much spread a storyboard
+// AIMS for is Deezine's, and this is the number to aim with.
+//
+// It is deliberately not wired into `resolveGrammar`. Null there means "there
+// is nothing to compute" — one anchor has no hop and no dwell repairs it. A
+// column has a perfectly computable flight that happens to be a bad one, which
+// is a defect in a declared table and belongs where tables are checked, not in
+// a branch that silently removes the bee from a shipped screen.
+export const facingFlipRate = (anchors, size) => {
+  if (!anchors || anchors.length < 2 || !(size > 0)) return null;
+  let flips = 0;
+  let n = 0;
+  for (const a of anchors) {
+    for (const b of anchors) {
+      if (a === b) continue;
+      if (Math.abs(b.x - a.x) / size >= 1) flips += 1;
+      n += 1;
+    }
+  }
+  return n > 0 ? flips / n : null;
 };
 
 // airborne / (airborne + dwell) = target  =>  dwell = airborne/target - airborne.

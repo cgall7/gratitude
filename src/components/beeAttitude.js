@@ -156,6 +156,8 @@ const lerpAt = (ts, values, t) => {
  * @param easing    the timing easing the track is flown with, w → t
  * @param durationMs  the flight's wall-clock length
  * @param turnMs    wall-clock length of one facing change
+ * @param heldFacing  the facing the bee arrives holding, for a caller that
+ *                  flies a SEQUENCE of plans rather than one track
  *
  * Returns `inputRange` / `rotateOutput` (degrees) / `scaleXOutput` ready
  * for `Animated.interpolate`, plus a `segments` table carrying the
@@ -164,7 +166,7 @@ const lerpAt = (ts, values, t) => {
  */
 export const buildAttitude = (
   path,
-  { width, height, size, closed, easing = (w) => w, durationMs, turnMs = TURN_MS }
+  { width, height, size, closed, easing = (w) => w, durationMs, turnMs = TURN_MS, heldFacing }
 ) => {
   const n = path.length - 1;
   const waypointTs = path.map((_, i) => i / n);
@@ -176,7 +178,37 @@ export const buildAttitude = (
     return { dx, dy, pitch, bank: bankFor(pitch), bodyWidths: Math.abs(dx) / size };
   });
 
-  let held = Math.sign(segments[0].dx) || 1;
+  // R122 — THE BASE CASE WAS DOING THE WHOLE JOB, AND IT DOES NOT CONSULT THE
+  // THRESHOLD.
+  //
+  // `flightSequencer` puts `heldFacing` on every plan it builds and its own
+  // comment says "`buildAttitude` has to accept it — see its `heldFacing`
+  // option." There was no such option. The field was written by three plan
+  // builders, threaded through `resolveBeat`, carried across the component
+  // boundary, and read by nothing — a justification comment naming a
+  // dependency that did not exist (R83, and this is the second outing).
+  //
+  // What that cost is not the perch snap the sequencer comment warns about;
+  // it is bigger. With nothing to hold, EVERY plan re-seeded from
+  // `Math.sign(dx)` — a sign, with no magnitude in it — so `facingFor`'s
+  // threshold was never consulted BETWEEN plans, only within one. Measured
+  // over 40 chained sorties on a three-anchor set, sweeping the set's
+  // x-extent:
+  //
+  //     x-extent    0    8   16   24   32   43   44   345
+  //     turns       0   27   27   27   27   27   27    27
+  //
+  // Eight pixels of horizontal separation — under a fifth of a bee-box, far
+  // too little to read as a direction — mirrored the whole character exactly
+  // as often as 345px did. Only an extent of EXACTLY zero was quiet, and only
+  // because `Math.sign(0) || 1` pins it. That is the deadband the threshold
+  // exists to provide, absent for every caller that flies more than one plan.
+  //
+  // Seeding from `heldFacing` puts segment 0 back under `facingFor` like every
+  // other segment. Callers that pass nothing are unaffected to the bit: the
+  // seed is `Math.sign(segments[0].dx) || 1`, and `facingFor` applied to that
+  // same segment returns it unchanged whichever branch it takes.
+  let held = heldFacing || Math.sign(segments[0].dx) || 1;
   segments.forEach((seg) => {
     held = facingFor(seg.dx, size, held);
     seg.facing = held;
