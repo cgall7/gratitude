@@ -34,7 +34,14 @@ import {
   reconcile as reconcileDailyNudge,
   toISODateLocal,
 } from '../services/dailyNudge';
-import { NUDGE_TITLE, NUDGE_BODY } from '../constants/nudgeCopy';
+import {
+  NUDGE_TITLE,
+  NUDGE_BODY,
+  NUDGE_ASK_LABEL,
+  NUDGE_ASK_READY,
+  NUDGE_GRANTED_LINE,
+  NUDGE_DECLINED_LINE,
+} from '../constants/nudgeCopy';
 
 const HIT_SLOP = { top: 12, bottom: 12, left: 12, right: 12 };
 
@@ -382,16 +389,16 @@ const CelebrationStep = ({ step, onNext }) => {
         <Text style={styles.bodyLgCenter}>
           Tomorrow it's two. Do that for a while and you'll have a record of everything you were given.
         </Text>
-        {(nudge === NUDGE_ASK || nudge === NUDGE_BUSY) && (
+        {NUDGE_ASK_READY && (nudge === NUDGE_ASK || nudge === NUDGE_BUSY) && (
           <PressableScale
             onPress={handleAskForNudge}
             disabled={nudge === NUDGE_BUSY}
             containerStyle={styles.nudgeSlot}
             style={styles.nudgeChip}
-            accessibilityLabel="Let me know on days I don't write"
+            accessibilityLabel={NUDGE_ASK_LABEL}
           >
             <Ionicons name="notifications-outline" size={15} color={theme.colors.ink} />
-            <Text style={styles.nudgeChipText}>Let me know on days I don't write</Text>
+            <Text style={styles.nudgeChipText}>{NUDGE_ASK_LABEL}</Text>
           </PressableScale>
         )}
         {/* Both settled states drop the chip's edge and fill on purpose:
@@ -402,13 +409,13 @@ const CelebrationStep = ({ step, onNext }) => {
         {nudge === NUDGE_GRANTED && (
           <View style={[styles.nudgeSlot, styles.nudgeSettled]}>
             <Ionicons name="checkmark" size={15} color={theme.colors.inkSoft} />
-            <Text style={styles.nudgeSettledText}>You're set.</Text>
+            <Text style={styles.nudgeSettledText}>{NUDGE_GRANTED_LINE}</Text>
           </View>
         )}
         {nudge === NUDGE_OFF && (
           <View style={[styles.nudgeSlot, styles.nudgeSettled]}>
             <Ionicons name="notifications-off-outline" size={15} color={theme.colors.inkSoft} />
-            <Text style={styles.nudgeSettledText}>Notifications are off.</Text>
+            <Text style={styles.nudgeSettledText}>{NUDGE_DECLINED_LINE}</Text>
           </View>
         )}
       </View>

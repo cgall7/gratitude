@@ -284,7 +284,32 @@ export function collectRenderedStrings(ast, { file, positions } = {}) {
     if (node.type !== 'StringLiteral' && node.type !== 'TemplateLiteral') return;
     const position = positionFor(ancestors, file);
     if (!position) return;
-    if (position === 'constant' && !(node.type === 'StringLiteral' && isProse(node.value))) return;
+    // `constant` is the one position with no syntactic evidence that a
+    // string is copy — src/constants/ also holds colour and token strings —
+    // so it carries a prose filter the other four don't need.
+    //
+    // THE FILTER IS ON THE TEXT, NOT ON THE NODE TYPE. This previously read
+    // `node.type === 'StringLiteral' && isProse(node.value)`, which dropped
+    // EVERY template literal in src/constants/ by type: twelve privacy-policy
+    // and terms bodies plus one token, unguarded, with `hallelujah` provably
+    // shippable inside `PRIVACY_POLICY` at a green gate (Pixel, `c84e3b61`;
+    // control by Sage at `8f4466df` — the same word as a StringLiteral in the
+    // same file reds correctly).
+    //
+    // Quasis are joined with '' rather than templateText's ' ' ON PURPOSE:
+    // the question is whether THE COPY has whitespace, not whether the
+    // RECONSTRUCTION does. Joining with ' ' inserts a space at every
+    // interpolation, so `demo-${id}` reconstructs as "demo- " and passes the
+    // whitespace test — a token admitted as prose, and the filter quietly
+    // stops meaning anything for templates. Measured on this tree: join(' ')
+    // admits 13 (including demoHive.js:88's token), join('') admits 12 (all
+    // twelve legalCopy bodies, token correctly rejected).
+    if (position === 'constant') {
+      const text = node.type === 'StringLiteral'
+        ? node.value
+        : node.quasis.map((q) => q.value.cooked ?? q.value.raw).join('');
+      if (!isProse(text)) return;
+    }
     const value = node.type === 'StringLiteral' ? node.value : templateText(node);
     take(value, position, node, ancestors);
   });

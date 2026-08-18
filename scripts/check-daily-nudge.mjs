@@ -43,6 +43,7 @@ const WINDOW_MODULE = path.join(ROOT, 'src/services/nudgeWindow.js');
 const SERVICE_MODULE = path.join(ROOT, 'src/services/dailyNudge.js');
 const APP_JS = path.join(ROOT, 'App.js');
 const COPY_MODULE = path.join(ROOT, 'src/constants/nudgeCopy.js');
+const ONBOARDING_JS = path.join(ROOT, 'src/screens/Onboarding.js');
 
 let pass = 0;
 let fail = 0;
@@ -767,6 +768,7 @@ const appRearmSites = (() => {
   const fns = enclosingFunctions(ast);
   const saves = [];
   const rearms = [];
+  const navs = [];
   walk(ast.program, (n) => {
     if (n.type !== 'CallExpression') return;
     const c = n.callee;
@@ -774,8 +776,19 @@ const appRearmSites = (() => {
       saves.push(n);
     }
     if (c?.type === 'Identifier' && c.name === 'rearmDailyNudge') rearms.push(n);
+    // The ruled PLACEMENT (Lumen, endorsing Sage `250bc4e9`) is that the
+    // re-arm runs AFTER the navigation, so its up-to-six serial schedules
+    // land on a screen that is already gone rather than inside CoreRitual's
+    // held honey-unlock overlay. Row 10 alone is blind to this: it asserts
+    // save -> re-arm and stays green with the re-arm back inside the unlock
+    // (Sage measured exactly that). Collect the navigation call too so the
+    // ordering is held by an assertion instead of by a comment.
+    if (c?.type === 'MemberExpression' && c.property?.name === 'replace'
+        && c.object?.type === 'MemberExpression' && c.object.property?.name === 'navigation') {
+      navs.push(n);
+    }
   });
-  return { src, fns, saves, rearms };
+  return { src, fns, saves, rearms, navs };
 })();
 {
   const { fns, saves, rearms } = appRearmSites;
@@ -803,6 +816,101 @@ const appRearmSites = (() => {
         'row 10 — every EntryStore.saveEntry in App.js is followed by rearmDailyNudge in the same function',
         bads.join('; '),
       );
+    }
+  }
+}
+
+{
+  // row 10b — the ORDER of the two, not merely their presence.
+  const { fns, saves, rearms, navs } = appRearmSites;
+  const offenders = [];
+  for (const save of saves) {
+    const holder = smallestEnclosing(fns, save.start);
+    if (!holder) continue;
+    const inHolder = (n) => n.start >= holder.start && n.start < holder.end;
+    const localNavs = navs.filter(inHolder);
+    const localRearms = rearms.filter((r) => inHolder(r) && r.start > save.end);
+    if (localNavs.length === 0 || localRearms.length === 0) continue;
+    const firstNav = Math.min(...localNavs.map((n) => n.start));
+    const early = localRearms.filter((r) => r.start < firstNav);
+    if (early.length > 0) {
+      offenders.push(`App.js:${early[0].loc.start.line} runs before the navigation at App.js:${localNavs.find((n) => n.start === firstNav).loc.start.line} — up to six serial schedules land inside CoreRitual's held unlock overlay`);
+    }
+  }
+  if (offenders.length === 0) {
+    ok('row 10b — App.js\'s save-side re-arm runs after the navigation, not inside the held unlock overlay');
+  } else {
+    bad('row 10b — App.js\'s save-side re-arm runs after the navigation, not inside the held unlock overlay', offenders.join('; '));
+  }
+}
+
+console.log('\nJ. the ask does not render until its string is ratified');
+// WHY THIS ROW EXISTS, stated plainly because it is a row about my own
+// defect: `nudgeCopy.js` declared a sentinel, described a guard in a comment,
+// and wired NOTHING. `Onboarding.js` hardcoded the WITHDRAWN ask string in
+// two rendered positions, the constant had zero consumers, and I reported the
+// control as not rendering. Sage read the code instead of the comment
+// (`8f4466df`). A SENTINEL WITH NO READER IS NOT A GUARD, IT IS A NOTE.
+//
+// Two assertions, because either alone is satisfiable by the defect:
+//   11a  the sentinel VALUE never reaches a rendered position — catches the
+//        placeholder shipping to a user.
+//   11b  the sentinel has a CONSUMER outside its declaring module — catches
+//        the shape that actually happened, where the value is fine because
+//        nothing reads it and the screen hardcodes its own copy instead.
+{
+  const copySrc = allSrc.get(COPY_MODULE);
+  const sentinel = copySrc && /NUDGE_ASK_PENDING\s*=\s*'([^']+)'/.exec(copySrc)?.[1];
+  if (!sentinel) {
+    bad(
+      'row 11a — the ask sentinel never reaches a rendered position',
+      `could not read NUDGE_ASK_PENDING out of ${path.relative(ROOT, COPY_MODULE)} — the sentinel was renamed or removed, and this row cannot tell whether it still ships`,
+    );
+  } else {
+    const leaks = [];
+    for (const [file, src] of allSrc) {
+      if (file === COPY_MODULE) continue;
+      const ast = parseJs(src);
+      walk(ast.program, (n) => {
+        if (n.type === 'StringLiteral' && n.value.includes(sentinel)) {
+          leaks.push(`${path.relative(ROOT, file)}:${n.loc.start.line}`);
+        }
+      });
+    }
+    if (leaks.length === 0) {
+      ok(`row 11a — the ask sentinel ${JSON.stringify(sentinel)} appears nowhere outside its own module`);
+    } else {
+      bad('row 11a — the ask sentinel never reaches a rendered position', `sentinel literal found at ${leaks.join(', ')}`);
+    }
+  }
+
+  // 11b — the readiness flag must be READ by the screen that owns the beat.
+  // Asserting the import alone would pass on an unused import, so this walks
+  // for an actual reference in Onboarding's own tree.
+  const onbSrc = allSrc.get(ONBOARDING_JS);
+  if (!onbSrc) {
+    bad('row 11b — the ask control is gated on the ratified-string flag', 'Onboarding.js not readable');
+  } else {
+    const ast = parseJs(onbSrc);
+    let readsReady = 0;
+    let readsLabel = 0;
+    let withdrawnLiteral = null;
+    walk(ast.program, (n) => {
+      if (n.type === 'Identifier' && n.name === 'NUDGE_ASK_READY') readsReady += 1;
+      if (n.type === 'Identifier' && n.name === 'NUDGE_ASK_LABEL') readsLabel += 1;
+      // The ask's own words may not be a literal in the screen: copy is
+      // Deezine's and lives in the constants module. Any literal starting
+      // "Let me know" is a hardcoded ask by construction.
+      if (n.type === 'StringLiteral' && /^Let me know/i.test(n.value)) {
+        withdrawnLiteral = `${path.relative(ROOT, ONBOARDING_JS)}:${n.loc.start.line} ${JSON.stringify(n.value)}`;
+      }
+    });
+    if (withdrawnLiteral) {
+      bad('row 11b — the ask control is gated on the ratified-string flag', `the ask is a hardcoded literal in the screen: ${withdrawnLiteral} — copy belongs to nudgeCopy.js, and a literal here cannot be withdrawn by editing the constant`);
+    } else if (readsReady < 1 || readsLabel < 1) {
+      bad('row 11b — the ask control is gated on the ratified-string flag', `Onboarding.js references NUDGE_ASK_READY ${readsReady}x and NUDGE_ASK_LABEL ${readsLabel}x — both must be read, or the sentinel guards nothing`);
+    } else {
+      ok(`row 11b — Onboarding.js gates the ask on NUDGE_ASK_READY and renders NUDGE_ASK_LABEL (no hardcoded ask literal)`);
     }
   }
 }

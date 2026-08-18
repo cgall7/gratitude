@@ -61,7 +61,22 @@ export const NUDGE_BODY = 'What did it show you?';
 // `App.js`'s sentinel guard, where nothing is scheduled while the sentinel
 // stands. A permission ask with a placeholder label is the one thing worse
 // than no permission ask.
-export const NUDGE_ASK_LABEL = '__OWNED_BY_DEEZINE__';
+//
+// THE SENTINEL IS EXPORTED SEPARATELY so a gate can import the value rather
+// than retype it, and so `NUDGE_ASK_READY` is derived here instead of at the
+// call site. The first draft of this block declared a sentinel and wired
+// nothing: `Onboarding.js` hardcoded the withdrawn string in two places, the
+// constant had ZERO consumers, and this comment described a guard that did
+// not exist (Sage, `8f4466df`). A sentinel with no reader is not a guard, it
+// is a note.
+export const NUDGE_ASK_PENDING = '__OWNED_BY_DEEZINE__';
+export const NUDGE_ASK_LABEL = NUDGE_ASK_PENDING;
+
+// The ask renders ONLY when the label is a ratified string. While this is
+// false the beat ships with no ask at all — which is the honest state, not a
+// degraded one: half B's own ruling is that the ask and the App.js re-arm
+// land together or the ask does not land.
+export const NUDGE_ASK_READY = NUDGE_ASK_LABEL !== NUDGE_ASK_PENDING;
 
 // RATIFIED, Lumen `8269a288`, and it SURVIVED the ask's second withdrawal
 // (`0db0852c`) — which is the ratification's own stated reason working: it is
