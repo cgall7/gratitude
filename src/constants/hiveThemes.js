@@ -43,7 +43,7 @@ const BY_ID = new Map(HIVE_COVER_THEMES.map((t) => [t.id, t]));
 export const hiveCoverTheme = (id) => BY_ID.get(id) ?? HIVE_COVER_THEMES[0];
 
 export const REVIEW_CADENCE_OPTIONS = [
-  { id: 'monthly', label: 'Monthly', subtitle: 'Get a reminder every month.' },
-  { id: 'yearly', label: 'Yearly', subtitle: 'Get a reminder once a year.' },
+  { id: 'monthly', label: 'Monthly', subtitle: 'Revisit this hive every month.' },
+  { id: 'yearly', label: 'Yearly', subtitle: 'Revisit this hive once a year.' },
   { id: 'manual', label: 'Manual', subtitle: 'You decide when to review.' },
 ];

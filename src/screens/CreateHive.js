@@ -177,7 +177,7 @@ export const CreateHiveFlow = ({ navigation }) => {
             disabled={saving}
             style={styles.cta}
           >
-            {entryText.trim() ? 'Save & Start Writing' : 'Save & Start Writing'}
+            Save & Start Writing
           </PrimaryButton>
           <PressableScale
             onPress={() => finish(false)}
