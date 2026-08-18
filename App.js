@@ -37,16 +37,31 @@ const Stack = createStackNavigator();
 // from anywhere in half A on purpose — §2's fuse), so this is inert today;
 // it exists so half B only has to add the ask, not the re-arm plumbing too.
 //
-// GAP, flagged rather than silently partial: §4.1 also says "re-arm ... on
-// every entry save." That save happens in `src/screens/CoreRitual.js`
-// (`InputScreen`'s real write path) and `src/screens/Onboarding.js`'s
-// pre-auth buffer, neither of which is in half A's touched-file list
-// (`app.json`, this file, the service module, one response listener,
-// Deezine's copy — Sage, thread 1a0821d5). The foreground re-arm below
-// covers the common case (opening the app after writing backgrounds and
-// foregrounds it in practice), but the save-triggered re-arm needs a
-// follow-up call to `reconcileDailyNudge` at CoreRitual's `saveEntry` call
-// site.
+// §4.1's OTHER re-arm — "on every entry save" — is the `onUnlock` handler
+// below, and it is not optional now that half B's ask names the condition
+// out loud ("Let me know on days I don't write"). Without it the consent is
+// factually wrong about the one behaviour it describes:
+//
+//   08:00  resume  -> re-arm; today is unwritten, so today 20:00 is armed
+//   09:00  write   -> nothing cancels it
+//   20:00          -> the nudge fires on a day they wrote
+//
+// A written day only leaves the schedule when `reconcile` runs AGAIN, so
+// dropping today needs a SECOND resume, after the save and before the hour.
+// Write in the morning and don't reopen the app — the most ordinary day this
+// app has — and it fires anyway. (This comment previously claimed the
+// foreground re-arm "covers the common case" and attributed the save to
+// `CoreRitual.js`. Both were wrong: the foreground that PRECEDES a write is
+// the one that armed today, and `CoreRitual.js:142` says in its own words
+// that it does not save. Sage measured it; a justification comment is a
+// dependency, and that one justified nothing.)
+//
+// The Celebration "yes" handler does NOT go through this function — it has
+// no session (`requireUserId` throws) and needs no read, because at that
+// beat the user has written exactly today. `src/screens/Onboarding.js` says
+// so at the call site. The pre-auth buffer's later flush needs no re-arm
+// either: it writes the same day the handler already reconciled against, so
+// the window it would compute is the one already scheduled.
 //
 // The sentinel guard is redundant with `reconcile()`'s own required-content
 // check today (nothing is enabled yet), and cheap insurance against a future
@@ -219,6 +234,26 @@ export default function App() {
                     // a real session already — it owns the write now.
                     await EntryStore.saveEntry(new Date(), text, tagEntry(text));
                     props.navigation.replace('Main');
+                    // §4.1's save-side re-arm, and it sits AFTER the
+                    // navigation on purpose (Sage, 250bc4e9). This promise is
+                    // the honey unlock's own: CoreRitual holds the unlocking
+                    // overlay for the whole life of `onUnlock`, resetting
+                    // only on the error path because success is expected to
+                    // navigate away. Put the re-arm above `replace` and a
+                    // Supabase select, a scheduled-notification enumeration,
+                    // up to seven cancels, two AsyncStorage reads and up to
+                    // six SERIAL `scheduleNotificationAsync` calls all land
+                    // inside that animation. Below it, the screen is already
+                    // gone and the work is invisible.
+                    //
+                    // Still awaited rather than floated, so the ordering is
+                    // legible and a future throw is not silently orphaned.
+                    // It cannot reject today — the whole body after the
+                    // sentinel guard is one try/catch (see above) — which is
+                    // what makes running it past `replace` safe: CoreRitual's
+                    // `.catch` would otherwise alert and animate a screen
+                    // that has already unmounted.
+                    await rearmDailyNudge();
                   }}
                 />
               )}

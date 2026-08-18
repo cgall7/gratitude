@@ -736,6 +736,77 @@ console.log('\nG. copy ownership (§7 — not wired into run-checks.mjs, see hea
 // =========================================================================
 // H. Mutation matrix (required before §6's rows are trusted)
 // =========================================================================
+console.log('\nI. the ask names a behaviour, and the behaviour is delivered');
+// §4.1's SAVE-SIDE re-arm, and it is a gate row rather than a comment
+// because half B's ask says the condition out loud: "Let me know on days I
+// don't write." A scheduled day only leaves the schedule when `reconcile`
+// runs AGAIN, so a write that is not followed by a re-arm leaves today's
+// nudge armed on a day the user wrote — the consent would be factually
+// wrong about the one behaviour it names (§27.2, on the surface the
+// permission was granted from). Sage measured the sequence; Lumen ruled the
+// fix blocking scope of half B.
+//
+// SCOPE, STATED: this row is about App.js's `onUnlock` write, which is the
+// app's only save with a live session and a user still holding the phone.
+// It is deliberately NOT a universal rule over every `EntryStore.saveEntry`
+// call site, because two of the three sites legitimately do not re-arm and
+// a universal row would need an exemption list to stay green — the
+// Celebration handler reconciles directly (no session to read from), and
+// `pendingOnboardingWrites`' flush writes the day-key the Celebration
+// handler already reconciled against. A rule that needs a door in it is not
+// the rule; this one is stated where it is true.
+//
+// The assertion is SIBLING-POSITIONED, not callee-positioned: it asks
+// whether the function that saves also re-arms, AFTER the save, in source
+// order. Deleting the re-arm reds it; moving it above the save reds it too,
+// because a re-arm that runs before the write reads a day that is not
+// written yet — which is exactly the ordering bug the old comment made.
+const appRearmSites = (() => {
+  const src = allSrc.get(APP_JS);
+  const ast = parseJs(src);
+  const fns = enclosingFunctions(ast);
+  const saves = [];
+  const rearms = [];
+  walk(ast.program, (n) => {
+    if (n.type !== 'CallExpression') return;
+    const c = n.callee;
+    if (c?.type === 'MemberExpression' && c.object?.name === 'EntryStore' && c.property?.name === 'saveEntry') {
+      saves.push(n);
+    }
+    if (c?.type === 'Identifier' && c.name === 'rearmDailyNudge') rearms.push(n);
+  });
+  return { src, fns, saves, rearms };
+})();
+{
+  const { fns, saves, rearms } = appRearmSites;
+  if (saves.length === 0) {
+    bad(
+      'row 10 — App.js\'s entry save is followed by a nudge re-arm in the same function',
+      'no EntryStore.saveEntry call site found in App.js — the write moved and this row is now checking a file that does not do the thing',
+    );
+  } else {
+    const bads = [];
+    for (const save of saves) {
+      const holder = smallestEnclosing(fns, save.start);
+      const after = rearms.filter((r) => holder && r.start >= holder.start && r.start < holder.end && r.start > save.end);
+      const before = rearms.filter((r) => holder && r.start >= holder.start && r.start < holder.end && r.start <= save.end);
+      if (after.length === 0) {
+        const where = before.length > 0 ? 'the only re-arm in that function runs BEFORE the save, so it reads a day that is not written yet' : 'no rearmDailyNudge call in that function at all — today stays armed on a day the user wrote';
+        bads.push(`App.js:${save.loc.start.line} (${holder?.name ?? 'anonymous handler'}) — ${where}`);
+      }
+    }
+    if (bads.length === 0) {
+      const lines = saves.map((sv) => sv.loc.start.line).join(', ');
+      ok(`row 10 — every EntryStore.saveEntry in App.js is followed by rearmDailyNudge in the same function (${saves.length} save site${saves.length > 1 ? 's' : ''}, App.js:${lines})`);
+    } else {
+      bad(
+        'row 10 — every EntryStore.saveEntry in App.js is followed by rearmDailyNudge in the same function',
+        bads.join('; '),
+      );
+    }
+  }
+}
+
 console.log('\nH. mutation matrix');
 {
   // SHOULD-PASS — renaming the window builder's internals must not move any

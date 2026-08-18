@@ -296,7 +296,7 @@ const FirstEntryStep = ({ step, onNext, onBack, onSave }) => {
 const NUDGE_ASK = 'ask';
 const NUDGE_BUSY = 'busy';
 const NUDGE_GRANTED = 'granted';
-const NUDGE_GONE = 'gone';
+const NUDGE_OFF = 'off';
 
 const CelebrationStep = ({ step, onNext }) => {
   const [nudge, setNudge] = useState(NUDGE_ASK);
@@ -321,12 +321,17 @@ const CelebrationStep = ({ step, onNext }) => {
       return;
     }
     if (!result.granted) {
-      // An OS decline is terminal (§2: this function does not retry). The
-      // control LEAVES the beat rather than persisting as a promise it can
-      // no longer keep — a button still reading "Let me know tomorrow
-      // evening" after the OS said no is a lie in button form. Reversal
-      // lives in Settings (§5).
-      setNudge(NUDGE_GONE);
+      // An OS decline is terminal (§2: this function does not retry), so the
+      // control cannot persist — a button still offering what the OS just
+      // refused is a lie in button form. It settles into a resting state
+      // rather than vanishing (Lumen, 36f84721, correcting an earlier
+      // ruling of their own): the user tapped yes, an in-app act of trust,
+      // and the OS said no. A control that disappears out from under that
+      // tap swallows the only feedback the sequence will ever get — and
+      // until §7's settings row exists there is no other surface in the
+      // product that mentions this switch at all. The resting state also
+      // holds the slot that row will later explain.
+      setNudge(NUDGE_OFF);
       return;
     }
     setNudge(NUDGE_GRANTED);
@@ -383,19 +388,27 @@ const CelebrationStep = ({ step, onNext }) => {
             disabled={nudge === NUDGE_BUSY}
             containerStyle={styles.nudgeSlot}
             style={styles.nudgeChip}
-            accessibilityLabel="Let me know tomorrow evening"
+            accessibilityLabel="Let me know on days I don't write"
           >
             <Ionicons name="notifications-outline" size={15} color={theme.colors.ink} />
-            <Text style={styles.nudgeChipText}>Let me know tomorrow evening</Text>
+            <Text style={styles.nudgeChipText}>Let me know on days I don't write</Text>
           </PressableScale>
         )}
+        {/* Both settled states drop the chip's edge and fill on purpose:
+            the ask has been answered, so each is a status now, not a tap
+            target, and nothing about either should still read as pressable.
+            They occupy the ask's own slot so the beat's height never jumps
+            under the answer. */}
         {nudge === NUDGE_GRANTED && (
-          // The settled state drops the chip's edge and fill on purpose: the
-          // ask has been answered, so it is a status now, not a tap target,
-          // and nothing about it should still read as pressable.
           <View style={[styles.nudgeSlot, styles.nudgeSettled]}>
             <Ionicons name="checkmark" size={15} color={theme.colors.inkSoft} />
-            <Text style={styles.nudgeSettledText}>Tomorrow evening, then.</Text>
+            <Text style={styles.nudgeSettledText}>You're set.</Text>
+          </View>
+        )}
+        {nudge === NUDGE_OFF && (
+          <View style={[styles.nudgeSlot, styles.nudgeSettled]}>
+            <Ionicons name="notifications-off-outline" size={15} color={theme.colors.inkSoft} />
+            <Text style={styles.nudgeSettledText}>Notifications are off.</Text>
           </View>
         )}
       </View>
