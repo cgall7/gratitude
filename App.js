@@ -20,6 +20,8 @@ import { CreateHiveFlow } from './src/screens/CreateHive';
 import { HiveDetailScreen } from './src/screens/HiveDetail';
 import { ComposeHiveEntryScreen } from './src/screens/ComposeHiveEntry';
 import { MemoryLaneScreen } from './src/screens/MemoryLane';
+import { ReceivedPackagesScreen } from './src/screens/ReceivedPackages';
+import { PackageOpenScreen } from './src/screens/PackageOpen';
 import { PollinateWrapped } from './src/screens/PollinateWrapped';
 import { MainTabs } from './src/navigation/MainTabs';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
@@ -256,6 +258,15 @@ export default function App() {
                 reason as its siblings above: this is a place you go, not a
                 sheet over the place you were. */}
             <Stack.Screen name="MemoryLane" component={MemoryLaneScreen} />
+
+            {/* 8b.6 — the reveal engine's second mount point (revealSequencer.js's
+                own header names both by number). PackageOpen is a plain push, not
+                modal, same reasoning as MemoryLane above: a place you go, not a
+                sheet over the place you were. ReceivedPackages IS a modal — it's
+                an inbox opened from chrome, same category as Notes/Seeds below,
+                not a flow you go deeper into. */}
+            <Stack.Screen name="ReceivedPackages" component={ReceivedPackagesScreen} options={{ presentation: 'modal' }} />
+            <Stack.Screen name="PackageOpen" component={PackageOpenScreen} />
 
             <Stack.Screen name="Legal" component={LegalScreen} options={{ presentation: 'modal' }} />
 

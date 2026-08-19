@@ -185,4 +185,94 @@ export const HiveStore = {
     if (error) throw error;
     return toHiveEntry(data);
   },
+
+  // 8b.6 — the recipient's side of the send act (`docs/strategy/
+  // Pollinate_Delivery_Slices.md` §8b.5's "Recipient read-access ruling").
+  // Reads through the two subject-scoped policies that migration ships —
+  // `private_hives_select_as_subject` and `entries_select_as_hive_subject`,
+  // both gated on `sent_at is not null` — so an unsealed or unsent hive
+  // never surfaces here, and neither method below needs its own sealed/sent
+  // guard on top of RLS.
+  //
+  // NOT CALLABLE YET: `private_hives.sent_at` is "not yet in schema" as of
+  // this PR — Fizz's 8b.5 migration ships it, the two policies, and
+  // `send_hive`. Until that lands both methods fail with Postgres 42703
+  // (undefined column), the expected shape of "the schema hasn't caught up"
+  // per `undefined_column_beats_permission_denied` — not a client bug, and
+  // not evidence the query is wrong. This branch is written against the
+  // exact column/policy names Sage ratified so no rewrite is needed once
+  // 8b.5 merges, only a rebase.
+  async listReceivedPackages() {
+    const client = requireSupabase();
+    const subjectId = await requireUserId(client);
+    const { data: hives, error } = await client
+      .from('private_hives')
+      .select('id, owner_id, subject_name, cover_theme, sealed_at, sent_at')
+      .eq('subject_profile_id', subjectId)
+      .not('sent_at', 'is', null)
+      .order('sent_at', { ascending: false });
+    if (error) throw error;
+    if (!hives || hives.length === 0) return [];
+
+    // Sender names, batched — `profiles_select_connections`
+    // (20260809000005) is the same policy an incoming request card reads
+    // under, and it drops silently (zero rows, not an error) once the
+    // sender is unfriended. Missing names below fall back to 'Someone',
+    // reusing that migration's own established fallback rather than a
+    // second, inconsistent one — see the client note in Sage's spec about
+    // read access surviving an unfriend while the profile does not.
+    const ownerIds = [...new Set(hives.map((h) => h.owner_id))];
+    const { data: senders } = await client.from('profiles').select('id, display_name').in('id', ownerIds);
+    const senderNames = new Map((senders ?? []).map((p) => [p.id, p.display_name]));
+
+    return hives.map((h) => ({
+      id: h.id,
+      subjectName: h.subject_name,
+      coverTheme: h.cover_theme,
+      sentAt: h.sent_at,
+      senderName: senderNames.get(h.owner_id) || 'Someone',
+    }));
+  },
+
+  // One package: the hive's own facts, its sent entries (chronological,
+  // oldest first — `revealSequencer.buildRevealSequence` sorts on `at` too,
+  // but a stable input order here keeps the tie-break on `savedAt`/`id`
+  // meaningful rather than accidental), and the sender name with the same
+  // fallback `listReceivedPackages` uses.
+  async getReceivedPackage(hiveId) {
+    const client = requireSupabase();
+    const subjectId = await requireUserId(client);
+    const { data: hive, error } = await client
+      .from('private_hives')
+      .select('id, owner_id, subject_name, cover_theme, sealed_at, sent_at')
+      .eq('id', hiveId)
+      .eq('subject_profile_id', subjectId)
+      .not('sent_at', 'is', null)
+      .maybeSingle();
+    if (error) throw error;
+    if (!hive) return null;
+
+    const { data: entryRows, error: entriesError } = await client
+      .from('entries')
+      .select()
+      .eq('hive_id', hiveId)
+      .eq('visibility', 'sent')
+      .order('entry_date', { ascending: true });
+    if (entriesError) throw entriesError;
+
+    const { data: sender } = await client
+      .from('profiles')
+      .select('display_name')
+      .eq('id', hive.owner_id)
+      .maybeSingle();
+
+    return {
+      id: hive.id,
+      subjectName: hive.subject_name,
+      coverTheme: hive.cover_theme,
+      sentAt: hive.sent_at,
+      senderName: sender?.display_name || 'Someone',
+      entries: (entryRows ?? []).map(toHiveEntry),
+    };
+  },
 };
