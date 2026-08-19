@@ -72,6 +72,7 @@ try {
 
 const ALICE = '11111111-1111-1111-1111-111111111111'; // the author
 const BOB = '22222222-2222-2222-2222-222222222222'; // accepted connection
+const CAROL = '33333333-3333-3333-3333-333333333333'; // connected to Alice, not the send's recipient
 const MALLORY = '44444444-4444-4444-4444-444444444444'; // no connection at all
 
 let pass = 0;
@@ -283,16 +284,21 @@ async function main() {
   }
 
   // --- Fixtures --------------------------------------------------------------
-  await client.query('insert into auth.users (id) select * from unnest($1::uuid[])', [[ALICE, BOB, MALLORY]]);
+  await client.query('insert into auth.users (id) select * from unnest($1::uuid[])', [[ALICE, BOB, CAROL, MALLORY]]);
   await client.query(
     `insert into public.profiles (id, display_name)
-     values ($1,'Alice'),($2,'Bob'),($3,'Mallory') on conflict (id) do nothing`,
-    [ALICE, BOB, MALLORY]
+     values ($1,'Alice'),($2,'Bob'),($3,'Carol'),($4,'Mallory') on conflict (id) do nothing`,
+    [ALICE, BOB, CAROL, MALLORY]
   );
   await client.query(
     `insert into public.honeycomb_connections (requester_id, addressee_id, status)
      values ($1, $2, 'accepted')`,
     [ALICE, BOB]
+  );
+  await client.query(
+    `insert into public.honeycomb_connections (requester_id, addressee_id, status)
+     values ($1, $2, 'accepted')`,
+    [ALICE, CAROL]
   );
 
   // --- The share round-trip --------------------------------------------------
@@ -504,6 +510,56 @@ async function main() {
       ? ok('send_hive refuses to send an already-sent hive twice')
       : bad('send_hive refuses to send an already-sent hive twice', `wrong reason: ${e.message.split('\n')[0]}`);
   }
+
+  // --- hive_send_events (8b.7, 20260819000002_hive_send_events) --------------
+  // send_hive (hiveId, above) already ran for ALICE -> BOB. Its insert into
+  // hive_send_events happened in the same transaction — this is the content-
+  // free feed event's own round trip, not a re-test of send_hive itself.
+  console.log('\n  hive_send_events (8b.7 content-free feed event on send)');
+
+  const sendEvent = (
+    await readAs(ALICE, 'select id, sender_id, recipient_id from public.hive_send_events where sender_id = $1 and recipient_id = $2', [ALICE, BOB])
+  )[0];
+  if (sendEvent) ok('send_hive inserts exactly one hive_send_events row for the owner/subject pair');
+  else bad('send_hive inserts a hive_send_events row', 'no row landed for sender=Alice, recipient=Bob');
+
+  const eventCols = sendEvent ? Object.keys(sendEvent) : [];
+  const hasContentRef = eventCols.some((c) => /entry|hive_id|content/i.test(c));
+  if (!hasContentRef) ok('hive_send_events carries no entry/hive/content reference (content-free by construction)');
+  else bad('hive_send_events carries no entry/hive/content reference', `found column(s): ${eventCols.join(', ')}`);
+
+  const bobReadsEvent = await readAs(BOB, 'select id from public.hive_send_events where id = $1', [sendEvent?.id]);
+  if (bobReadsEvent.length === 1) ok('the recipient reads their own send event');
+  else bad('the recipient reads their own send event', `Bob read ${JSON.stringify(bobReadsEvent)}`);
+
+  const carolReadsEvent = await readAs(CAROL, 'select id from public.hive_send_events where id = $1', [sendEvent?.id]);
+  if (carolReadsEvent.length === 1) ok('a connection of the sender (not the recipient) reads the send event — community visibility');
+  else bad('a connection of the sender reads the send event', `Carol read ${JSON.stringify(carolReadsEvent)}`);
+
+  const malloryReadsEvent = await readAs(MALLORY, 'select id from public.hive_send_events where id = $1', [sendEvent?.id]);
+  if (malloryReadsEvent.length === 0) ok('an unconnected user cannot read the send event');
+  else bad('an unconnected user cannot read the send event', `LEAK: Mallory read ${JSON.stringify(malloryReadsEvent)}`);
+
+  try {
+    await readAs(ALICE, 'insert into public.hive_send_events (sender_id, recipient_id) values ($1, $2)', [ALICE, BOB]);
+    bad('hive_send_events cannot be inserted directly by any authenticated caller', 'the direct insert succeeded — send_hive is not the only writer');
+  } catch (e) {
+    ok('hive_send_events cannot be inserted directly by any authenticated caller');
+  }
+
+  // No UPDATE/ALL policy means RLS's USING clause evaluates false for every
+  // row, so the update touches 0 rows rather than raising — a throw is not
+  // the right assertion. Target CAROL (a value that would actually show up)
+  // and read the row back as ALICE (a party, unconditional select) to prove
+  // nothing changed.
+  await asUser(BOB, () =>
+    client.query('update public.hive_send_events set recipient_id = $1 where id = $2', [CAROL, sendEvent?.id])
+  );
+  const afterUpdateAttempt = (
+    await readAs(ALICE, 'select recipient_id from public.hive_send_events where id = $1', [sendEvent?.id])
+  )[0];
+  if (afterUpdateAttempt?.recipient_id === BOB) ok('hive_send_events cannot be updated by a participant');
+  else bad('hive_send_events cannot be updated by a participant', `recipient_id is now ${afterUpdateAttempt?.recipient_id} — the direct update took effect`);
 
   // --- entries_update_own mirror guard: shares -> hive_id closes (20260819000001) ---
   // Direction one (hive entry can't acquire a shares row) was already closed

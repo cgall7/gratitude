@@ -209,6 +209,37 @@ export const HoneycombStore = {
     return (data ?? []).map((share) => toFeedShare(share, user.id));
   },
 
+  // 8b.7 — hive_send_events (20260819000002) is a separate table from
+  // `shares` on purpose (see the migration comment): reusing shares would
+  // reopen the leak the entries_update_own mirror guard exists to close.
+  // Separate table means separate query; `kind: 'send'` is how
+  // HoneycombTab tells this card apart from a FeedCard share when merging
+  // the two lists for render.
+  async listSendEvents() {
+    const client = requireSupabase();
+    const {
+      data: { user },
+    } = await client.auth.getUser();
+    const { data, error } = await client
+      .from('hive_send_events')
+      .select(
+        'id, created_at, sender_id, recipient_id, sender:profiles!hive_send_events_sender_id_fkey(display_name, avatar_url), recipient:profiles!hive_send_events_recipient_id_fkey(display_name, avatar_url)'
+      )
+      .order('created_at', { ascending: false })
+      .limit(50);
+    if (error) throw error;
+    return (data ?? []).map((row) => ({
+      kind: 'send',
+      id: row.id,
+      createdAt: row.created_at,
+      isSender: row.sender_id === user.id,
+      isRecipient: row.recipient_id === user.id,
+      senderName: row.sender?.display_name ?? 'Someone',
+      senderAvatarUrl: row.sender?.avatar_url,
+      recipientName: row.recipient?.display_name ?? 'Someone',
+    }));
+  },
+
   // The last-7-days window for the hive's week view. Filters on
   // `entries.entry_date` — the day the gratitude is *about* — because
   // that's the key the week view groups under; filtering on `created_at`

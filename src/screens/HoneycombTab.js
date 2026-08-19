@@ -10,6 +10,7 @@ import { toISODate, daysAgoISO, groupSharesByDay, HIVE_WEEK_DAYS } from '../util
 import { PrimaryButton } from '../components/PrimaryButton';
 import { PressableScale } from '../components/PressableScale';
 import { FeedCard } from '../components/FeedCard';
+import { SendEventCard } from '../components/SendEventCard';
 import { HoneycombGrid, HIVE_SLOTS, personKey } from '../components/HoneycombGrid';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { BeeTransition } from '../components/BeeTransition';
@@ -224,6 +225,12 @@ const HoneycombFeed = () => {
   const navigation = useNavigation();
   const [loading, setLoading] = useState(true);
   const [feed, setFeed] = useState([]);
+  // 8b.7 — a separate list from `feed`: hive_send_events is its own table
+  // (see HoneycombStore.listSendEvents), so it's a separate query. Merged
+  // with `feed` only at render time (mergedFeed below), never into `feed`
+  // itself — knownFeedIdsRef/feedArrivalKey below key off `feed` alone, and
+  // a send event has no entry to have arrived.
+  const [sendEvents, setSendEvents] = useState([]);
   // 'today' | 'week' — the §18 pager's resting position. State lives here
   // (not in the toggle) so Pixel's pager can drive it from swipe progress.
   const [hiveView, setHiveView] = useState('today');
@@ -271,7 +278,7 @@ const HoneycombFeed = () => {
   }, []);
 
   const loadAll = useCallback(async ({ suppressArrival = false } = {}) => {
-    // finally, not a trailing call: any of the six Promise.all members below
+    // finally, not a trailing call: any of the seven Promise.all members below
     // rejecting — or hasSharedDate() further down — must still clear the
     // spinner. Before this, only the happy path reached setLoading(false),
     // so a rejection left the tab spinning forever with no exit (Sage,
@@ -280,8 +287,11 @@ const HoneycombFeed = () => {
     // loading indicator itself can't get stuck.
     try {
       const today = toISODate(new Date());
-      const [feedResult, weekFeedRaw, connectionsResult, requestsResult, entry, hiveState] = await Promise.all([
+      const [feedResult, sendEventsResult, weekFeedRaw, connectionsResult, requestsResult, entry, hiveState] = await Promise.all([
         HoneycombStore.listFeed(),
+        // 8b.7 — its own query against hive_send_events, merged with
+        // feedResult only at render time (mergedFeed below).
+        HoneycombStore.listSendEvents(),
         // Window floor: today minus six days, inclusive — 7 day-buckets total.
         HoneycombStore.listFeedSince(daysAgoISO(HIVE_WEEK_DAYS - 1)),
         HoneycombStore.listConnections(),
@@ -317,6 +327,7 @@ const HoneycombFeed = () => {
       knownFeedIdsRef.current = new Set(feedResult.map((share) => share.id));
 
       setFeed(feedResult);
+      setSendEvents(sendEventsResult);
       setWeekFeed(weekFeedResult);
       setConnections(connectionsResult);
       setIncomingRequests(requestsResult);
@@ -420,6 +431,16 @@ const HoneycombFeed = () => {
   // running it here means the comb's "today" moves with every refresh
   // rather than freezing at mount.
   const { todayMembers, weekSections } = partitionHive(weekFeed);
+
+  // 8b.7 — shares and send events are two separate queries against two
+  // separate tables (HoneycombStore.listFeed / listSendEvents); this is the
+  // one place they become one list, newest-first by the same clock
+  // (created_at on both sides). Today-only, like `feed` itself — WeekView
+  // stays share-only because it windows on entries.entry_date, which a
+  // send event doesn't have.
+  const mergedFeed = [...feed, ...sendEvents].sort(
+    (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+  );
 
   return (
     <View style={styles.container}>
@@ -627,7 +648,7 @@ const HoneycombFeed = () => {
       )}
 
       {hiveView !== 'week' && (
-        feed.length === 0 ? (
+        mergedFeed.length === 0 ? (
           connections.length === 0 ? (
             <View style={[styles.emptyState, styles.emptyStateYellow]}>
               <Text style={styles.emptyTitle}>Your hive is quiet.</Text>
@@ -642,9 +663,13 @@ const HoneycombFeed = () => {
         ) : (
           <View style={styles.feedTopAnchor}>
             <BeeTransition triggerKey={feedArrivalKey} path={FEED_ARRIVAL_PATH} anchorStyle={styles.feedArrivalBeeAnchor} size={16} />
-            {feed.map((share) => (
-              <FeedCard key={share.id} share={share} onLikeToggled={handleLikeToggled} />
-            ))}
+            {mergedFeed.map((item) =>
+              item.kind === 'send' ? (
+                <SendEventCard key={`send-${item.id}`} event={item} />
+              ) : (
+                <FeedCard key={item.id} share={item} onLikeToggled={handleLikeToggled} />
+              )
+            )}
           </View>
         )
       )}
