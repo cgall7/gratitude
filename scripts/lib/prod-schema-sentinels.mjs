@@ -56,4 +56,15 @@ export const SENTINELS = {
   '20260817000002_private_hives_cover_and_cadence': { kind: 'column', table: 'private_hives', column: 'cover_theme' },
   '20260819000001_private_hives_send': { kind: 'column', table: 'private_hives', column: 'sent_at' },
   '20260819000002_hive_send_events': { kind: 'column', table: 'hive_send_events', column: 'id' },
+  // seal_hive adds no new column (unlike send_hive/sent_at) — it's purely a
+  // new SECURITY DEFINER function, revoked from anon in the same migration
+  // that creates it. Same shape as 20260813000005's anon-revoke sentinel:
+  // an anon caller can't get past PostgREST's own EXECUTE check, so 42501
+  // is what "this migration landed" looks like from outside.
+  '20260819000003_seal_hive': {
+    kind: 'rpc',
+    fn: 'seal_hive',
+    args: { p_hive_id: '00000000-0000-0000-0000-000000000000' },
+    expect: '42501',
+  },
 };

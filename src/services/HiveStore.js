@@ -121,12 +121,15 @@ export const HiveStore = {
     }));
   },
 
+  // Carries subject_profile_id + sent_at (beyond what listHives needs) —
+  // HiveDetailScreen's seal/send footer (Design Language §5-6) has to
+  // derive "has a subject" and "already sent" from this single fetch.
   async getHive(hiveId) {
     const client = requireSupabase();
     const ownerId = await requireUserId(client);
     const { data, error } = await client
       .from('private_hives')
-      .select('id, subject_name, cover_theme, review_cadence, sealed_at, created_at')
+      .select('id, subject_name, subject_profile_id, cover_theme, review_cadence, sealed_at, sent_at, created_at')
       .eq('owner_id', ownerId)
       .eq('id', hiveId)
       .maybeSingle();
@@ -135,11 +138,34 @@ export const HiveStore = {
     return {
       id: data.id,
       subjectName: data.subject_name,
+      subjectProfileId: data.subject_profile_id,
       coverTheme: data.cover_theme,
       reviewCadence: data.review_cadence,
       sealedAt: data.sealed_at,
+      sentAt: data.sent_at,
       createdAt: data.created_at,
     };
+  },
+
+  // §5 Screen 3's "Seal This Keepsake" CTA. SECURITY DEFINER RPC
+  // (20260819000003) does the sealed_at set + private->packaged entry flip
+  // in one transaction — see that migration for why a client-side pair of
+  // writes can't be trusted to do the same thing atomically. Postgres error
+  // text (owner/already-sealed) passes through `error.message` unchanged;
+  // callers show it as-is rather than re-deriving the same two cases.
+  async sealHive(hiveId) {
+    const client = requireSupabase();
+    const { error } = await client.rpc('seal_hive', { p_hive_id: hiveId });
+    if (error) throw error;
+  },
+
+  // §6 Screen 2's "Send Keepsake" CTA. `send_hive` (20260819000001) is the
+  // one existing RPC this wraps — was already live and correct, just never
+  // had a caller (the gap this whole thread's Slice 1 review found).
+  async sendHive(hiveId) {
+    const client = requireSupabase();
+    const { error } = await client.rpc('send_hive', { p_hive_id: hiveId });
+    if (error) throw error;
   },
 
   // Chronological entry list for one hive, most recent first (Design
