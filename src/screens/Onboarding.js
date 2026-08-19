@@ -29,6 +29,19 @@ import { PendingOnboardingWrites } from '../services/pendingOnboardingWrites';
 import { getDailyPrompt } from '../constants/prompts';
 import { tagEntry } from '../utils/themeTagger';
 import { useAuth } from '../contexts/AuthContext';
+import {
+  requestPermissionAndEnable,
+  reconcile as reconcileDailyNudge,
+  toISODateLocal,
+} from '../services/dailyNudge';
+import {
+  NUDGE_TITLE,
+  NUDGE_BODY,
+  NUDGE_ASK_LABEL,
+  NUDGE_ASK_READY,
+  NUDGE_GRANTED_LINE,
+  NUDGE_DECLINED_LINE,
+} from '../constants/nudgeCopy';
 
 const HIT_SLOP = { top: 12, bottom: 12, left: 12, right: 12 };
 
@@ -268,21 +281,148 @@ const FirstEntryStep = ({ step, onNext, onBack, onSave }) => {
 // --- Celebration — always the first-ever-save treatment (the entry step's
 // --- save IS the first-ever save), never the bare badge. "given" closes the
 // --- loop back to the Welcome line. ---
-const CelebrationStep = ({ step, onNext }) => (
-  <StepShell step={step} stage="saved" wash={theme.colors.washYellow}>
-    <View style={styles.centerFill}>
-      <View style={styles.badgeStage}>
-        <CelebrationRays />
-        <CelebrationBadge />
+//
+// THE DAILY NUDGE ASK LIVES IN THIS BEAT, UNDER "Tomorrow it's two."
+// (`PLANS/DAILY_NUDGE_SPEC.md` §2's placement corollary, Lumen). The body
+// already makes the promise; the notification is the MECHANISM of that
+// sentence, so the ask reads as the payoff of a line just read rather than
+// as an interruption. Reading order protects the celebration: badge ->
+// "That's one." -> body all land before the ask exists.
+//
+// AFFIRMATIVE-ONLY — there is no "No thanks". The in-app decline is walking
+// past it: tapping "Keep it" without touching the ask. Nothing is recorded,
+// so §2's corollary keeps its full value and a later re-ask stays open.
+// The Who beat carries a decline link because it owns its screen and has no
+// other exit; this beat's "Keep it" is already an unblocked exit, which is
+// why a second control here would be a guilt button. (That is Sage's reason,
+// taken over the §30.10.4 citation I first reached for — §30.10.4 rules on
+// the WEIGHT of a decline control, not on whether one exists, so it cannot
+// be cited for having none.)
+//
+// "Keep it" is never gated on the ask, in any state.
+const NUDGE_ASK = 'ask';
+const NUDGE_BUSY = 'busy';
+const NUDGE_GRANTED = 'granted';
+const NUDGE_OFF = 'off';
+
+const CelebrationStep = ({ step, onNext }) => {
+  const [nudge, setNudge] = useState(NUDGE_ASK);
+
+  // §2, THE FUSE — this is the "yes" handler, and the only caller of
+  // `requestPermissionAndEnable` anywhere in the app. It is reached from a
+  // JSX press prop and from nowhere else: not a mount effect, not module
+  // scope, so the OS dialog cannot fire before an in-app yes.
+  // `scripts/check-daily-nudge.mjs` row 2c asserts that shape by walking
+  // from the call site out to the prop, rather than by finding the name.
+  const handleAskForNudge = async () => {
+    setNudge(NUDGE_BUSY);
+    let result;
+    try {
+      result = await requestPermissionAndEnable();
+    } catch {
+      // A throw is not an OS decline. Nothing was granted and nothing was
+      // armed, so the label still describes exactly what the control would
+      // do — returning it to the ask is the honest state, and the only one
+      // that does not strand the user with a promise nobody made.
+      setNudge(NUDGE_ASK);
+      return;
+    }
+    if (!result.granted) {
+      // An OS decline is terminal (§2: this function does not retry), so the
+      // control cannot persist — a button still offering what the OS just
+      // refused is a lie in button form. It settles into a resting state
+      // rather than vanishing (Lumen, 36f84721, correcting an earlier
+      // ruling of their own): the user tapped yes, an in-app act of trust,
+      // and the OS said no. A control that disappears out from under that
+      // tap swallows the only feedback the sequence will ever get — and
+      // until §7's settings row exists there is no other surface in the
+      // product that mentions this switch at all. The resting state also
+      // holds the slot that row will later explain.
+      setNudge(NUDGE_OFF);
+      return;
+    }
+    setNudge(NUDGE_GRANTED);
+
+    // ARM THE PROMISE HERE, and deliberately NOT via App.js's
+    // `rearmDailyNudge`. Two independent reasons, either one sufficient:
+    //
+    //   1. `requestPermissionAndEnable` sets the enabled flag and returns —
+    //      it never reconciles (`disable()` does; the enable path does not,
+    //      an asymmetry that sat unnamed in the module until Sage measured
+    //      it). App.js's foreground reconcile already ran at launch, BEFORE
+    //      that flag existed, and the next background->active transition may
+    //      not arrive before tomorrow 20:00. A user who taps yes, finishes
+    //      onboarding and pockets the phone would get no nudge on night one
+    //      — exactly the cohort the feature exists for.
+    //   2. `rearmDailyNudge` sources its written days from `EntryStore`,
+    //      whose `requireUserId` throws "Not signed in", and there IS no
+    //      session at this beat — STEP_ACCOUNT is two beats away, which is
+    //      the same reason the entry itself is buffered through
+    //      `PendingOnboardingWrites`. App.js's catch would swallow that
+    //      silently and night one would break with nothing reported.
+    //
+    // No read is needed anyway: at this beat the user has written exactly
+    // today and nothing else, so that one day-key IS `writtenDaysISO`.
+    // `buildWindow` drops today and schedules from tomorrow — which is what
+    // the label promised.
+    try {
+      const now = new Date();
+      await reconcileDailyNudge({
+        writtenDaysISO: [toISODateLocal(now)],
+        now,
+        content: { title: NUDGE_TITLE, body: NUDGE_BODY },
+      });
+    } catch {
+      // Permission is granted and the flag is set, so App.js's next
+      // foreground re-arm covers this. The settled line stays honest.
+    }
+  };
+
+  return (
+    <StepShell step={step} stage="saved" wash={theme.colors.washYellow}>
+      <View style={styles.centerFill}>
+        <View style={styles.badgeStage}>
+          <CelebrationRays />
+          <CelebrationBadge />
+        </View>
+        <Text style={styles.h1Center}>That's one.</Text>
+        <Text style={styles.bodyLgCenter}>
+          Tomorrow it's two. Do that for a while and you'll have a record of everything you were given.
+        </Text>
+        {NUDGE_ASK_READY && (nudge === NUDGE_ASK || nudge === NUDGE_BUSY) && (
+          <PressableScale
+            onPress={handleAskForNudge}
+            disabled={nudge === NUDGE_BUSY}
+            containerStyle={styles.nudgeSlot}
+            style={styles.nudgeChip}
+            accessibilityLabel={NUDGE_ASK_LABEL}
+          >
+            <Ionicons name="notifications-outline" size={15} color={theme.colors.ink} />
+            <Text style={styles.nudgeChipText}>{NUDGE_ASK_LABEL}</Text>
+          </PressableScale>
+        )}
+        {/* Both settled states drop the chip's edge and fill on purpose:
+            the ask has been answered, so each is a status now, not a tap
+            target, and nothing about either should still read as pressable.
+            They occupy the ask's own slot so the beat's height never jumps
+            under the answer. */}
+        {nudge === NUDGE_GRANTED && (
+          <View style={[styles.nudgeSlot, styles.nudgeSettled]}>
+            <Ionicons name="checkmark" size={15} color={theme.colors.inkSoft} />
+            <Text style={styles.nudgeSettledText}>{NUDGE_GRANTED_LINE}</Text>
+          </View>
+        )}
+        {nudge === NUDGE_OFF && (
+          <View style={[styles.nudgeSlot, styles.nudgeSettled]}>
+            <Ionicons name="notifications-off-outline" size={15} color={theme.colors.inkSoft} />
+            <Text style={styles.nudgeSettledText}>{NUDGE_DECLINED_LINE}</Text>
+          </View>
+        )}
       </View>
-      <Text style={styles.h1Center}>That's one.</Text>
-      <Text style={styles.bodyLgCenter}>
-        Tomorrow it's two. Do that for a while and you'll have a record of everything you were given.
-      </Text>
-    </View>
-    <PrimaryButton onPress={onNext}>Keep it</PrimaryButton>
-  </StepShell>
-);
+      <PrimaryButton onPress={onNext}>Keep it</PrimaryButton>
+    </StepShell>
+  );
+};
 
 // --- Beat 3: Who — the hero's first client code ---
 //
@@ -910,6 +1050,43 @@ const styles = StyleSheet.create({
   },
   whoActions: {
     marginTop: 8,
+  },
+  // The nudge ask (§2's placement corollary). Quieter than the ink pill,
+  // louder than a decline link — it is the affirmative, and a control that
+  // looked like `declineLinkText` would read as the opposite of what it
+  // does. The chip geometry is `SparkChips`' existing quiet-affirmative
+  // control, not a new shape. Colour is forced: this beat's wash is
+  // `washYellow`, where `accentDeep` measures 2.35:1 and fails 4.5:1 at
+  // every size this text can be — `ink` (15.39:1) and `inkSoft` (5.67:1)
+  // are the legal pair.
+  nudgeSlot: {
+    alignSelf: 'center',
+    marginTop: 22,
+  },
+  nudgeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    backgroundColor: theme.colors.surface,
+    borderWidth: 1,
+    borderColor: theme.colors.surfaceBorder,
+    borderRadius: theme.borderRadius.full,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+  },
+  nudgeChipText: {
+    ...theme.type.bodySm,
+    color: theme.colors.ink,
+  },
+  nudgeSettled: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    paddingVertical: 11,
+  },
+  nudgeSettledText: {
+    ...theme.type.bodySm,
+    color: theme.colors.inkSoft,
   },
   declineLink: {
     alignSelf: 'center',

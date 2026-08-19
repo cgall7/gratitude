@@ -43,6 +43,7 @@ const WINDOW_MODULE = path.join(ROOT, 'src/services/nudgeWindow.js');
 const SERVICE_MODULE = path.join(ROOT, 'src/services/dailyNudge.js');
 const APP_JS = path.join(ROOT, 'App.js');
 const COPY_MODULE = path.join(ROOT, 'src/constants/nudgeCopy.js');
+const ONBOARDING_JS = path.join(ROOT, 'src/screens/Onboarding.js');
 
 let pass = 0;
 let fail = 0;
@@ -135,6 +136,45 @@ const smallestEnclosing = (fns, pos) => {
 // `ours.map((request) => cancel(...))` — the literal smallest enclosing
 // node is that anonymous arrow, which is an implementation detail of
 // `reconcile`, not a second function the spec's row is asking about.
+// Parent pointers. `walk` above is a pure descent and cannot answer "what
+// contains this node" for anything but a position range, which is enough for
+// rows 2a/2b/3 (is a call inside a function) and not enough for row 2c (is a
+// function reached from a JSX prop). Same shape as check-bee-attitude's K7
+// walk: only TYPED nodes are linked, so an intermediate array or plain
+// options object never becomes somebody's parent.
+const parentMap = (root) => {
+  const parents = new Map();
+  const visit = (node, parent) => {
+    if (!node || typeof node !== 'object') return;
+    if (Array.isArray(node)) {
+      node.forEach((n) => visit(n, parent));
+      return;
+    }
+    const typed = typeof node.type === 'string';
+    if (typed) parents.set(node, parent);
+    const next = typed ? node : parent;
+    for (const key of Object.keys(node)) {
+      if (key === 'loc' || key.endsWith('Comments')) continue;
+      visit(node[key], next);
+    }
+  };
+  visit(root, null);
+  return parents;
+};
+
+const ancestorChain = (parents, node) => {
+  const chain = [];
+  let cur = parents.get(node);
+  while (cur) {
+    chain.push(cur);
+    cur = parents.get(cur);
+  }
+  return chain;
+};
+
+const isFunctionNode = (n) =>
+  n.type === 'FunctionDeclaration' || n.type === 'FunctionExpression' || n.type === 'ArrowFunctionExpression';
+
 const namedEnclosing = (fns, pos) => {
   let best = null;
   for (const fn of fns) {
@@ -268,18 +308,59 @@ console.log('\nA. the permission ask is fused');
     }
   }
 
-  // Row 2c — a real caller. Half A ships no Celebration screen yet
-  // (`pixel/one-door`, half B), so there is nothing in src/ that calls
-  // `requestPermissionAndEnable` by name. PENDING, not a fail: the fuse
-  // function is correctly shaped and correctly the only caller of the
-  // native API; it simply has no caller of its own yet.
+  // Row 2c — THE FUSE'S CALL SITE, not merely its existence.
   //
-  // A CALL SITE, not a substring match — App.js's own comments name
-  // `requestPermissionAndEnable` in prose (documenting that it is NOT yet
-  // called), and `src.includes(...)` cannot tell a comment from a call. It
-  // did not, in an earlier draft of this gate: this row misreported PASS
-  // off that exact comment before being caught.
-  const fuseCallers = [];
+  // WHAT THIS ROW USED TO CHECK, AND WHY IT WAS NOT ENOUGH. It walked for a
+  // CallExpression named `requestPermissionAndEnable` anywhere in src/ +
+  // App.js and passed on EXISTENCE — while its own name claimed the call
+  // came "from the Celebration 'yes' handler". Sage wrote the exact §2
+  // defect into CelebrationStep:
+  //
+  //   React.useEffect(() => { requestPermissionAndEnable(); }, []);
+  //
+  // an OS permission dialog on mount with no in-app yes anywhere — and this
+  // row resolved to PASS on it, with all 31 gates green. Rows 2a/2b/3 could
+  // not catch it either: every one of them asserts the position of the
+  // NATIVE `requestPermissionsAsync` call, which lives inside dailyNudge.js
+  // and can only move if someone edits half A. They are frozen green no
+  // matter what half B does. Nothing in the suite looked at the CALLER's
+  // position. The spec asked for the stronger row in §A.2 — "that
+  // function's binding name is the one the Celebration 'yes' handler calls
+  // — resolved by walking from the call site" — and half of it got built.
+  //
+  // So the call must be REACHED FROM A JSX EVENT-HANDLER PROP, by a walk,
+  // in either of the only two shapes that can express one:
+  //
+  //   onPress={() => { ... }}      the handler IS the prop's value
+  //   onPress={handleAskForNudge}  the prop names a function defined here
+  //
+  // and must not sit at module scope or inside a mount effect. Same
+  // downward walk as check-bee-attitude's K7, a different tree.
+  //
+  // AN UNRESOLVED CALL SITE IS A FAIL, NEVER A PASS. A shape this row
+  // cannot classify is a shape it cannot vouch for, and the place a check
+  // declines to have an opinion must not look like the place it has a clean
+  // one.
+  //
+  // ZERO CALLERS IS ALSO A FAIL, and this is the row's PENDING being
+  // retired rather than dropped. It used to report PENDING with the reason
+  // "blocked on pixel/one-door merging" — a condition that fired nine
+  // minutes after the row was authored, and then sat green-ish and unread
+  // for twenty-two hours because PENDING is not red. One-door has merged
+  // and half B is this commit, so the ask existing IS the deliverable: its
+  // absence is a regression, not a not-yet.
+  const HANDLER_PROP = /^on[A-Z]/;
+  const EFFECT_HOOKS = new Set(['useEffect', 'useLayoutEffect', 'useInsertionEffect']);
+  const effectCalleeName = (n) => {
+    if (n.type !== 'CallExpression') return null;
+    if (n.callee?.type === 'Identifier') return EFFECT_HOOKS.has(n.callee.name) ? n.callee.name : null;
+    if (n.callee?.type === 'MemberExpression' && n.callee.property?.type === 'Identifier') {
+      return EFFECT_HOOKS.has(n.callee.property.name) ? n.callee.property.name : null;
+    }
+    return null;
+  };
+
+  const fuseSites = [];
   for (const [file, src] of allSrc) {
     if (file === SERVICE_MODULE) continue;
     let ast;
@@ -288,21 +369,107 @@ console.log('\nA. the permission ask is fused');
     } catch {
       continue;
     }
-    let calls = false;
+
+    // Every function reachable from a handler prop in this file, collected
+    // two ways: the arrow written directly in the prop, and every name the
+    // prop's expression mentions (which covers `onPress={handleX}` and
+    // `onPress={() => handleX()}` and `onPress={a ? b : c}` alike).
+    const inlineHandlerFns = new Set();
+    const handlerNames = new Set();
+    walk(ast.program, (n) => {
+      if (n.type !== 'JSXAttribute') return;
+      const propName = n.name?.type === 'JSXIdentifier' ? n.name.name : null;
+      if (!propName || !HANDLER_PROP.test(propName)) return;
+      if (n.value?.type !== 'JSXExpressionContainer') return;
+      const expr = n.value.expression;
+      if (expr?.type === 'ArrowFunctionExpression' || expr?.type === 'FunctionExpression') {
+        inlineHandlerFns.add(expr);
+      }
+      walk(expr, (m) => {
+        if (m.type === 'Identifier') handlerNames.add(m.name);
+      });
+    });
+
+    // Every name mentioned inside a mount-effect callback. A handler can be
+    // correctly wired to a prop AND ALSO called from an effect — the prop
+    // satisfies the walk while the effect still fires the OS dialog on
+    // mount. Reaching a prop is necessary, not sufficient; the effect set is
+    // what makes it both.
+    const effectReferencedNames = new Set();
+    walk(ast.program, (n) => {
+      if (!effectCalleeName(n)) return;
+      walk(n.arguments ?? [], (m) => {
+        if (m.type === 'Identifier') effectReferencedNames.add(m.name);
+      });
+    });
+
+    const fns = enclosingFunctions(ast);
+    const fnByNode = new Map(fns.map((f) => [f.node, f]));
+    const parents = parentMap(ast.program);
+
     walk(ast.program, (n) => {
       if (n.type !== 'CallExpression') return;
-      if (n.callee?.type === 'Identifier' && n.callee.name === 'requestPermissionAndEnable') calls = true;
-      if (n.callee?.type === 'MemberExpression' && n.callee.property?.name === 'requestPermissionAndEnable') calls = true;
+      const isFuse =
+        (n.callee?.type === 'Identifier' && n.callee.name === 'requestPermissionAndEnable') ||
+        (n.callee?.type === 'MemberExpression' && n.callee.property?.name === 'requestPermissionAndEnable');
+      if (!isFuse) return;
+
+      const where = `${path.relative(ROOT, file)}:${n.loc.start.line}`;
+      const chain = ancestorChain(parents, n);
+      const effect = chain.map(effectCalleeName).find(Boolean);
+      const fnAncestors = chain.filter(isFunctionNode);
+
+      let reached = null;
+      let alsoInEffect = null;
+      for (const anc of fnAncestors) {
+        if (inlineHandlerFns.has(anc)) {
+          reached = 'an inline handler prop';
+          break;
+        }
+        const meta = fnByNode.get(anc);
+        if (meta?.name && handlerNames.has(meta.name)) {
+          reached = `the handler prop naming ${meta.name}`;
+          if (effectReferencedNames.has(meta.name)) alsoInEffect = meta.name;
+          break;
+        }
+      }
+
+      fuseSites.push({
+        where,
+        reached,
+        effect: effect ?? null,
+        alsoInEffect,
+        moduleScope: fnAncestors.length === 0,
+      });
     });
-    if (calls) fuseCallers.push(path.relative(ROOT, file));
   }
-  if (fuseCallers.length > 0) {
-    ok(`row 2c — requestPermissionAndEnable is called from a real call site (${fuseCallers.join(', ')})`);
-  } else {
-    pend(
-      'row 2c — requestPermissionAndEnable is called from the Celebration "yes" handler',
-      "no caller yet — Onboarding.js's Celebration screen is half B, blocked on pixel/one-door merging (spec's ratified split). Re-run this gate once that PR lands and expect this row to resolve to pass or fail.",
+
+  if (fuseSites.length === 0) {
+    bad(
+      'row 2c — every requestPermissionAndEnable call site is reached from a JSX event-handler prop',
+      'zero call sites in src/ + App.js — half B\'s Celebration ask is the only caller this function has ever had, so its absence is a removal of the feature, not a not-yet',
     );
+  } else {
+    const broken = fuseSites.filter((s2) => s2.moduleScope || s2.effect || s2.alsoInEffect || !s2.reached);
+    if (broken.length === 0) {
+      ok(
+        `row 2c — every requestPermissionAndEnable call site is reached from a JSX event-handler prop and none sits in a mount effect or at module scope (${fuseSites
+          .map((s2) => `${s2.where} via ${s2.reached}`)
+          .join(', ')})`,
+      );
+    } else {
+      bad(
+        'row 2c — every requestPermissionAndEnable call site is reached from a JSX event-handler prop and none sits in a mount effect or at module scope',
+        broken
+          .map((s2) => {
+            if (s2.moduleScope) return `${s2.where} is a bare module-level call — the OS dialog fires at import`;
+            if (s2.effect) return `${s2.where} is inside a ${s2.effect} callback — the OS dialog fires on mount, with no in-app yes (§2's fuse)`;
+            if (s2.alsoInEffect) return `${s2.where} is reached from a handler prop, but ${s2.alsoInEffect} is ALSO referenced inside a mount effect — the prop wiring is real and the OS dialog still fires on mount`;
+            return `${s2.where} is inside a function this row could not reach from any on* prop — it may be correct, but an unclassifiable call site is not a vouched-for one`;
+          })
+          .join('; '),
+      );
+    }
   }
 }
 
@@ -493,9 +660,12 @@ const runSweep = (windowDays, buildWindowFn = buildWindow) => {
 // =========================================================================
 console.log('\nD. live-state honesty');
 {
-  // No settings row exists in src/ yet — neither half A nor half B's stated
-  // scope includes one. PENDING, for the same reason row 2c is: the thing
-  // this row checks has no call site to walk yet.
+  // D2 (Sage, 2026-08-19): `src/screens/Account.js` now has the settings row
+  // — its `refreshNudgeState` calls `getPermissionState()` and the same
+  // component renders the `Switch`. Still walked by call site rather than
+  // asserted against a single named file: a second settings surface
+  // (Account.js is not spec-named anywhere as THE home for this) should also
+  // satisfy this row without an edit here.
   //
   // A CALL SITE, not a substring match — same class of bug row 2c had:
   // `src.includes('getPermissionState')` would match a comment naming the
@@ -570,6 +740,218 @@ console.log('\nG. copy ownership (§7 — not wired into run-checks.mjs, see hea
 // =========================================================================
 // H. Mutation matrix (required before §6's rows are trusted)
 // =========================================================================
+console.log('\nI. the ask names a behaviour, and the behaviour is delivered');
+// §4.1's SAVE-SIDE re-arm, and it is a gate row rather than a comment
+// because half B's ask says the condition out loud: "Let me know on days I
+// don't write." A scheduled day only leaves the schedule when `reconcile`
+// runs AGAIN, so a write that is not followed by a re-arm leaves today's
+// nudge armed on a day the user wrote — the consent would be factually
+// wrong about the one behaviour it names (§27.2, on the surface the
+// permission was granted from). Sage measured the sequence; Lumen ruled the
+// fix blocking scope of half B.
+//
+// SCOPE, STATED: this row is about App.js's `onUnlock` write, which is the
+// app's only save with a live session and a user still holding the phone.
+// It is deliberately NOT a universal rule over every `EntryStore.saveEntry`
+// call site, because two of the three sites legitimately do not re-arm and
+// a universal row would need an exemption list to stay green — the
+// Celebration handler reconciles directly (no session to read from), and
+// `pendingOnboardingWrites`' flush writes the day-key the Celebration
+// handler already reconciled against. A rule that needs a door in it is not
+// the rule; this one is stated where it is true.
+//
+// The assertion is SIBLING-POSITIONED, not callee-positioned: it asks
+// whether the function that saves also re-arms, AFTER the save, in source
+// order. Deleting the re-arm reds it; moving it above the save reds it too,
+// because a re-arm that runs before the write reads a day that is not
+// written yet — which is exactly the ordering bug the old comment made.
+const appRearmSites = (() => {
+  const src = allSrc.get(APP_JS);
+  const ast = parseJs(src);
+  const fns = enclosingFunctions(ast);
+  const saves = [];
+  const rearms = [];
+  const navs = [];
+  walk(ast.program, (n) => {
+    if (n.type !== 'CallExpression') return;
+    const c = n.callee;
+    if (c?.type === 'MemberExpression' && c.object?.name === 'EntryStore' && c.property?.name === 'saveEntry') {
+      saves.push(n);
+    }
+    if (c?.type === 'Identifier' && c.name === 'rearmDailyNudge') rearms.push(n);
+    // The ruled PLACEMENT (Lumen, endorsing Sage `250bc4e9`) is that the
+    // re-arm runs AFTER the navigation, so its up-to-six serial schedules
+    // land on a screen that is already gone rather than inside CoreRitual's
+    // held honey-unlock overlay. Row 10 alone is blind to this: it asserts
+    // save -> re-arm and stays green with the re-arm back inside the unlock
+    // (Sage measured exactly that). Collect the navigation call too so the
+    // ordering is held by an assertion instead of by a comment.
+    if (c?.type === 'MemberExpression' && c.property?.name === 'replace'
+        && c.object?.type === 'MemberExpression' && c.object.property?.name === 'navigation') {
+      navs.push(n);
+    }
+  });
+  return { src, fns, saves, rearms, navs };
+})();
+{
+  const { fns, saves, rearms } = appRearmSites;
+  if (saves.length === 0) {
+    bad(
+      'row 10 — App.js\'s entry save is followed by a nudge re-arm in the same function',
+      'no EntryStore.saveEntry call site found in App.js — the write moved and this row is now checking a file that does not do the thing',
+    );
+  } else {
+    const bads = [];
+    for (const save of saves) {
+      const holder = smallestEnclosing(fns, save.start);
+      const after = rearms.filter((r) => holder && r.start >= holder.start && r.start < holder.end && r.start > save.end);
+      const before = rearms.filter((r) => holder && r.start >= holder.start && r.start < holder.end && r.start <= save.end);
+      if (after.length === 0) {
+        const where = before.length > 0 ? 'the only re-arm in that function runs BEFORE the save, so it reads a day that is not written yet' : 'no rearmDailyNudge call in that function at all — today stays armed on a day the user wrote';
+        bads.push(`App.js:${save.loc.start.line} (${holder?.name ?? 'anonymous handler'}) — ${where}`);
+      }
+    }
+    if (bads.length === 0) {
+      const lines = saves.map((sv) => sv.loc.start.line).join(', ');
+      ok(`row 10 — every EntryStore.saveEntry in App.js is followed by rearmDailyNudge in the same function (${saves.length} save site${saves.length > 1 ? 's' : ''}, App.js:${lines})`);
+    } else {
+      bad(
+        'row 10 — every EntryStore.saveEntry in App.js is followed by rearmDailyNudge in the same function',
+        bads.join('; '),
+      );
+    }
+  }
+}
+
+{
+  // row 10b — the ORDER of the two, not merely their presence.
+  const { fns, saves, rearms, navs } = appRearmSites;
+  const offenders = [];
+  for (const save of saves) {
+    const holder = smallestEnclosing(fns, save.start);
+    if (!holder) continue;
+    const inHolder = (n) => n.start >= holder.start && n.start < holder.end;
+    const localNavs = navs.filter(inHolder);
+    const localRearms = rearms.filter((r) => inHolder(r) && r.start > save.end);
+    if (localNavs.length === 0 || localRearms.length === 0) continue;
+    const firstNav = Math.min(...localNavs.map((n) => n.start));
+    const early = localRearms.filter((r) => r.start < firstNav);
+    if (early.length > 0) {
+      offenders.push(`App.js:${early[0].loc.start.line} runs before the navigation at App.js:${localNavs.find((n) => n.start === firstNav).loc.start.line} — up to six serial schedules land inside CoreRitual's held unlock overlay`);
+    }
+  }
+  if (offenders.length === 0) {
+    ok('row 10b — App.js\'s save-side re-arm runs after the navigation, not inside the held unlock overlay');
+  } else {
+    bad('row 10b — App.js\'s save-side re-arm runs after the navigation, not inside the held unlock overlay', offenders.join('; '));
+  }
+}
+
+console.log('\nJ. the ask does not render until its string is ratified');
+// WHY THIS ROW EXISTS, stated plainly because it is a row about my own
+// defect: `nudgeCopy.js` declared a sentinel, described a guard in a comment,
+// and wired NOTHING. `Onboarding.js` hardcoded the WITHDRAWN ask string in
+// two rendered positions, the constant had zero consumers, and I reported the
+// control as not rendering. Sage read the code instead of the comment
+// (`8f4466df`). A SENTINEL WITH NO READER IS NOT A GUARD, IT IS A NOTE.
+//
+// Two assertions, because either alone is satisfiable by the defect:
+//   11a  the sentinel VALUE never reaches a rendered position — catches the
+//        placeholder shipping to a user.
+//   11b  the sentinel has a CONSUMER outside its declaring module — catches
+//        the shape that actually happened, where the value is fine because
+//        nothing reads it and the screen hardcodes its own copy instead.
+{
+  const copySrc = allSrc.get(COPY_MODULE);
+  const sentinel = copySrc && /NUDGE_ASK_PENDING\s*=\s*'([^']+)'/.exec(copySrc)?.[1];
+  if (!sentinel) {
+    bad(
+      'row 11a — the ask sentinel never reaches a rendered position',
+      `could not read NUDGE_ASK_PENDING out of ${path.relative(ROOT, COPY_MODULE)} — the sentinel was renamed or removed, and this row cannot tell whether it still ships`,
+    );
+  } else {
+    const leaks = [];
+    for (const [file, src] of allSrc) {
+      if (file === COPY_MODULE) continue;
+      const ast = parseJs(src);
+      walk(ast.program, (n) => {
+        if (n.type === 'StringLiteral' && n.value.includes(sentinel)) {
+          leaks.push(`${path.relative(ROOT, file)}:${n.loc.start.line}`);
+        }
+      });
+    }
+    if (leaks.length === 0) {
+      ok(`row 11a — the ask sentinel ${JSON.stringify(sentinel)} appears nowhere outside its own module`);
+    } else {
+      bad('row 11a — the ask sentinel never reaches a rendered position', `sentinel literal found at ${leaks.join(', ')}`);
+    }
+  }
+
+  // 11b — the readiness flag must be READ by the screen that owns the beat.
+  // Asserting the import alone would pass on an unused import, so this walks
+  // for an actual reference in Onboarding's own tree.
+  const onbSrc = allSrc.get(ONBOARDING_JS);
+  if (!onbSrc) {
+    bad('row 11b — the ask control is gated on the ratified-string flag', 'Onboarding.js not readable');
+  } else {
+    const ast = parseJs(onbSrc);
+    let readsReady = 0;
+    let readsLabel = 0;
+    let withdrawnLiteral = null;
+    walk(ast.program, (n) => {
+      if (n.type === 'Identifier' && n.name === 'NUDGE_ASK_READY') readsReady += 1;
+      if (n.type === 'Identifier' && n.name === 'NUDGE_ASK_LABEL') readsLabel += 1;
+      // The ask's own words may not be a literal in the screen: copy is
+      // Deezine's and lives in the constants module. Any literal starting
+      // "Let me know" is a hardcoded ask by construction.
+      if (n.type === 'StringLiteral' && /^Let me know/i.test(n.value)) {
+        withdrawnLiteral = `${path.relative(ROOT, ONBOARDING_JS)}:${n.loc.start.line} ${JSON.stringify(n.value)}`;
+      }
+    });
+    if (withdrawnLiteral) {
+      bad('row 11b — the ask control is gated on the ratified-string flag', `the ask is a hardcoded literal in the screen: ${withdrawnLiteral} — copy belongs to nudgeCopy.js, and a literal here cannot be withdrawn by editing the constant`);
+    } else if (readsReady < 1 || readsLabel < 1) {
+      bad('row 11b — the ask control is gated on the ratified-string flag', `Onboarding.js references NUDGE_ASK_READY ${readsReady}x and NUDGE_ASK_LABEL ${readsLabel}x — both must be read, or the sentinel guards nothing`);
+    } else {
+      ok(`row 11b — Onboarding.js gates the ask on NUDGE_ASK_READY and renders NUDGE_ASK_LABEL (no hardcoded ask literal)`);
+    }
+  }
+}
+
+console.log('\nK. the Celebration ask\'s own copy (§7 item, Lumen\'s — D6)');
+// D6 (Sage, 2026-08-19): half B merges DARK — `NUDGE_ASK_LABEL` still holds
+// `NUDGE_ASK_PENDING` while Lumen's copy call is outstanding, and that is a
+// SELF-CLEARING PENDING row here, not a FAIL.
+//
+// THIS IS A DIFFERENT SHAPE FROM SECTION G ON PURPOSE. Section G's row FAILS
+// LOUDLY while `NUDGE_TITLE`/`NUDGE_BODY` hold the sentinel, because §7 ruled
+// half A literally cannot ship without that copy — `reconcile()` throws with
+// no content, so an unshipped title/body is a shipped defect (nothing
+// schedules, ever). The ask has no such dependent: rows 11a/11b already
+// assert the control does not render and the sentinel never reaches a
+// rendered position while `NUDGE_ASK_LABEL === NUDGE_ASK_PENDING` — so an
+// unratified ask ships nothing broken, only nothing yet. Sage's ruling is
+// that the aggregate suite should not carry a standing red for a copy call
+// that is scoped to a named owner (Lumen) and has its own tracked ask, the
+// same reasoning `run-checks.mjs`'s PENDING state exists to hold.
+//
+// SELF-CLEARING: this row re-evaluates `nudgeCopy.js` on every run. The
+// moment `NUDGE_ASK_LABEL` stops equalling `NUDGE_ASK_PENDING`, this flips to
+// `ok` with no other edit required — same mechanism as row 8's PENDING,
+// which self-clears the day a settings row calls `getPermissionState`.
+{
+  const copySrc = allSrc.get(COPY_MODULE);
+  const copyMod = await importModule(copySrc);
+  if (copyMod.NUDGE_ASK_LABEL === copyMod.NUDGE_ASK_PENDING) {
+    pend(
+      "row 12 — the Celebration ask's own copy (NUDGE_ASK_LABEL) is ratified",
+      'NUDGE_ASK_LABEL still holds NUDGE_ASK_PENDING (\'__OWNED_BY_DEEZINE__\') — Lumen\'s D5 call. Merged dark per Sage\'s D6 ruling (2026-08-19): rows 11a/11b already prove the sentinel never reaches a rendered position and the control does not render while this holds, so there is no shipped defect to fail on, only an open copy call. Self-clears the moment NUDGE_ASK_LABEL stops equalling NUDGE_ASK_PENDING.',
+    );
+  } else {
+    ok("row 12 — the Celebration ask's own copy (NUDGE_ASK_LABEL) is ratified (no longer the sentinel)");
+  }
+}
+
 console.log('\nH. mutation matrix');
 {
   // SHOULD-PASS — renaming the window builder's internals must not move any
