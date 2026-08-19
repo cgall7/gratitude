@@ -92,6 +92,27 @@ export const HiveDetailScreen = ({ navigation, route }) => {
         <Text style={[styles.bannerCount, { color: cover.textColor }]}>{memoryLabel}</Text>
       </View>
 
+      {entries.length > 0 && (
+        <PressableScale
+          onPress={() =>
+            navigation.navigate('MemoryLane', {
+              hiveId,
+              subjectName: hive.subjectName,
+              coverTheme: hive.coverTheme,
+            })
+          }
+          style={styles.memoryLaneRow}
+          containerStyle={styles.memoryLaneContainer}
+          accessibilityLabel="Take a trip down memory lane"
+        >
+          <View style={styles.memoryLaneContent}>
+            <Ionicons name="sparkles" size={18} color={theme.colors.accentDeep} />
+            <Text style={styles.memoryLaneText}>Trip Down Memory Lane</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={theme.colors.inkSoft} />
+        </PressableScale>
+      )}
+
       <FlatList
         data={entries}
         keyExtractor={(item) => item.id}
@@ -171,6 +192,31 @@ const styles = StyleSheet.create({
   bannerCount: {
     ...theme.type.bodySm,
     marginTop: 4,
+  },
+  memoryLaneContainer: {
+    marginHorizontal: 24,
+    marginTop: 16,
+  },
+  memoryLaneRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.borderRadius.medium,
+    paddingVertical: 14,
+    paddingHorizontal: 18,
+    borderWidth: 1,
+    borderColor: theme.colors.surfaceBorder,
+  },
+  memoryLaneContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  memoryLaneText: {
+    ...theme.type.bodySm,
+    color: theme.colors.ink,
+    fontFamily: theme.fonts.bodySemiBold,
   },
   list: {
     padding: 24,

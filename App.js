@@ -19,6 +19,7 @@ import { SeedsInbox } from './src/screens/SeedsInbox';
 import { CreateHiveFlow } from './src/screens/CreateHive';
 import { HiveDetailScreen } from './src/screens/HiveDetail';
 import { ComposeHiveEntryScreen } from './src/screens/ComposeHiveEntry';
+import { MemoryLaneScreen } from './src/screens/MemoryLane';
 import { PollinateWrapped } from './src/screens/PollinateWrapped';
 import { MainTabs } from './src/navigation/MainTabs';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
@@ -249,6 +250,12 @@ export default function App() {
             <Stack.Screen name="CreateHive" component={CreateHiveFlow} />
             <Stack.Screen name="HiveDetail" component={HiveDetailScreen} />
             <Stack.Screen name="ComposeHiveEntry" component={ComposeHiveEntryScreen} />
+            {/* 8b.4 Trip Down Memory Lane — the author's bloom moment, first of
+                the reveal engine's two mount points (`revealSequencer.js`
+                header). Pushed from HiveDetail, not modal, for the same
+                reason as its siblings above: this is a place you go, not a
+                sheet over the place you were. */}
+            <Stack.Screen name="MemoryLane" component={MemoryLaneScreen} />
 
             <Stack.Screen name="Legal" component={LegalScreen} options={{ presentation: 'modal' }} />
 
