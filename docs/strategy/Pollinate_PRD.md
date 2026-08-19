@@ -155,7 +155,7 @@ A Private Hive is a personal gratitude journal you keep FOR someone close to you
 3. **The hive grows:** Your entries accumulate in a beautiful, living space. A quiet counter tracks how many moments you've captured. The hive breathes — entries drift gently, photos warm the space, the cover evolves as more entries are added.
 4. **Trip Down Memory Lane:** On your review cadence (monthly or yearly), Pollinate sends a push notification: *"It's time to revisit your hive for [Name]. 12 moments of gratitude are waiting."* You open the hive and entries appear one by one — a guided, animated walk through everything you've written. Each entry blooms into view. Photos, words, memories. It's reflective, warm, and genuinely fun. This is the author's bloom moment.
 5. **Seal, then (optionally) Send — two acts, decoupled (2026-08-17 amendment):** After the review, when the hive is ready, you **seal** it — the author's completion act. Sealing selects entries into a curated collection, adds a note, and finishes the keepsake. It requires no recipient — a hive for a grandmother, a six-year-old, or someone you've lost completes here. **Send is a separate, optional step:** if the person is a connected friend, send the sealed package in-app. The recipient gets a notification: *"Colin packaged [N] moments of gratitude for you."* They open it, and your collected memories bloom for them — one by one, with the same beautiful animation.
-6. **Reply:** Recipient can react, reply, or start their own hive for someone.
+6. **Reply → Slice 1.1** (ruled 2026-08-17; Slices row 8b.8 owns the deferral): in Slice 1 the opened package ends with a plain Close. A moved recipient responds by starting their own hive — the same creation flow as step 1.
 
 #### The Emotional Design
 
@@ -196,7 +196,7 @@ The review prompt is the app's core re-engagement mechanic. It's not a notificat
 - User can select entries from a hive to package into a curated collection
 - User can send a package to a connected friend in the app
 - Recipient receives notification and can open the package with bloom animation
-- Recipient can react and reply to received packages
+- Package-open ends with a plain Close — react/reply are Slice 1.1, not acceptance criteria here (Slices row 8b.8, ruled 2026-08-17)
 - Package contents visible ONLY to the recipient (enforced by Supabase RLS)
 - Feed event created when a package is sent (with appropriate privacy — "Colin sent gratitude to [Name]" without revealing contents)
 - Bloom animation for both review and package-open is smooth, emotional, and gorgeous
