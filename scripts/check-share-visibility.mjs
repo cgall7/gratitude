@@ -401,6 +401,138 @@ async function main() {
     );
   }
 
+  // --- send_hive (8b.5, 20260819000001_private_hives_send) -------------------
+  // The recipient read-access ruling's whole point: flipping visibility to
+  // 'sent' has to actually deliver the entry, and only to the hive's
+  // subject, and only once send_hive() has run. ALICE/BOB's accepted
+  // connection above is reused as owner/subject.
+  console.log('\n  send_hive (8b.5 recipient read-access ruling)');
+
+  const insertHive = async (subjectId, subjectName) =>
+    (
+      await readAs(
+        ALICE,
+        `insert into public.private_hives (owner_id, subject_name, subject_profile_id)
+         values ($1, $2, $3) returning id`,
+        [ALICE, subjectName, subjectId]
+      )
+    )[0].id;
+  const sealHive = (id) => readAs(ALICE, 'update public.private_hives set sealed_at = now() where id = $1', [id]);
+  const insertEntry = async (hiveId, content, visibility = 'packaged') =>
+    (
+      await readAs(
+        ALICE,
+        `insert into public.entries (user_id, hive_id, content, entry_date, visibility)
+         values ($1, $2, $3, '2026-08-01', $4) returning id`,
+        [ALICE, hiveId, content, visibility]
+      )
+    )[0].id;
+
+  const hiveId = await insertHive(BOB, 'Bob');
+  const packagedEntry = await insertEntry(hiveId, 'grateful for Bob');
+  await sealHive(hiveId);
+
+  const bobBeforeHive = await readAs(BOB, 'select id from public.private_hives where id = $1', [hiveId]);
+  if (bobBeforeHive.length === 0) ok('the subject cannot read the hive before send_hive');
+  else bad('the subject cannot read the hive before send_hive', `LEAK: Bob read ${JSON.stringify(bobBeforeHive)}`);
+
+  const bobBeforeEntry = await readAs(BOB, 'select id from public.entries where id = $1', [packagedEntry]);
+  if (bobBeforeEntry.length === 0) ok('the subject cannot read a packaged entry before send_hive');
+  else bad('the subject cannot read a packaged entry before send_hive', `LEAK: Bob read ${JSON.stringify(bobBeforeEntry)}`);
+
+  try {
+    await readAs(ALICE, 'select public.send_hive($1)', [hiveId]);
+    ok('send_hive succeeds for the owner of a sealed hive with a connected subject');
+  } catch (e) {
+    bad('send_hive succeeds for the owner', e.message.split('\n')[0]);
+  }
+
+  const bobReadsHive = await readAs(BOB, 'select sent_at from public.private_hives where id = $1', [hiveId]);
+  if (bobReadsHive.length === 1 && bobReadsHive[0].sent_at) ok('the subject reads the hive once sent_at is set');
+  else bad('the subject reads the hive once sent', `Bob read ${JSON.stringify(bobReadsHive)}`);
+
+  const bobReadsEntry = await readAs(BOB, 'select content from public.entries where id = $1', [packagedEntry]);
+  if (bobReadsEntry.length === 1) ok('the subject reads the sent entry');
+  else bad('the subject reads the sent entry', `Bob read ${JSON.stringify(bobReadsEntry)}`);
+
+  const malloryReadsHive = await readAs(MALLORY, 'select id from public.private_hives where id = $1', [hiveId]);
+  if (malloryReadsHive.length === 0) ok('an unconnected user cannot read the sent hive');
+  else bad('an unconnected user cannot read the sent hive', `LEAK: Mallory read ${JSON.stringify(malloryReadsHive)}`);
+
+  const malloryReadsEntry = await readAs(MALLORY, 'select content from public.entries where id = $1', [packagedEntry]);
+  if (malloryReadsEntry.length === 0) ok('an unconnected user cannot read the sent entry');
+  else bad('an unconnected user cannot read the sent entry', `LEAK: Mallory read ${JSON.stringify(malloryReadsEntry)}`);
+
+  // send_hive only flips 'packaged' rows — an entry left at the default
+  // 'private' in a sent hive is never delivered, curated or not.
+  const hiveId2 = await insertHive(BOB, 'Bob again');
+  const unpackagedEntry = await insertEntry(hiveId2, 'not curated', 'private');
+  await sealHive(hiveId2);
+  await readAs(ALICE, 'select public.send_hive($1)', [hiveId2]);
+  const bobReadsUnpackaged = await readAs(BOB, 'select content from public.entries where id = $1', [unpackagedEntry]);
+  if (bobReadsUnpackaged.length === 0) ok('send_hive never delivers an entry that was never packaged');
+  else bad('send_hive never delivers an unpackaged entry', `LEAK: Bob read ${JSON.stringify(bobReadsUnpackaged)}`);
+
+  // Guard rails: unsealed, unconnected-subject, and double-send all refuse,
+  // each for the stated reason rather than any error.
+  const unsealedHive = await insertHive(BOB, 'Draft');
+  try {
+    await readAs(ALICE, 'select public.send_hive($1)', [unsealedHive]);
+    bad('send_hive refuses an unsealed hive', 'the send succeeded');
+  } catch (e) {
+    /sealed/.test(e.message)
+      ? ok('send_hive refuses an unsealed hive')
+      : bad('send_hive refuses an unsealed hive', `wrong reason: ${e.message.split('\n')[0]}`);
+  }
+
+  const noConnHive = await insertHive(MALLORY, 'Mallory');
+  await sealHive(noConnHive);
+  try {
+    await readAs(ALICE, 'select public.send_hive($1)', [noConnHive]);
+    bad('send_hive refuses a subject who is not a connected friend', 'the send succeeded');
+  } catch (e) {
+    /connected/.test(e.message)
+      ? ok('send_hive refuses a subject who is not a connected friend')
+      : bad('send_hive refuses a subject who is not a connected friend', `wrong reason: ${e.message.split('\n')[0]}`);
+  }
+
+  try {
+    await readAs(ALICE, 'select public.send_hive($1)', [hiveId]);
+    bad('send_hive refuses to send an already-sent hive twice', 'the second send succeeded');
+  } catch (e) {
+    /already been sent/.test(e.message)
+      ? ok('send_hive refuses to send an already-sent hive twice')
+      : bad('send_hive refuses to send an already-sent hive twice', `wrong reason: ${e.message.split('\n')[0]}`);
+  }
+
+  // --- entries_update_own mirror guard: shares -> hive_id closes (20260819000001) ---
+  // Direction one (hive entry can't acquire a shares row) was already closed
+  // by owns_entry(); this is direction two.
+  console.log('\n  entries_update_own mirror guard (a shared entry cannot acquire a hive_id)');
+
+  const guardHive = await insertHive(null, 'Guard');
+
+  try {
+    await readAs(ALICE, 'update public.entries set hive_id = $1 where id = $2', [guardHive, unshared]);
+    ok('an entry with no shares row can still acquire a hive_id (control)');
+  } catch (e) {
+    bad('an entry with no shares row can still acquire a hive_id (control)', e.message.split('\n')[0]);
+  }
+
+  try {
+    await readAs(ALICE, 'update public.entries set hive_id = $1 where id = $2', [guardHive, shared]);
+    bad('an entry with a shares row cannot acquire a hive_id', 'the reparent succeeded — direction two of the feed/hive coupling is open');
+  } catch (e) {
+    ok('an entry with a shares row cannot acquire a hive_id');
+  }
+
+  try {
+    await readAs(ALICE, "update public.entries set content = 'edited, still shared' where id = $1", [shared]);
+    ok('editing a shared journal entry (no hive_id change) still succeeds');
+  } catch (e) {
+    bad('editing a shared journal entry (no hive_id change) still succeeds', e.message.split('\n')[0]);
+  }
+
   await client.end();
   await pg.stop();
   fs.rmSync(dataDir, { recursive: true, force: true });

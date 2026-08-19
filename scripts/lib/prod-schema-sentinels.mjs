@@ -54,4 +54,5 @@ export const SENTINELS = {
   '20260815000006_private_hives_sealed_entries_immutable': { kind: 'order', reason: 'policy replace only' },
   '20260817000001_harden_definer_search_path': { kind: 'order', reason: 'ALTER FUNCTION SET search_path only' },
   '20260817000002_private_hives_cover_and_cadence': { kind: 'column', table: 'private_hives', column: 'cover_theme' },
+  '20260819000001_private_hives_send': { kind: 'column', table: 'private_hives', column: 'sent_at' },
 };
