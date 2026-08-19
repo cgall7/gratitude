@@ -19,6 +19,8 @@ import { SeedsInbox } from './src/screens/SeedsInbox';
 import { CreateHiveFlow } from './src/screens/CreateHive';
 import { HiveDetailScreen } from './src/screens/HiveDetail';
 import { ComposeHiveEntryScreen } from './src/screens/ComposeHiveEntry';
+import { SealHiveScreen } from './src/screens/SealHive';
+import { SendHiveScreen } from './src/screens/SendHive';
 import { MemoryLaneScreen } from './src/screens/MemoryLane';
 import { ReceivedPackagesScreen } from './src/screens/ReceivedPackages';
 import { PackageOpenScreen } from './src/screens/PackageOpen';
@@ -252,6 +254,13 @@ export default function App() {
             <Stack.Screen name="CreateHive" component={CreateHiveFlow} />
             <Stack.Screen name="HiveDetail" component={HiveDetailScreen} />
             <Stack.Screen name="ComposeHiveEntry" component={ComposeHiveEntryScreen} />
+            {/* Seal/Send (thread b57ad406, 2026-08-19 — the gap Fizz/Bumble/Sage
+                found: the 8b.2-8b.7 arc was live at the data layer with no
+                button anywhere to trigger it). Design Language §5-6, condensed
+                per Lumen's ruling same thread. Both plain pushes, same
+                reasoning as their HiveDetail siblings. */}
+            <Stack.Screen name="SealHive" component={SealHiveScreen} />
+            <Stack.Screen name="SendHive" component={SendHiveScreen} />
             {/* 8b.4 Trip Down Memory Lane — the author's bloom moment, first of
                 the reveal engine's two mount points (`revealSequencer.js`
                 header). Pushed from HiveDetail, not modal, for the same

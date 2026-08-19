@@ -4,6 +4,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../constants/theme';
 import { HiveStore } from '../services/HiveStore';
+import { HoneycombStore } from '../services/HoneycombStore';
 import { hiveCoverTheme } from '../constants/hiveThemes';
 import { PressableScale } from '../components/PressableScale';
 import { PrimaryButton } from '../components/PrimaryButton';
@@ -20,17 +21,23 @@ const longDate = (isoDate) => {
   });
 };
 
-// 8b.3 — entry list for one hive (Design Language §3). Read/write-only for
-// this PR: no seal button here yet (8b.5 is merge-gated on migrations
-// …000003–000006 landing on prod) and no edit-in-place (not in 8b.3's
-// literal scope — "Author can add entries ... Entry list view with
-// chronological ordering").
+// 8b.3 — entry list for one hive (Design Language §3), plus the seal/send
+// entry points (§5-6, thread b57ad406 2026-08-19 — the gap found after
+// 8b.2-8b.7 shipped with no way to trigger any of it). No edit-in-place
+// (not in 8b.3's literal scope — "Author can add entries ... Entry list
+// view with chronological ordering").
 export const HiveDetailScreen = ({ navigation, route }) => {
   const { hiveId } = route.params;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [hive, setHive] = useState(null);
   const [entries, setEntries] = useState([]);
+  // §11 "Send only works for connected friends" — the subject may be a
+  // registered profile who has since unfriended, or was never one to begin
+  // with. Only fetched when it could matter (sealed, has a subject, not
+  // sent yet) so an unsealed hive's screen never pays for a connections
+  // round trip it can't use.
+  const [subjectIsFriend, setSubjectIsFriend] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -45,6 +52,14 @@ export const HiveDetailScreen = ({ navigation, route }) => {
           setError(false);
           setHive(hiveData);
           setEntries(entryList);
+
+          if (hiveData?.sealedAt && hiveData?.subjectProfileId && !hiveData?.sentAt) {
+            const connections = await HoneycombStore.listConnections();
+            if (cancelled) return;
+            setSubjectIsFriend(connections.some((c) => c.id === hiveData.subjectProfileId));
+          } else {
+            setSubjectIsFriend(false);
+          }
         } catch (err) {
           if (cancelled) return;
           console.warn('HiveDetailScreen: failed to load hive', err);
@@ -113,6 +128,48 @@ export const HiveDetailScreen = ({ navigation, route }) => {
         </PressableScale>
       )}
 
+      {!hive.sealedAt && entries.length > 0 && (
+        <PressableScale
+          onPress={() =>
+            navigation.navigate('SealHive', {
+              hiveId,
+              subjectName: hive.subjectName,
+              coverTheme: hive.coverTheme,
+            })
+          }
+          style={styles.memoryLaneRow}
+          containerStyle={styles.memoryLaneContainer}
+          accessibilityLabel="Seal this keepsake"
+        >
+          <View style={styles.memoryLaneContent}>
+            <Ionicons name="lock-closed" size={18} color={theme.colors.accentDeep} />
+            <Text style={styles.memoryLaneText}>Seal This Keepsake</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={theme.colors.inkSoft} />
+        </PressableScale>
+      )}
+
+      {hive.sealedAt && subjectIsFriend && (
+        <PressableScale
+          onPress={() =>
+            navigation.navigate('SendHive', {
+              hiveId,
+              subjectName: hive.subjectName,
+              coverTheme: hive.coverTheme,
+            })
+          }
+          style={styles.memoryLaneRow}
+          containerStyle={styles.memoryLaneContainer}
+          accessibilityLabel={`Send to ${hive.subjectName}`}
+        >
+          <View style={styles.memoryLaneContent}>
+            <Ionicons name="paper-plane" size={18} color={theme.colors.accentDeep} />
+            <Text style={styles.memoryLaneText}>Send to {hive.subjectName}</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={theme.colors.inkSoft} />
+        </PressableScale>
+      )}
+
       <FlatList
         data={entries}
         keyExtractor={(item) => item.id}
@@ -135,7 +192,9 @@ export const HiveDetailScreen = ({ navigation, route }) => {
 
       {hive.sealedAt ? (
         <View style={styles.footer}>
-          <Text style={styles.sealedNote}>This hive is sealed — entries are read-only.</Text>
+          <Text style={styles.sealedNote}>
+            {hive.sentAt ? `Sent to ${hive.subjectName}.` : 'This hive is sealed — entries are read-only.'}
+          </Text>
         </View>
       ) : (
         <View style={styles.footer}>
