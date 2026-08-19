@@ -39,7 +39,6 @@ export const TodayTab = ({ navigation }) => {
   const [error, setError] = useState(false);
   const [entry, setEntry] = useState(null);
   const [streak, setStreak] = useState(0);
-  const [total, setTotal] = useState(0);
   // §32.2 — where the bee may land, held by the screen and read by the flight.
   // Membership only: the coordinates are measured at the moment of choosing,
   // so scrolling this list does not touch this value and does not re-render.
@@ -68,8 +67,6 @@ export const TodayTab = ({ navigation }) => {
           // Recap's badge disagree on the same day (Pixel, thread 19e90cf8,
           // 2026-08-13). "THIS YEAR" stays year-scoped — it says so.
           setStreak(currentStreak(allEntries, now));
-          const currentYear = String(now.getFullYear());
-          setTotal(allEntries.filter((e) => e.date.startsWith(currentYear)).length);
         } catch (err) {
           // requireUserId (EntryStore.js) throws 'Not signed in' with no
           // session — reachable via DEMO_MODE's Welcome skip link, which
@@ -90,7 +87,6 @@ export const TodayTab = ({ navigation }) => {
           setError(true);
           setEntry(null);
           setStreak(0);
-          setTotal(0);
         } finally {
           if (!cancelled) setLoading(false);
         }
@@ -178,35 +174,27 @@ export const TodayTab = ({ navigation }) => {
             ≥44pt span is asserted by `check-bee-attitude` row K4 ("the set is
             not a column") against these declarations, so a later edit that
             quietly puts them back in a column fails rather than ships. K4
-            checks the unconditional subset too: an extent that rests on the
-            conditional badge is an extent some render state does not have. */}
-        <StaggeredItem index={0}>
-          <PerchAnchor id="streak-card" on="left" at={0.5}>
-          <View style={[styles.streakCard, error && { backgroundColor: theme.colors.surface }]}>
-            {error ? (
-              // No numeral, no caption — both are assertions about a user
-              // we failed to read, not one who wrote nothing (Pixel, thread
-              // 19e90cf8). Placeholder copy; Deezine's when §23 lands.
-              <Text style={styles.streakCaption}>We couldn't reach your journal.</Text>
-            ) : (
-              <>
-                <Text style={styles.streakCaption}>{streakCaption(streak)}</Text>
-                <View style={styles.statDivider} />
-                <View style={styles.statRow}>
-                  <View style={styles.stat}>
-                    <Text style={styles.statValue}>{streak}</Text>
-                    <Text style={styles.statLabel}>DAY STREAK</Text>
-                  </View>
-                  <View style={styles.stat}>
-                    <Text style={styles.statValue}>{total}</Text>
-                    <Text style={styles.statLabel}>THIS YEAR</Text>
-                  </View>
-                </View>
-              </>
-            )}
-          </View>
-          </PerchAnchor>
-        </StaggeredItem>
+            checks the unconditional subset too: an extent that rests on a
+            conditional anchor is an extent some render state does not have —
+            here that subset is entry-card (right) + hive-shelf (left), which
+            is why the shelf sits left after the quiet-page cut removed the
+            footer that used to carry the left side. */}
+
+        {/* The streak, spoken instead of scored (Colin, UX Design thread
+            2026-08-17: quiet morning page). The scoreboard card's numerals
+            duplicated the header badge ("7") and Recap's year count; what
+            survives is the one line that was ever a goal rather than a
+            number. Hidden on error — a streak caption is an assertion about
+            a user we failed to read, not one who wrote nothing (Pixel,
+            thread 19e90cf8); the entry card below carries the error copy
+            alone, where before this state said it twice. */}
+        {!error && (
+          <StaggeredItem index={0}>
+            <PerchAnchor id="streak-whisper" on="left" at={0.5}>
+              <Text style={styles.whisper}>{streakCaption(streak)}</Text>
+            </PerchAnchor>
+          </StaggeredItem>
+        )}
 
         <StaggeredItem index={1}>
           <PerchAnchor id="entry-card" on="right" at={0.5}>
@@ -240,31 +228,17 @@ export const TodayTab = ({ navigation }) => {
           </PerchAnchor>
         </StaggeredItem>
 
-        {/* The written state's fourth anchor, and the reason the written state
-            is the RICHER one rather than the poorer one — Sage's §1 retraction
-            (2026-08-17). Counting affordances stops at the Write button and
-            gets 2 here; counting structural units, which is the declared rule,
-            finds this footer and gets 4. It is declared by being wrapped, so
-            the count is a consequence of this JSX and cannot drift from a
-            table that says what the JSX does. */}
-        {entry && (
-          <StaggeredItem index={2}>
-            <PerchAnchor id="footer" on="left" at={0.5}>
-              <Text style={styles.footerText}>
-                Saved. Your day is open. Share it with your hive, or come back tomorrow.
-              </Text>
-            </PerchAnchor>
-          </StaggeredItem>
-        )}
-
-        {/* Private Hives shelf (8b.2/8b.3, WP-1 §26.1). Indices 1–2 above
+        {/* Private Hives shelf (8b.2/8b.3, WP-1 §26.1). Indices 0–1 above
             are the journal's; this is the next cascade step, so the two
-            shelves settle in reading order. `hivesError` never blanks the
+            shelves settle in reading order. The written-state footer that
+            used to sit between them narrated exactly what this shelf now IS
+            ("share it with your hive") — the affordance replaced its own
+            caption in the quiet-page cut. `hivesError` never blanks the
             shelf into nothing — the door card still renders, since it's a
             local navigation target with no data dependency, same reasoning
             as the journal's own error branch not hiding its CTA. */}
-        <StaggeredItem index={3}>
-          <PerchAnchor id="hive-shelf" on="right" at={0.5}>
+        <StaggeredItem index={2}>
+          <PerchAnchor id="hive-shelf" on="left" at={0.5}>
           <View style={styles.hiveShelf}>
             <Text style={styles.shelfLabel}>PRIVATE HIVES</Text>
             <ScrollView
@@ -307,37 +281,10 @@ const styles = StyleSheet.create({
     paddingTop: 72,
     paddingBottom: TAB_CLEARANCE,
   },
-  streakCard: {
-    backgroundColor: theme.colors.washYellow,
-    borderRadius: theme.borderRadius.large,
-    padding: 24,
-    marginBottom: 16,
-  },
-  streakCaption: {
-    ...theme.type.bodyLg,
-    color: theme.colors.ink,
-    textAlign: 'center',
-  },
-  statDivider: {
-    height: 1,
-    backgroundColor: theme.colors.surfaceBorderStrong,
-    marginVertical: 20,
-  },
-  statRow: {
-    flexDirection: 'row',
-  },
-  stat: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  statValue: {
-    ...theme.type.display,
-    color: theme.colors.accentDeep,
-  },
-  statLabel: {
-    ...theme.type.label,
+  whisper: {
+    ...theme.type.bodySm,
     color: theme.colors.inkSoft,
-    marginTop: 4,
+    marginBottom: 16,
   },
   emptyCard: {
     backgroundColor: theme.colors.surface,
@@ -365,7 +312,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: theme.colors.surfaceBorder,
     borderRadius: theme.borderRadius.large,
-    padding: 28,
+    paddingHorizontal: 28,
+    paddingVertical: 40,
     alignItems: 'center',
     ...theme.shadows.card,
   },
@@ -381,16 +329,10 @@ const styles = StyleSheet.create({
   },
   gratitudeText: {
     fontFamily: theme.fonts.bodyItalic,
-    fontSize: 24,
+    fontSize: 26,
     color: theme.colors.ink,
     textAlign: 'center',
-    lineHeight: 34,
-  },
-  footerText: {
-    ...theme.type.bodySm,
-    color: theme.colors.inkSoft,
-    textAlign: 'center',
-    marginTop: 20,
+    lineHeight: 37,
   },
   hiveShelf: {
     marginTop: 28,
