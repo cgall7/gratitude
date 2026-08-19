@@ -33,7 +33,13 @@ const check = (label, ok) => {
 
 const store = read('src/services/HiveStore.js');
 const selects = [...store.matchAll(/\.from\('private_hives'\)[\s\S]{0,120}?\.select\('([^']*)'\)/g)].map((m) => m[1]);
-check('HiveStore.js has exactly three private_hives selects', selects.length === 3);
+// Five as of 8b.6 (`listReceivedPackages`/`getReceivedPackage` — the
+// recipient's two subject-scoped reads, joining the owner-scoped
+// createHive/listHives/getHive this gate originally counted). The count is
+// not a ceiling; it exists so a new private_hives select added later has to
+// touch this line, which is what keeps it from carrying sealed_at by
+// omission the way the original three did.
+check('HiveStore.js has exactly five private_hives selects', selects.length === 5);
 check(
   'every private_hives select names sealed_at',
   selects.length > 0 && selects.every((cols) => cols.split(',').map((c) => c.trim()).includes('sealed_at'))

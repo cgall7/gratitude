@@ -544,6 +544,18 @@ const HoneycombFeed = () => {
             >
               <Ionicons name="mail-outline" size={22} color={theme.colors.ink} />
             </PressableScale>
+            {/* 8b.6's discovery door — same placement reasoning as Seeds/Notes
+                above (a compose/open screen nothing points at is untested
+                dead code): the header beside them is the only surface that
+                already has this shape. Moving it is Project 10's call, same
+                note the two icons above already carry. */}
+            <PressableScale
+              onPress={() => navigation.getParent()?.navigate('ReceivedPackages')}
+              haptic={null}
+              accessibilityLabel="Sent to you"
+            >
+              <Ionicons name="gift-outline" size={22} color={theme.colors.ink} />
+            </PressableScale>
           </PerchAnchor>
         }
       />
