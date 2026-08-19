@@ -26,21 +26,22 @@ import { EntryStore } from './src/services/EntryStore';
 import { tagEntry } from './src/utils/themeTagger';
 import { DEMO_MODE } from './src/constants/demoMode';
 import { resolveInitialRouteWithTimeout } from './src/utils/resolveInitialRoute';
-import { reconcile as reconcileDailyNudge, isNudgeResponse, WINDOW_DAYS as NUDGE_WINDOW_DAYS } from './src/services/dailyNudge';
-import { NUDGE_TITLE, NUDGE_BODY } from './src/constants/nudgeCopy';
+import { isNudgeResponse } from './src/services/dailyNudge';
+import { rearmDailyNudge } from './src/services/rearmDailyNudge';
 
 const Stack = createStackNavigator();
 
 // Daily Nudge half A (`PLANS/DAILY_NUDGE_SPEC.md` §4.1) — re-arm the window
-// on every foreground. `reconcile()` itself no-ops until half B's Celebration
-// "yes" ever sets the enabled flag (`requestPermissionAndEnable`, not called
-// from anywhere in half A on purpose — §2's fuse), so this is inert today;
-// it exists so half B only has to add the ask, not the re-arm plumbing too.
+// on every foreground. The function itself now lives in
+// `src/services/rearmDailyNudge.js` (Account.js's settings row needs it too,
+// and this file imports Account.js — see that module's header for why the
+// function had to move rather than be imported back).
 //
 // §4.1's OTHER re-arm — "on every entry save" — is the `onUnlock` handler
 // below, and it is not optional now that half B's ask names the condition
-// out loud ("Let me know on days I don't write"). Without it the consent is
-// factually wrong about the one behaviour it describes:
+// out loud (`NUDGE_ASK_LABEL`, `src/constants/nudgeCopy.js`: "Let me know on
+// days my page is still blank"). Without it the consent is factually wrong
+// about the one behaviour it describes:
 //
 //   08:00  resume  -> re-arm; today is unwritten, so today 20:00 is armed
 //   09:00  write   -> nothing cancels it
@@ -62,29 +63,6 @@ const Stack = createStackNavigator();
 // so at the call site. The pre-auth buffer's later flush needs no re-arm
 // either: it writes the same day the handler already reconciled against, so
 // the window it would compute is the one already scheduled.
-//
-// The sentinel guard is redundant with `reconcile()`'s own required-content
-// check today (nothing is enabled yet), and cheap insurance against a future
-// dev-only toggle that flips the enabled flag without going through
-// Celebration.
-const rearmDailyNudge = async () => {
-  if (NUDGE_TITLE.startsWith('__OWNED_BY_') || NUDGE_BODY.startsWith('__OWNED_BY_')) return;
-  try {
-    const now = new Date();
-    const windowEnd = new Date(now);
-    windowEnd.setDate(windowEnd.getDate() + NUDGE_WINDOW_DAYS - 1);
-    const entries = await EntryStore.getEntriesBetween(now, windowEnd);
-    await reconcileDailyNudge({
-      writtenDaysISO: entries.map((e) => e.date),
-      now,
-      content: { title: NUDGE_TITLE, body: NUDGE_BODY },
-    });
-  } catch {
-    // Not signed in, Supabase unconfigured, or a transient failure — the
-    // next foreground tries again. §4.1's re-arm has no "must succeed now"
-    // requirement; it is called unconditionally on a cadence.
-  }
-};
 
 SplashScreen.preventAutoHideAsync();
 

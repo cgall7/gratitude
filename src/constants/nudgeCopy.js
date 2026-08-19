@@ -39,28 +39,24 @@ export const NUDGE_BODY = 'What did it show you?';
 //                                         accident. It would be false in the
 //                                         product's own voice one merge later.
 //
-// The live constraint (Lumen, `0db0852c`): name the condition through THE
-// LINE — the one noun the personal journal owns outright. User-facing
-// `line` has TWO hits, not one, and the second is the better argument:
+// The live constraint (Lumen, `0db0852c`) named THE LINE; that constraint was
+// itself withdrawn by D5 (Lumen, `fedeaff5`, 2026-08-19) — `line` stays spent
+// on the send flow (Onboarding.js:179, TodayTab.js:201) and the ask needed
+// its own word. D5's RATIFIED replacement takes the destination block's own
+// vocabulary instead of its noun:
 //
-//   Onboarding.js:179  "One line a day. That's how it starts."
-//   TodayTab.js:201    "One line is enough. Write it, and your day opens."
+//   TodayTab.js:200-202  "Today's page is blank." / "One line is enough…"
 //
-// `TodayTab.js:199-205` is the BLANK-STATE block — "Today's page is blank."
-// / that line / "Write today's entry" — which is the exact render state the
-// nudge fires about. The notification exists to say the personal record has
-// a gap, and the screen it drives you to already calls that gap a missing
-// LINE, in the app's own voice. Ask and destination share the noun.
-//
-// (My earlier count here said "exactly one hit". It came from a sweep that
-// missed JSX text not sharing a line with its tags; Sage found the second
-// with the shipped collector, `scripts/lib/rendered-strings.mjs`. Zero hits
-// on any hive surface still holds at `38a32fa` and `f525a8e`.)
-//
-// Until the string lands, the ask CONTROL DOES NOT RENDER — the same shape as
-// `App.js`'s sentinel guard, where nothing is scheduled while the sentinel
-// stands. A permission ask with a placeholder label is the one thing worse
-// than no permission ask.
+// "page" and "blank" name that render state directly — the exact state the
+// nudge fires about — without re-spending `line`, without `write`/`entry`/
+// `reminder`/`nudge`/`evening` (§3), and `notification` stays reserved to its
+// two switch surfaces (`NUDGE_DECLINED_LINE` and the settings row). D5's own
+// gate run (48 trees, Sage's shipped collector) found zero collisions: every
+// `page` hit is the destination itself or a deictic self-reference in
+// `legalCopy.js`, every `blank` hit is the destination. `page`/`blank` are
+// now reserved rows in `check-copy-rules.mjs` for the same reason `line` was
+// swept before this replaced it — the sweep is evidence about today's trees,
+// not tomorrow's; the reserved row is the guard that survives a later branch.
 //
 // THE SENTINEL IS EXPORTED SEPARATELY so a gate can import the value rather
 // than retype it, and so `NUDGE_ASK_READY` is derived here instead of at the
@@ -70,7 +66,11 @@ export const NUDGE_BODY = 'What did it show you?';
 // not exist (Sage, `8f4466df`). A sentinel with no reader is not a guard, it
 // is a note.
 export const NUDGE_ASK_PENDING = '__OWNED_BY_DEEZINE__';
-export const NUDGE_ASK_LABEL = NUDGE_ASK_PENDING;
+
+// RATIFIED, Lumen `fedeaff5`, 2026-08-19 (D5). Truthful only if a morning
+// save disarms that day's nudge — see App.js's re-arm-on-save handler, which
+// this string's existence keeps load-bearing rather than optional.
+export const NUDGE_ASK_LABEL = 'Let me know on days my page is still blank.';
 
 // The ask renders ONLY when the label is a ratified string. While this is
 // false the beat ships with no ask at all — which is the honest state, not a

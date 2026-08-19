@@ -98,6 +98,7 @@ import {
   collectRenderedStrings,
   walkWithAncestry,
 } from './lib/rendered-strings.mjs';
+import { NUDGE_ASK_LABEL } from '../src/constants/nudgeCopy.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SRC = path.join(ROOT, 'src');
@@ -500,6 +501,74 @@ const FROZEN = [
 ];
 const texts = new Set(copy.map((c) => c.text));
 for (const [label, line] of FROZEN) check(`${label} is still rendered`, texts.has(line), true);
+
+// --- E. Reserved words stay on their one referent ------------------------
+//
+// A DIFFERENT SHAPE FROM SECTION C ON PURPOSE. `page` and `blank` are not
+// banned — they are ordinary English, and stay ordinary English right up
+// until a second surface spends either on a DIFFERENT object. D5 (Lumen,
+// `fedeaff5`, 2026-08-19) ratified `NUDGE_ASK_LABEL` — "Let me know on days
+// my page is still blank." — on the argument that it takes TodayTab's own
+// blank-state vocabulary (`TodayTab.js:200`, "Today's page is blank.")
+// rather than inventing a new noun. That argument holds only against the
+// tree it was measured on: `line` was withdrawn the same way, after
+// `fizz/private-hives-rails` spent it on a different object
+// (`ComposeHiveEntry.js:56`, `CreateHive.js:180`) between one sweep and the
+// next. "A sweep is evidence about today's trees, not tomorrow's" is Lumen's
+// own stated reason for this section — the sweep found zero collisions
+// across 48 trees, and this row is what makes a FUTURE collision fail loudly
+// instead of shipping and being discovered by a human days later.
+//
+// EXACT STRINGS, NOT A REGEX CLASSIFIER, unlike section C's FORBIDDEN list.
+// Section C asks "does this word appear at all" over an open-ended set of
+// sentences nobody has written yet, which is why it needs recall/precision
+// fixtures (section B). This asks "does this occurrence still name the ONE
+// referent it is reserved to" — a closed, measured set, same convention as
+// section D's FROZEN copy above. A hit whose exact text is not in the
+// allowlist is a NEW spend of the word, and reds here rather than needing a
+// second human sweep to notice.
+//
+// `page`'s allowlist has three members, not two: the destination
+// (`TodayTab.js`), `legalCopy.js`'s deictic self-reference to the document
+// being read (never an object-noun claim about a screen — a different sense
+// of the word, not a different OBJECT), and the nudge ask this PR adds,
+// which is the same referent as the destination by D5's own ruling. `blank`
+// has two: the destination and the same ask.
+console.log(`\n--- E. reserved words stay on their one referent ---`);
+const RESERVED_WORD_RE = { page: /\bpage/i, blank: /\bblank/i };
+const RESERVED_ALLOW = {
+  page: new Set([
+    "Today's page is blank.",
+    'The rest of this page is the same thing said precisely.',
+    'This app is published by . We are responsible for the information described on this page — in data-protection terms, its controller.',
+    'If we change how any of this works, we will change this page and the date at the top of it. For anything that meaningfully affects your privacy, we will tell you in the app rather than expecting you to re-read this.',
+    NUDGE_ASK_LABEL,
+  ]),
+  blank: new Set(["Today's page is blank.", NUDGE_ASK_LABEL]),
+};
+check(
+  'every reserved word has a non-empty allowlist',
+  Object.keys(RESERVED_WORD_RE).every((w) => RESERVED_ALLOW[w]?.size > 0),
+  true
+);
+const reservedHits = [];
+for (const word of Object.keys(RESERVED_WORD_RE)) {
+  const re = RESERVED_WORD_RE[word];
+  for (const c of copy) {
+    if (re.test(c.text) && !RESERVED_ALLOW[word].has(c.text)) {
+      reservedHits.push(`${word} → ${c.file}:${c.line} [${c.position}] ${JSON.stringify(c.text.slice(0, 90))}`);
+    }
+  }
+}
+check('no reserved word spent on a referent outside its allowlist', reservedHits, []);
+// The mirror check: an allowlisted string that no longer renders is a stale
+// exemption, not a passing gate — the same "an assertion survives the code
+// it was written about" property section D's rows already carry.
+const staleAllowlistEntries = [];
+for (const word of Object.keys(RESERVED_ALLOW)) {
+  for (const s of RESERVED_ALLOW[word]) if (!texts.has(s)) staleAllowlistEntries.push(`${word}: ${JSON.stringify(s)}`);
+}
+check('every reserved-word allowlist entry is still rendered', staleAllowlistEntries, []);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

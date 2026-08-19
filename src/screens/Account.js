@@ -1,16 +1,25 @@
-import React, { useState } from 'react';
-import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import React, { useCallback, useState } from 'react';
+import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Alert, Switch } from 'react-native';
 // react-native's own SafeAreaView is deprecated and warns on every render
 // (confirmed on device — it's what raises the LogBox toast over Legal.js).
 // react-native-safe-area-context is already a dependency, and React
 // Navigation mounts its provider, so this is the drop-in.
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../constants/theme';
 import { useAuth } from '../contexts/AuthContext';
 import { HoneycombStore } from '../services/HoneycombStore';
 import { Avatar } from '../components/Avatar';
 import { PressableScale } from '../components/PressableScale';
+import {
+  getPermissionState,
+  isEnabled as isNudgeEnabled,
+  requestPermissionAndEnable,
+  disable as disableDailyNudge,
+} from '../services/dailyNudge';
+import { rearmDailyNudge } from '../services/rearmDailyNudge';
+import { NUDGE_DECLINED_LINE } from '../constants/nudgeCopy';
 // The shipped version number, read from the one file that defines it.
 // expo-constants would be the usual source, but it isn't a dependency of
 // this app (it's only a transitive dep of `expo` and isn't installed at the
@@ -35,6 +44,18 @@ const HIT_SLOP = { top: 12, bottom: 12, left: 12, right: 12 };
 // company's app; the new brand's `pollinateapp.xyz` isn't registered yet
 // (§19.4 — Colin is buying it, tracked as pending). A row that silently goes
 // nowhere is worse than an absent row, so they land when the address does.
+// D2 (Sage, 2026-08-19) — the daily nudge's settings row, ship-with-the-
+// nudge per that ruling and §6 row 8 of the gate. Four states, not a plain
+// boolean: the switch's own truth is `permission.granted && enabled`, never
+// `enabled` alone — §5's failure mode is an OS-level revoke the app never
+// hears about, and a stored "on" flag with no live read is exactly the "lie
+// with a toggle on it" that section warns against.
+const NUDGE_UNKNOWN = 'unknown'; // not yet read — switch stays inert so it never flashes a wrong position
+const NUDGE_ON = 'on';
+const NUDGE_OFF = 'off'; // undetermined or granted-but-disabled: tappable, turning it on runs the one fuse (`requestPermissionAndEnable`)
+const NUDGE_DENIED = 'denied'; // OS-level decline — terminal (§2 corollary), switch is locked off
+const NUDGE_BUSY = 'busy';
+
 const Row = ({ icon, label, onPress, tone }) => (
   <PressableScale onPress={onPress} accessibilityLabel={label} style={styles.row}>
     <Ionicons name={icon} size={19} color={tone === 'danger' ? theme.colors.danger : theme.colors.inkSoft} />
@@ -48,9 +69,62 @@ const Row = ({ icon, label, onPress, tone }) => (
 export const AccountScreen = ({ navigation }) => {
   const { session } = useAuth();
   const [signingOut, setSigningOut] = useState(false);
+  const [nudgeState, setNudgeState] = useState(NUDGE_UNKNOWN);
 
   const displayName = session?.user?.user_metadata?.display_name ?? 'Your account';
   const email = session?.user?.email;
+
+  // §6 row 8 — the switch's rendered state derives from a LIVE permission
+  // read (this call), not the stored preference alone. Re-run on every
+  // focus, not just on mount: the only way this screen finds out about an
+  // OS-level revoke is by asking again when the user comes back from
+  // Settings, which is a navigate-away-and-return, not a re-render.
+  const refreshNudgeState = useCallback(async () => {
+    const [permission, enabled] = await Promise.all([getPermissionState(), isNudgeEnabled()]);
+    if (permission.status === 'denied') {
+      setNudgeState(NUDGE_DENIED);
+    } else if (permission.granted && enabled) {
+      setNudgeState(NUDGE_ON);
+    } else {
+      setNudgeState(NUDGE_OFF);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshNudgeState();
+    }, [refreshNudgeState]),
+  );
+
+  // The ONLY caller of `requestPermissionAndEnable` outside the Celebration
+  // ask (§6 row 2c's walk: an onPress/onValueChange prop, never an effect or
+  // module scope — this is one, via the Switch below). An OS decline is
+  // terminal and this handler never retries it: `disabled` on the Switch
+  // stops the tap from reaching here at all once `nudgeState` is DENIED.
+  const handleToggleNudge = async (wantsOn) => {
+    if (nudgeState === NUDGE_BUSY || nudgeState === NUDGE_DENIED) return;
+    setNudgeState(NUDGE_BUSY);
+    try {
+      if (wantsOn) {
+        const result = await requestPermissionAndEnable();
+        // `requestPermissionAndEnable` sets the flag and returns — it does
+        // not reconcile (§4.1's asymmetry, same one Onboarding's Celebration
+        // handler works around). A live session already exists on this
+        // screen, so re-arm immediately rather than waiting for the next
+        // foreground: someone who flips this on and backgrounds the app has
+        // the same "night one" gap the Celebration ask exists to close.
+        if (result.granted) {
+          await rearmDailyNudge();
+        }
+      } else {
+        await disableDailyNudge();
+      }
+    } catch (err) {
+      console.warn('Failed to update daily reminder', err);
+    } finally {
+      await refreshNudgeState();
+    }
+  };
 
   const handleSignOut = () => {
     Alert.alert('Sign out?', "You'll need to sign in again to see your entries and your hive.", [
@@ -91,6 +165,25 @@ export const AccountScreen = ({ navigation }) => {
           <Avatar name={displayName} avatarUrl={session?.user?.user_metadata?.avatar_url} size={72} />
           <Text style={styles.name}>{displayName}</Text>
           {email ? <Text style={styles.email}>{email}</Text> : null}
+        </View>
+
+        <View style={styles.card}>
+          <View style={styles.row}>
+            <Ionicons name="notifications-outline" size={19} color={theme.colors.inkSoft} />
+            <View style={styles.nudgeTextGroup}>
+              <Text style={styles.nudgeLabel}>Daily reminder</Text>
+              {nudgeState === NUDGE_DENIED && <Text style={styles.nudgeCaption}>{NUDGE_DECLINED_LINE}</Text>}
+            </View>
+            <Switch
+              value={nudgeState === NUDGE_ON}
+              onValueChange={handleToggleNudge}
+              disabled={nudgeState === NUDGE_UNKNOWN || nudgeState === NUDGE_BUSY || nudgeState === NUDGE_DENIED}
+              accessibilityLabel="Daily reminder"
+              trackColor={{ false: theme.colors.surfaceBorderStrong, true: theme.colors.accent }}
+              thumbColor={theme.colors.surface}
+              ios_backgroundColor={theme.colors.surfaceBorderStrong}
+            />
+          </View>
         </View>
 
         <View style={styles.card}>
@@ -169,6 +262,20 @@ const styles = StyleSheet.create({
   },
   rowLabelDanger: {
     color: theme.colors.danger,
+  },
+  nudgeTextGroup: {
+    flex: 1,
+    gap: 2,
+  },
+  nudgeLabel: {
+    ...theme.type.bodySm,
+    fontFamily: theme.fonts.bodySemiBold,
+    color: theme.colors.textPrimary,
+  },
+  nudgeCaption: {
+    ...theme.type.bodySm,
+    fontSize: 12,
+    color: theme.colors.textSecondary,
   },
   divider: {
     height: 1,

@@ -660,9 +660,12 @@ const runSweep = (windowDays, buildWindowFn = buildWindow) => {
 // =========================================================================
 console.log('\nD. live-state honesty');
 {
-  // No settings row exists in src/ yet — neither half A nor half B's stated
-  // scope includes one. PENDING, for the same reason row 2c is: the thing
-  // this row checks has no call site to walk yet.
+  // D2 (Sage, 2026-08-19): `src/screens/Account.js` now has the settings row
+  // — its `refreshNudgeState` calls `getPermissionState()` and the same
+  // component renders the `Switch`. Still walked by call site rather than
+  // asserted against a single named file: a second settings surface
+  // (Account.js is not spec-named anywhere as THE home for this) should also
+  // satisfy this row without an edit here.
   //
   // A CALL SITE, not a substring match — same class of bug row 2c had:
   // `src.includes('getPermissionState')` would match a comment naming the
@@ -912,6 +915,40 @@ console.log('\nJ. the ask does not render until its string is ratified');
     } else {
       ok(`row 11b — Onboarding.js gates the ask on NUDGE_ASK_READY and renders NUDGE_ASK_LABEL (no hardcoded ask literal)`);
     }
+  }
+}
+
+console.log('\nK. the Celebration ask\'s own copy (§7 item, Lumen\'s — D6)');
+// D6 (Sage, 2026-08-19): half B merges DARK — `NUDGE_ASK_LABEL` still holds
+// `NUDGE_ASK_PENDING` while Lumen's copy call is outstanding, and that is a
+// SELF-CLEARING PENDING row here, not a FAIL.
+//
+// THIS IS A DIFFERENT SHAPE FROM SECTION G ON PURPOSE. Section G's row FAILS
+// LOUDLY while `NUDGE_TITLE`/`NUDGE_BODY` hold the sentinel, because §7 ruled
+// half A literally cannot ship without that copy — `reconcile()` throws with
+// no content, so an unshipped title/body is a shipped defect (nothing
+// schedules, ever). The ask has no such dependent: rows 11a/11b already
+// assert the control does not render and the sentinel never reaches a
+// rendered position while `NUDGE_ASK_LABEL === NUDGE_ASK_PENDING` — so an
+// unratified ask ships nothing broken, only nothing yet. Sage's ruling is
+// that the aggregate suite should not carry a standing red for a copy call
+// that is scoped to a named owner (Lumen) and has its own tracked ask, the
+// same reasoning `run-checks.mjs`'s PENDING state exists to hold.
+//
+// SELF-CLEARING: this row re-evaluates `nudgeCopy.js` on every run. The
+// moment `NUDGE_ASK_LABEL` stops equalling `NUDGE_ASK_PENDING`, this flips to
+// `ok` with no other edit required — same mechanism as row 8's PENDING,
+// which self-clears the day a settings row calls `getPermissionState`.
+{
+  const copySrc = allSrc.get(COPY_MODULE);
+  const copyMod = await importModule(copySrc);
+  if (copyMod.NUDGE_ASK_LABEL === copyMod.NUDGE_ASK_PENDING) {
+    pend(
+      "row 12 — the Celebration ask's own copy (NUDGE_ASK_LABEL) is ratified",
+      'NUDGE_ASK_LABEL still holds NUDGE_ASK_PENDING (\'__OWNED_BY_DEEZINE__\') — Lumen\'s D5 call. Merged dark per Sage\'s D6 ruling (2026-08-19): rows 11a/11b already prove the sentinel never reaches a rendered position and the control does not render while this holds, so there is no shipped defect to fail on, only an open copy call. Self-clears the moment NUDGE_ASK_LABEL stops equalling NUDGE_ASK_PENDING.',
+    );
+  } else {
+    ok("row 12 — the Celebration ask's own copy (NUDGE_ASK_LABEL) is ratified (no longer the sentinel)");
   }
 }
 
