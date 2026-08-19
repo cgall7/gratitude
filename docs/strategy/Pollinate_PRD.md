@@ -87,7 +87,7 @@ Pollinate is not a utility app. It's an **emotional experience.** Every interact
 ### Persona C: "The Daily Practitioner"
 - Any age. Wants a daily gratitude practice that isn't lonely.
 - Starts with the journal. Discovers private hives. Gets hooked when they take their first "trip down memory lane" and realize how much they've written about someone they love.
-- Free tier is enough for them initially. They upgrade when they want more hives and monthly reviews (send limit pending Colin's ruling — see §5.1).
+- Free tier is enough for them initially. They upgrade when they want more hives and monthly reviews (sends are never metered — ruled 2026-08-19; see §5.1).
 
 ---
 
@@ -181,10 +181,10 @@ The review prompt is the app's core re-engagement mechanic. It's not a notificat
 
 | | Free | Paid ($2.99/mo or $29.99/yr) |
 |---|---|---|
-| Private hives | 1 hive | Unlimited hives |
+| Private hives | 1 hive, ever (lifetime — ruled 2026-08-19) | Unlimited hives |
 | Entries per hive | Unlimited | Unlimited |
 | Review cadence | Yearly only | Monthly, yearly, or manual |
-| Send | *(2026-08-17 flag — not yet ruled: `sealed_at`/`sent_at` are one-directional per hive, so "1/hive/year" is vacuous — every tier gets ≤1 send per hive, forever. Pending Colin: is free "1 hive" concurrent or lifetime? See Slices 8b.5 open item.)* | *(same, pending)* |
+| Send | Free — never metered *(ruled 2026-08-19: free "1 hive" is **lifetime**, so the paywall gates hive creation, not the send; structurally every tier gets ≤1 send per hive because `sealed_at`/`sent_at` are one-directional. See Slices 8b.5 cardinality ruling.)* | Free — same; unlimited hives means unlimited sends in practice |
 
 #### Acceptance Criteria
 
@@ -387,9 +387,9 @@ If we eventually want to earn transaction fees on tips, we'd need to integrate M
 | Feature | Free limit |
 |---|---|
 | Daily journal | Full, unlimited |
-| Private hives | **1 hive** |
+| Private hives | **1 hive, ever** (lifetime — ruled 2026-08-19) |
 | Review cadence | **Yearly only** |
-| Send | *(pending Colin's ruling — see 2026-08-17 flag above)* |
+| Send | Never metered *(ruled 2026-08-19 — the paywall gates hive creation; see the flag above)* |
 | Social seeds | **1 active seed at a time** |
 | Public hives (social) | **1 friend** |
 | Feed | Full access (view and react) |
@@ -403,7 +403,7 @@ If we eventually want to earn transaction fees on tips, we'd need to integrate M
 |---|---|
 | Private hives | **Unlimited hives** |
 | Review cadence | **Monthly, yearly, or manual** |
-| Send | *(pending Colin's ruling — see 2026-08-17 flag in §5.1)* |
+| Send | Never metered *(ruled 2026-08-19 — see the flag in §5.1)* |
 | Social seeds | **Unlimited active seeds** |
 | Public hives | **Unlimited friends** |
 | "Bloom When" conditional seeds | Unlocked |
