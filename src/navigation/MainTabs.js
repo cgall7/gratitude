@@ -3,6 +3,7 @@ import { View, StyleSheet, Animated } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { BottomTabBar, createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { theme } from '../constants/theme';
+import { SPRINGS } from '../constants/motion';
 import { TodayTab } from '../screens/TodayTab';
 import { RecapTab } from '../screens/RecapTab';
 import { WalletTab } from '../screens/WalletTab';
@@ -48,7 +49,7 @@ const TabIcon = ({ routeName, focused }) => {
   useEffect(() => {
     if (!focused) return;
     scale.setValue(0.6);
-    Animated.spring(scale, { toValue: 1, friction: 5, tension: 220, useNativeDriver: true }).start();
+    Animated.spring(scale, { toValue: 1, ...SPRINGS.land, useNativeDriver: true }).start();
   }, [focused]);
 
   const IconComponent = TAB_ICONS[routeName].set ?? Ionicons;

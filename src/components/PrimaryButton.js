@@ -2,6 +2,7 @@ import React from 'react';
 import { StyleSheet, Text } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { theme } from '../constants/theme';
+import { PRESS } from '../constants/motion';
 import { PressableScale } from './PressableScale';
 
 // The one CTA shape in the app (Sunbeam §4): full-width ink pill, cream
@@ -35,7 +36,7 @@ export const PrimaryButton = ({
     containerStyle={containerStyle}
     onPress={onPress}
     disabled={disabled}
-    scaleTo={0.97}
+    scaleTo={PRESS.slab}
     haptic={haptic}
     accessibilityLabel={accessibilityLabel}
   >

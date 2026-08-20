@@ -3,7 +3,7 @@ import { StyleSheet, Animated } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { theme } from '../constants/theme';
-import { DURATIONS, useReducedMotionState } from '../constants/motion';
+import { DURATIONS, SPRINGS, useReducedMotionState } from '../constants/motion';
 
 // One size, always (Sunbeam §4 R1 ruling) — 96pt, marigold fill, ink
 // checkmark. Scale the moment around it, never the badge itself.
@@ -24,7 +24,7 @@ export const CelebrationBadge = () => {
     // fade — the same value drives opacity instead of scale below.
     const arrive = reduced
       ? Animated.timing(reveal, { toValue: 1, duration: DURATIONS.reducedMotionFade, useNativeDriver: true })
-      : Animated.spring(reveal, { toValue: 1, friction: 4, tension: 140, useNativeDriver: true });
+      : Animated.spring(reveal, { toValue: 1, ...SPRINGS.pop, useNativeDriver: true });
     const sequence = Animated.sequence([Animated.delay(200), arrive]);
     sequence.start(({ finished }) => {
       // R20: a cleanup-triggered stop invokes this callback with

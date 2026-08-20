@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { StyleSheet, View, Animated } from 'react-native';
 import { theme } from '../constants/theme';
-import { DURATIONS, useReducedMotion } from '../constants/motion';
+import { DURATIONS, SPRINGS, useReducedMotion } from '../constants/motion';
 
 const RAY_COUNT = 18;
 const PARTICLE_COUNT = 7;
@@ -61,7 +61,7 @@ const Ray = ({ index, angle }) => {
   useEffect(() => {
     Animated.sequence([
       Animated.delay(300 + index * 60),
-      Animated.spring(progress, { toValue: 1, friction: 6, tension: 100, useNativeDriver: true }),
+      Animated.spring(progress, { toValue: 1, ...SPRINGS.ray, useNativeDriver: true }),
     ]).start();
   }, []);
 

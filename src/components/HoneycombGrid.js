@@ -337,7 +337,7 @@ export const HoneycombGrid = ({
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     Animated.timing(revealProgress, {
       toValue: 1,
-      duration: reduced ? DURATIONS.reducedMotionFade : 260,
+      duration: reduced ? DURATIONS.reducedMotionFade : DURATIONS.revealGlide,
       easing: reduced ? Easing.linear : Easing.out(Easing.cubic),
       useNativeDriver: true,
     }).start();

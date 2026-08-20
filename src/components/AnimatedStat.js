@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, StyleSheet, View } from 'react-native';
 import { theme } from '../constants/theme';
+import { SPRINGS } from '../constants/motion';
 
 // Hero stat values count up from 0 when they're a plain number (entry counts,
 // streak days); anything else (a theme name, a quote) just pops in. Re-runs
@@ -22,8 +23,8 @@ export const AnimatedStat = ({ value, style }) => {
     pop.setValue(1);
     glow.setValue(0);
     Animated.sequence([
-      Animated.spring(pop, { toValue: 1.15, friction: 4, tension: 140, useNativeDriver: true }),
-      Animated.spring(pop, { toValue: 1, friction: 4, tension: 140, useNativeDriver: true }),
+      Animated.spring(pop, { toValue: 1.15, ...SPRINGS.pop, useNativeDriver: true }),
+      Animated.spring(pop, { toValue: 1, ...SPRINGS.pop, useNativeDriver: true }),
     ]).start();
     Animated.timing(glow, { toValue: 1, duration: 400, useNativeDriver: true }).start();
   };
@@ -47,8 +48,7 @@ export const AnimatedStat = ({ value, style }) => {
     setDisplayValue(value);
     Animated.spring(anim, {
       toValue: 1,
-      friction: 7,
-      tension: 120,
+      ...SPRINGS.reveal,
       useNativeDriver: true,
     }).start(fireArrival);
   }, [value]);

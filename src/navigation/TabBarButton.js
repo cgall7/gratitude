@@ -2,6 +2,7 @@ import React, { useRef } from 'react';
 import { Animated, StyleSheet } from 'react-native';
 import { PlatformPressable } from '@react-navigation/elements';
 import * as Haptics from 'expo-haptics';
+import { SPRINGS, PRESS } from '../constants/motion';
 
 // Every tab switch gets a light haptic tick and a small spring "press" —
 // the default bottom-tabs button is a flat, silent touch target.
@@ -19,14 +20,14 @@ export const TabBarButton = ({ children, onPress, style, ...rest }) => {
   const scale = useRef(new Animated.Value(1)).current;
 
   const animateTo = (value) => {
-    Animated.spring(scale, { toValue: value, friction: 6, tension: 220, useNativeDriver: true }).start();
+    Animated.spring(scale, { toValue: value, ...SPRINGS.land, useNativeDriver: true }).start();
   };
 
   return (
     <PlatformPressable
       {...rest}
       style={style}
-      onPressIn={() => animateTo(0.88)}
+      onPressIn={() => animateTo(PRESS.standard)}
       onPressOut={() => animateTo(1)}
       onPress={(e) => {
         Haptics.selectionAsync();

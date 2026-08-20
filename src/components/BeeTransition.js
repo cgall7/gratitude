@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Animated, StyleSheet } from 'react-native';
 import { MascotBee } from './MascotBee';
 import { facingFor } from './beeAttitude';
-import { useReducedMotion } from '../constants/motion';
+import { SPRINGS, useReducedMotion } from '../constants/motion';
 
 // Per PLANS/HONEYCOMB_DESIGN.md §3 / §9.4: the bee arcs in and lifts off
 // between claim screens, doing narrative work (stitching the argument
@@ -66,8 +66,7 @@ export const BeeTransition = ({ triggerKey, path = DEFAULT_PATH, anchorStyle, si
     progress.setValue(0);
     Animated.spring(progress, {
       toValue: 1,
-      friction: 9,
-      tension: 60,
+      ...SPRINGS.glide,
       useNativeDriver: true,
     }).start(() => setFlying(false));
   }, [triggerKey]);
