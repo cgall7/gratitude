@@ -19,7 +19,7 @@ export const PillButton = ({ onPress, children, variant = 'filled', disabled, st
     onPress={onPress}
     disabled={disabled}
     style={[styles.pill, variant === 'outline' ? styles.outline : styles.filled, style]}
-    scaleTo={0.96}
+    pressedColor={variant === 'outline' ? theme.colors.pressedOnLight : theme.colors.pressedOnDark}
     accessibilityLabel={accessibilityLabel}
   >
     <Text style={[styles.text, variant === 'outline' ? styles.outlineText : styles.filledText]}>{children}</Text>

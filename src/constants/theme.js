@@ -135,6 +135,15 @@ const colors = {
   // Pooled honey. Translucent because honey IS translucent — a pool that is
   // opaque reads as paint. Motion only, like `accentBurst`.
   honeyPool: withAlpha(pigment.accentDeep, 0.22),
+
+  // --- Press feedback (C9) ---
+  // Two tints, not one, because a press over a filled dark surface (`ink`)
+  // and a press over a light one (`surface`/`glassFill`) have to move in
+  // opposite directions — darkening something already near-black shows
+  // nothing, and lightening white shows nothing either. `PressableScale`'s
+  // `pressedColor` overlay fades in on press-in, fades out on press-out.
+  pressedOnDark: withAlpha(pigment.surface, 0.12), // lifts a filled `ink` surface
+  pressedOnLight: withAlpha(pigment.inkVeil, 0.06), // dims a `surface`/glass one
 };
 
 // Two-stop washes, corner to corner: lit corner to shaded corner, so a

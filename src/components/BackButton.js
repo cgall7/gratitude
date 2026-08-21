@@ -18,6 +18,7 @@ export const BackButton = ({ onPress, variant = 'solid', color, style, accessibi
   <PressableScale
     onPress={onPress}
     style={[styles.button, variant === 'glass' ? styles.glass : styles.solid, style]}
+    pressedColor={theme.colors.pressedOnLight}
     accessibilityLabel={accessibilityLabel}
   >
     <Ionicons name="chevron-back" size={22} color={color ?? theme.colors.ink} />

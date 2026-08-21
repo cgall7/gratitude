@@ -42,6 +42,7 @@ export const PrimaryButton = ({
     disabled={disabled || loading}
     disabledOpacity={loading ? 1 : 0.4}
     scaleTo={0.97}
+    pressedColor={theme.colors.pressedOnDark}
     haptic={haptic}
     accessibilityLabel={accessibilityLabel}
     accessibilityState={{ busy: loading }}
