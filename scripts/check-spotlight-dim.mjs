@@ -105,9 +105,13 @@
 // WHERE THE NUMBERS COME FROM
 //
 // `pigment`, `colors`, and the `glow()` helper's `levels` register are
-// parsed from `theme.js` via the same small AST evaluator check-cover-
-// legibility.mjs uses, for the same reason: a hand-copied second palette is
-// the exact drift class this whole pass exists to catch.
+// parsed from `theme.js` via a small AST evaluator (below) for the same
+// reason R12 gave the functions that build them: a hand-copied second
+// palette is the exact drift class this whole pass exists to catch. (R13,
+// Lumen: this previously cited check-cover-legibility.mjs as precedent for
+// that evaluator — unopenable from this branch, and dead against current
+// `theme.js` on the branches that do carry it. Dropped the citation rather
+// than point at a file this branch can't reach.)
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -145,29 +149,11 @@ const walk = (node, visit) => {
   }
 };
 
-// withAlpha(hex, alpha) reimplemented from theme.js's own definition —
-// the gate evaluates the call rather than just recognising its shape.
-const withAlpha = (hex, alpha) => {
-  const m = /^#([0-9A-Fa-f]{6})$/.exec(hex);
-  if (!m) throw new Error(`withAlpha() takes a 6-digit hex pigment, got ${hex}`);
-  const [r, g, b] = [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16));
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-};
-
-// mix(hexA, hexB, t) reimplemented from theme.js's own definition, same
-// convention as withAlpha above — a derived pigment resolves to a hex
-// before anything sees it.
-const mix = (hexA, hexB, t) => {
-  const parseHex = (h) => {
-    const m = /^#([0-9A-Fa-f]{6})$/.exec(h);
-    if (!m) throw new Error(`mix() takes 6-digit hex pigments, got ${h}`);
-    return [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16));
-  };
-  if (!(t >= 0 && t <= 1)) throw new Error(`mix() takes t in [0,1], got ${t}`);
-  const [a, b] = [parseHex(hexA), parseHex(hexB)];
-  const ch = (i) => Math.round(a[i] + (b[i] - a[i]) * t).toString(16).padStart(2, '0');
-  return `#${ch(0)}${ch(1)}${ch(2)}`.toUpperCase();
-};
+// withAlpha/mix are ADOPTED from theme.js's own source below (R12, Lumen),
+// not reimplemented here. Declared now so evalNode can close over them;
+// assigned once theme.js is parsed, before either is first called.
+let withAlpha;
+let mix;
 
 const evalNode = (n, scope) => {
   if (n.type === 'StringLiteral') return n.value;
@@ -222,6 +208,25 @@ const findConst = (ast, name) => {
 // --- theme.js: pigment -> colors, and glow()'s levels register -------------
 const themeSrc = fs.readFileSync(THEME_FILE, 'utf8');
 const themeAst = parse(themeSrc, { sourceType: 'module', plugins: ['jsx'] });
+
+// Adopt withAlpha/mix from theme.js's own source rather than reimplementing
+// them (R12, Lumen, thread 6596d9c2): this file's own header, forty lines up,
+// already names "a hand-copied second palette" as the drift class this whole
+// pass exists to catch — that doctrine applies just as much to the functions
+// that BUILD the palette as to the palette's data, and the R11 mix()
+// calibration row proved it: a hand-copy can be internally self-consistent
+// (pinned to its own output) while the app's actual mix() has drifted
+// underneath it, and the row would never see it. Both functions are
+// self-contained (params + built-ins only, no closure over theme.js's outer
+// scope), so extracting each declarator's exact source text and building the
+// real function from it is safe — this executes theme.js's own definition,
+// not a model of it.
+const adopt = (name) => {
+  const node = findConst(themeAst, name);
+  return new Function(`return (${themeSrc.slice(node.start, node.end)});`)();
+};
+withAlpha = adopt('withAlpha');
+mix = adopt('mix');
 
 const pigment = evalNode(findConst(themeAst, 'pigment'), {});
 check('pigment loaded from theme.js has entries', Object.keys(pigment).length > 0, true);
@@ -279,13 +284,6 @@ for (const [dim, expectations] of Object.entries(spotlightTable)) {
   }
 }
 
-// calibration: mix() has three implementations in this repo (theme.js,
-// derive-spotlight-dim.mjs, here) with no shared calibration row until now —
-// legitimate, since color.mjs's CALIBRATION export is deltaE00-pair-shaped
-// and mix() isn't a distance. Pinned to theme.js's own spotlightDim pigment
-// term so a drift in any of the three copies is caught here first.
-check('calibration: mix(accentDeep, inkVeil, 0.25) reproduces the shipped spotlightDim pigment', mix(pigment.accentDeep, pigment.inkVeil, 0.25), '#C66100');
-
 const distinguishTable = { 0.25: 9.64, 0.3: 6.63, 0.32: 5.37, 0.35: 3.42 };
 const scrimPage = over(withAlpha(inkVeil, parseColor(colors.scrim).a), background);
 for (const [alpha, expected] of Object.entries(distinguishTable)) {
@@ -323,9 +321,7 @@ checkGE('spotlightDim reads as a distinct thing from the modal scrim (§20.7 flo
 const liveChroma = Number(chroma(over(colors.spotlightDim, surface)).toFixed(2));
 const pageChroma = Number(chroma(background).toFixed(2));
 console.log(`  C*(spotlightDim over surface) = ${liveChroma}, C*(background) = ${pageChroma}`);
-const chromaOk = liveChroma >= pageChroma;
-chromaOk ? (pass += 1) : (fail += 1);
-console.log(`${chromaOk ? 'ok  ' : 'FAIL'} spotlightDim carries at least as much chroma as the page it sits on${chromaOk ? '' : ` — got ${liveChroma}, want >= ${pageChroma}`}`);
+checkGE('spotlightDim carries at least as much chroma as the page it sits on', liveChroma, pageChroma);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
