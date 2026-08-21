@@ -26,6 +26,7 @@
     "check:bee-attitude": "node scripts/check-bee-attitude.mjs",
     "check:daily-nudge": "node scripts/check-daily-nudge.mjs",
     "check:reveal-pacing": "node scripts/check-reveal-pacing.mjs",
+    "check:color-grounds": "node scripts/check-color-grounds.mjs",
     "check:type-floor": "node scripts/check-type-floor.mjs",
     "check:type-floor-derived": "node scripts/check-type-floor-derived.mjs",
     "check:reexport-bindings": "node scripts/check-reexport-bindings.mjs",
