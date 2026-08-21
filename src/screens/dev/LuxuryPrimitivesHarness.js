@@ -22,6 +22,14 @@ import { PrimaryButton } from '../../components/PrimaryButton';
 // zero offset always, throws on an unknown level. The bead sits at 'bloom'
 // (responding to you); 'peak' is reserved for the one frame something is
 // fully alight, which this instrument never claims to be.
+//
+// Glow colour is `accentDeep`, not the bead's own `accentBurst` fill —
+// Lumen measured it: on this app's one cream ground (#FFF7CC) you cannot
+// make the page brighter by throwing more of its own hottest yellow at it
+// (near-zero luminance headroom, chroma only), so the glow that's meant to
+// radiate ONTO the page has to be the deep stop to read at all. The lit
+// crown stays `accentBurst` on the material itself — that's catching
+// light, not throwing it.
 export const LuxuryPrimitivesHarness = () => {
   const reduced = useReducedMotion();
   const [phase, setPhase] = useState('rest');
@@ -113,7 +121,7 @@ export const LuxuryPrimitivesHarness = () => {
           pointerEvents="none"
           style={[
             styles.bead,
-            theme.shadows.glow(theme.colors.accentBurst, 'bloom'),
+            theme.shadows.glow(theme.colors.accentDeep, 'bloom'),
             {
               transform: [
                 { translateY: fallY },
