@@ -337,9 +337,10 @@ const NOT_COPY_ATTRS = new Set([
   'pointerEvents', 'preset', 'resizeMode', 'returnKeyType', 'size', 'stage',
   'tint', 'tone',
   // SVG geometry and paint
-  'cx', 'cy', 'fill', 'fillRule', 'height', 'offset', 'patternTransform',
-  'patternUnits', 'preserveAspectRatio', 'r', 'stopOpacity', 'strokeLinecap',
-  'viewBox', 'width', 'x', 'x1', 'x2', 'y', 'y1', 'y2',
+  'cx', 'cy', 'fill', 'fillRule', 'gradientUnits', 'height', 'offset',
+  'patternTransform', 'patternUnits', 'preserveAspectRatio', 'r',
+  'stopOpacity', 'strokeLinecap', 'viewBox', 'width', 'x', 'x1', 'x2', 'y',
+  'y1', 'y2',
 ]);
 
 // The three attributes that are prose-SHAPED and still not copy. Named, so
