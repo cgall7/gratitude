@@ -166,8 +166,12 @@ export const SealHiveScreen = ({ navigation, route }) => {
 
       <View style={styles.footer}>
         {error && <Text style={styles.errorText}>{error}</Text>}
-        <PrimaryButton onPress={handleSeal} disabled={loading || phase === 'sealing' || entries.length === 0}>
-          {phase === 'sealing' ? 'Sealing…' : 'Seal This Keepsake'}
+        <PrimaryButton
+          onPress={handleSeal}
+          disabled={loading || entries.length === 0}
+          loading={phase === 'sealing'}
+        >
+          Seal This Keepsake
         </PrimaryButton>
         <PressableScale onPress={() => navigation.goBack()} style={styles.backLink} accessibilityLabel="Go back">
           <Text style={styles.backLinkText}>Go Back</Text>

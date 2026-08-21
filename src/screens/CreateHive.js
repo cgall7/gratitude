@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   StyleSheet,
   View,
@@ -7,6 +7,8 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  Animated,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../constants/theme';
@@ -15,6 +17,23 @@ import { tagEntry } from '../utils/themeTagger';
 import { HIVE_COVER_THEMES, REVIEW_CADENCE_OPTIONS } from '../constants/hiveThemes';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { PressableScale } from '../components/PressableScale';
+import { SPRINGS } from '../constants/motion';
+
+// E6 — the checkmark used to pop in with no transition, simultaneous with
+// the E5 border-width jump. Border width is now constant (see
+// `themeCard`/`themeCardSelected`), so this is the only motion on select,
+// and it gets to be the whole event: a spring pop, not a hard cut.
+const SelectedCheck = () => {
+  const scale = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.spring(scale, { toValue: 1, useNativeDriver: true, ...SPRINGS.pop }).start();
+  }, [scale]);
+  return (
+    <Animated.View style={[styles.themeCheck, { transform: [{ scale }] }]}>
+      <Ionicons name="checkmark-circle" size={22} color={theme.colors.ink} />
+    </Animated.View>
+  );
+};
 
 // 8b.2 — Create Private Hive flow, one root-stack screen with four internal
 // beats (Design Language §2), the same shape Onboarding.js already uses for
@@ -33,8 +52,19 @@ export const CreateHiveFlow = ({ navigation }) => {
   const [saveError, setSaveError] = useState(false);
 
   const step = STEPS[stepIndex];
+  // E13 — leaving step 0 exits the flow entirely and every other state
+  // (subjectName, entryText) resets with it. Stepping back within the flow
+  // (stepIndex > 0) never loses anything, since this component's state
+  // persists across steps, so only the exit itself needs a guard.
   const goBack = () => {
     if (stepIndex === 0) {
+      if (subjectName.trim()) {
+        Alert.alert('Discard this hive?', "You'll lose what you've entered so far.", [
+          { text: 'Keep editing', style: 'cancel' },
+          { text: 'Discard', style: 'destructive', onPress: () => navigation.goBack() },
+        ]);
+        return;
+      }
       navigation.goBack();
       return;
     }
@@ -52,7 +82,10 @@ export const CreateHiveFlow = ({ navigation }) => {
       if (body) {
         await HiveStore.addHiveEntry(hive.id, new Date(), body, tagEntry(body));
       }
-      navigation.navigate('Main', { screen: 'Today' });
+      // E12 — land inside the hive you just made, not on Today. Deezine is
+      // scoring the arrival ceremony separately; this is just the
+      // navigation it will land on top of.
+      navigation.navigate('HiveDetail', { hiveId: hive.id });
     } catch (err) {
       console.warn('CreateHiveFlow: failed to create hive', err);
       setSaveError(true);
@@ -72,6 +105,15 @@ export const CreateHiveFlow = ({ navigation }) => {
         </PressableScale>
       </View>
 
+      {/* E9 — four steps, no way to see how much of this you've committed
+          to. Dots, not a bar: the flow is a short fixed count of beats, not
+          a continuous fraction. */}
+      <View style={styles.progressRow} accessible={false} importantForAccessibility="no-hide-descendants">
+        {STEPS.map((s, i) => (
+          <View key={s} style={[styles.progressDot, i <= stepIndex && styles.progressDotActive]} />
+        ))}
+      </View>
+
       {step === 'who' && (
         <View style={styles.content}>
           <Text style={styles.title}>Who are you creating this hive for?</Text>
@@ -87,9 +129,6 @@ export const CreateHiveFlow = ({ navigation }) => {
           <Text style={styles.helpText}>
             You'll be the only one who sees this hive unless you choose to send it later.
           </Text>
-          <PrimaryButton onPress={goNext} disabled={!subjectName.trim()} style={styles.cta}>
-            Next
-          </PrimaryButton>
         </View>
       )}
 
@@ -110,14 +149,7 @@ export const CreateHiveFlow = ({ navigation }) => {
                   ]}
                   accessibilityLabel={`${themeOption.label} cover${selected ? ', selected' : ''}`}
                 >
-                  {selected && (
-                    <Ionicons
-                      name="checkmark-circle"
-                      size={22}
-                      color={theme.colors.ink}
-                      style={styles.themeCheck}
-                    />
-                  )}
+                  {selected && <SelectedCheck />}
                   <Text style={[styles.themeLabel, { color: themeOption.textColor }]}>
                     {themeOption.label}
                   </Text>
@@ -125,9 +157,6 @@ export const CreateHiveFlow = ({ navigation }) => {
               );
             })}
           </View>
-          <PrimaryButton onPress={goNext} style={styles.cta}>
-            Next
-          </PrimaryButton>
         </View>
       )}
 
@@ -151,9 +180,6 @@ export const CreateHiveFlow = ({ navigation }) => {
               </PressableScale>
             );
           })}
-          <PrimaryButton onPress={goNext} style={styles.cta}>
-            Create Hive
-          </PrimaryButton>
         </View>
       )}
 
@@ -169,26 +195,42 @@ export const CreateHiveFlow = ({ navigation }) => {
             multiline
             maxLength={10000}
           />
-          {saveError && (
-            <Text style={styles.errorText}>Couldn't save the hive. Check your connection and try again.</Text>
-          )}
-          <PrimaryButton
-            onPress={() => finish(true)}
-            disabled={saving}
-            style={styles.cta}
-          >
-            Save & Start Writing
-          </PrimaryButton>
-          <PressableScale
-            onPress={() => finish(false)}
-            disabled={saving}
-            style={styles.skipLink}
-            accessibilityLabel="Skip and go to Today"
-          >
-            <Text style={styles.skipLinkText}>Skip & Go to Today</Text>
-          </PressableScale>
         </ScrollView>
       )}
+
+      {/* E10 — this footer sits outside every step's content container
+          (a plain View for the first three steps, a ScrollView for
+          'entry'), so it's the one CTA anchor point that's never asked to
+          pin itself inside a ScrollView, where `marginTop: 'auto'` is a
+          no-op. Every step renders through this same footer instead of
+          carrying its own pinned button. */}
+      <View style={styles.footer}>
+        {step === 'entry' && saveError && (
+          <Text style={styles.errorText}>Couldn't save the hive. Check your connection and try again.</Text>
+        )}
+        {step === 'who' && (
+          <PrimaryButton onPress={goNext} disabled={!subjectName.trim()}>
+            Next
+          </PrimaryButton>
+        )}
+        {step === 'cover' && <PrimaryButton onPress={goNext}>Next</PrimaryButton>}
+        {step === 'cadence' && <PrimaryButton onPress={goNext}>Create Hive</PrimaryButton>}
+        {step === 'entry' && (
+          <>
+            <PrimaryButton onPress={() => finish(true)} loading={saving}>
+              Save & Start Writing
+            </PrimaryButton>
+            <PressableScale
+              onPress={() => finish(false)}
+              disabled={saving}
+              style={styles.skipLink}
+              accessibilityLabel="Skip writing an entry and open the new hive"
+            >
+              <Text style={styles.skipLinkText}>Skip for Now</Text>
+            </PressableScale>
+          </>
+        )}
+      </View>
     </KeyboardAvoidingView>
   );
 };
@@ -214,6 +256,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     ...theme.shadows.card,
   },
+  progressRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+    paddingTop: 16,
+  },
+  progressDot: {
+    width: 8,
+    height: 8,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.surfaceBorderStrong,
+  },
+  progressDotActive: {
+    backgroundColor: theme.colors.ink,
+  },
   content: {
     flex: 1,
     padding: 24,
@@ -238,27 +295,39 @@ const styles = StyleSheet.create({
     color: theme.colors.inkSoft,
     marginTop: 16,
   },
-  cta: {
-    marginTop: 'auto',
+  footer: {
+    paddingHorizontal: 24,
+    paddingBottom: 24,
   },
   themeGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
+    justifyContent: 'space-between',
   },
   themeCard: {
-    width: '31%',
+    // 48 + 48 = 96% < 100%: two per row can never overflow regardless of
+    // container width, because the slack is distributed by
+    // `justifyContent` instead of added by a `gap` on top of a fitted
+    // percentage (E4 — the three-across grid silently reflowed to two on
+    // narrower devices and always rendered an orphan 4th card either way).
+    width: '48%',
     aspectRatio: 1,
+    marginBottom: 12,
     borderRadius: theme.borderRadius.medium,
     alignItems: 'center',
     justifyContent: 'flex-end',
     padding: 10,
-    borderWidth: 1,
-    borderColor: theme.colors.surfaceBorder,
+    // E5 — border width is constant at 3 whether selected or not, so
+    // selecting a card never shifts its contents. Unselected sits at
+    // transparent; the visible rim is a colour change, not a layout change.
+    borderWidth: 3,
+    borderColor: 'transparent',
   },
   themeCardSelected: {
-    borderWidth: 3,
-    borderColor: theme.colors.accent,
+    // E7 — §4's law is "yellow never fills it"; a border is a fill of the
+    // edge. `ink` also reads at higher contrast against these near-white
+    // covers than `accent` ever did.
+    borderColor: theme.colors.ink,
   },
   themeCheck: {
     position: 'absolute',
