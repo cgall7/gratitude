@@ -81,6 +81,13 @@ export const axialRound = (q, r) => {
 // generator, not assumed from an orientation label.
 export const ringStepFor = (cellSize) => Math.sqrt(3) * cellSize;
 
+// One seat's centre in cluster space. `(cell.x, cell.y)` is the seat's
+// top-left corner; every consumer that needs "where is this person" —
+// `requestPollination`'s flight aim, the hex-tap scrim's punch-out centre —
+// needs the same point, so it's one expression rather than a copy hand-kept
+// in step with `hitTest`'s own offset (undone there, not re-derived here).
+export const cellCentre = (cell, cellSize) => ({ x: cell.x + cellSize, y: cell.y + cellSize });
+
 // The comb's identity for a grid member: WHO, not WHICH POST (§28.9
 // correction 2). `id` is the share, and a share is a thing a person can
 // replace; the face in the seat is what the user pointed at. One expression,

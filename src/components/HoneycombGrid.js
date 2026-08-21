@@ -6,14 +6,24 @@ import { theme } from '../constants/theme';
 import { hexTintFor } from './Avatar';
 import { hexPoints, hexEdgeMarks, hexSealPath } from './HexShape';
 import { useSvgId } from '../utils/svgId';
-import { DURATIONS, STAGGER_MS, useReducedMotion } from '../constants/motion';
+import { DURATIONS, HONEY, HONEY_EASING, PRESS, STAGGER_MS, useReducedMotion } from '../constants/motion';
+import { drip as dripHaptics } from '../constants/haptics';
+import { HexTapOverlay } from './HexTapOverlay';
 import {
   buildCombLayout,
+  cellCentre,
   hexSpiral,
   personKey,
   ringStepFor,
   shouldAbortPollination,
 } from './combLattice';
+
+// Lane D — the hex-tap honey drip's beat boundaries in ms from contact.
+// `HONEY` only names swell/neck/fall/pool (Beats 3-6); contact and ignition
+// (Beats 1-2) aren't bead motion, so they're not in that module — named here
+// instead of left as bare literals scattered through the timeline below.
+const CONTACT_MS = 180;
+const IGNITION_MS = 80;
 
 // Re-exported because the comb's identity rule is one expression and this is
 // where the rest of the app already reaches for it. `combLattice` owns it —
@@ -177,11 +187,15 @@ const FilledCell = ({ member, size, selected, reduced }) => {
             in this same Svg so the hole shows that fill, not a blank gap. */}
         {member.seeded && <Path d={sealPath} fill={theme.colors.ink} fillRule="evenodd" />}
         {member.blooming && <BloomRing size={size} reduced={reduced} />}
+        {/* Beat 1 (Lane D): surface -> ink on tap, width held constant at
+            2.5pt — "no width change, the luxury is restraint here." Width
+            used to jump 2 -> 2.5 with the colour; that's the one part of
+            this line the spec explicitly rules out. */}
         <Polygon
           points={points}
           fill="none"
           stroke={selected ? theme.colors.ink : theme.colors.surface}
-          strokeWidth={selected ? 2.5 : 2}
+          strokeWidth={2.5}
         />
       </Svg>
       {!member.avatarUrl && (
@@ -220,7 +234,7 @@ const EmptyCell = ({ size }) => {
   );
 };
 
-const HexCell = ({ member, size, x, y, delay, selected, reduced }) => {
+const HexCell = ({ member, size, x, y, delay, selected, reduced, pressDepth }) => {
   const progress = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -234,6 +248,11 @@ const HexCell = ({ member, size, x, y, delay, selected, reduced }) => {
   }, [progress, delay, reduced]);
 
   const scale = progress.interpolate({ inputRange: [0, 1], outputRange: [reduced ? 1 : 0.15, 1] });
+  // Beat 1's press depression rides on top of the entrance scale, and only
+  // on the cell that's actually selected — `pressDepth` is one shared value
+  // (only one cell can be selected at a time), so every other cell's
+  // transform is untouched.
+  const cellScale = selected && !reduced ? Animated.multiply(scale, pressDepth) : scale;
 
   return (
     <Animated.View
@@ -244,7 +263,7 @@ const HexCell = ({ member, size, x, y, delay, selected, reduced }) => {
           top: y,
           width: size * 2,
           height: size * 2,
-          transform: [{ scale }],
+          transform: [{ scale: cellScale }],
           opacity: progress,
         },
       ]}
@@ -295,6 +314,31 @@ export const HoneycombGrid = ({
   const cameraProgress = useRef(new Animated.Value(0)).current;
   const revealProgress = useRef(new Animated.Value(0)).current;
 
+  // Lane D — the honey drip's own animated values. `revealProgress` and
+  // `cameraProgress` already exist and are reused (ruling 3(b)); everything
+  // below is new, one value per beat that needs its own progress or opacity.
+  const pressDepth = useRef(new Animated.Value(1)).current;
+  const glowBloomOpacity = useRef(new Animated.Value(0)).current;
+  const glowRestOpacity = useRef(new Animated.Value(0)).current;
+  const honeyDecay = useRef(new Animated.Value(1)).current;
+  const beadProgress = useRef(new Animated.Value(0)).current;
+  const neckProgress = useRef(new Animated.Value(0)).current;
+  const fallProgress = useRef(new Animated.Value(0)).current;
+  const poolProgress = useRef(new Animated.Value(0)).current;
+  const pinchTimeoutRef = useRef(null);
+  // Ruling 3(a): the scrim's centre is cluster-space + the cluster's own
+  // origin in container space, measured once via `onLayout` rather than
+  // assumed — `stage` has no padding and is `container`'s first child, so
+  // this `onLayout` (relative to `stage`) already IS the container-space
+  // origin (Lumen's ruling; don't re-derive it).
+  const [clusterOrigin, setClusterOrigin] = useState(null);
+  const [tapCentre, setTapCentre] = useState(null);
+  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
+
+  useEffect(() => () => {
+    if (pinchTimeoutRef.current) clearTimeout(pinchTimeoutRef.current);
+  }, []);
+
   useEffect(() => {
     Animated.timing(cameraProgress, {
       toValue: 1,
@@ -334,7 +378,18 @@ export const HoneycombGrid = ({
     // the bee. Everything the beat asserts is carried by the stroke, the
     // haptic and the card, which is why §28.6 owes accessibility nothing
     // extra: a user who never perceives the flight loses nothing.
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    if (reduced) {
+      // Reduced Motion collapses the whole honey score to the cell + card
+      // (§28.6's rule, extended here) — no scrim, no glow, no bead. The
+      // acceptance bar's "instant pool" variant is still open; this is the
+      // conservative reading (skip the drip rather than fake an instant one)
+      // until that's reviewed on-device.
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    } else {
+      const cell = layout.cells.find((c) => c.member && personKey(c.member) === personKey(member));
+      setTapCentre(cell ? cellCentre(cell, cellSize) : null);
+      startHoneyDrip();
+    }
     Animated.timing(revealProgress, {
       toValue: 1,
       duration: reduced ? DURATIONS.reducedMotionFade : DURATIONS.revealGlide,
@@ -342,6 +397,124 @@ export const HoneycombGrid = ({
       useNativeDriver: true,
     }).start();
     requestPollination(member, tap);
+  };
+
+  // Lane D — the honey drip's own haptic + motion score, run fresh on every
+  // tap. Beat 1's stroke/press-depth are on the cell itself (`HexCell`
+  // below); this schedules everything the SVG overlay reads.
+  const startHoneyDrip = () => {
+    if (pinchTimeoutRef.current) clearTimeout(pinchTimeoutRef.current);
+
+    dripHaptics.swell();
+    pinchTimeoutRef.current = setTimeout(() => {
+      dripHaptics.pinch();
+    }, CONTACT_MS + IGNITION_MS + HONEY.swell + HONEY.neck);
+
+    pressDepth.setValue(1);
+    honeyDecay.setValue(1);
+    glowBloomOpacity.setValue(0);
+    glowRestOpacity.setValue(0);
+    beadProgress.setValue(0);
+    neckProgress.setValue(0);
+    fallProgress.setValue(0);
+    poolProgress.setValue(0);
+
+    // Beat 1 — press depression, ease-in-out across the contact window.
+    Animated.sequence([
+      Animated.timing(pressDepth, {
+        toValue: PRESS.standard,
+        duration: CONTACT_MS / 2,
+        easing: Easing.inOut(Easing.ease),
+        useNativeDriver: true,
+      }),
+      Animated.timing(pressDepth, {
+        toValue: 1,
+        duration: CONTACT_MS / 2,
+        easing: Easing.inOut(Easing.ease),
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    // Beat 2 — glow ignites, then crossfades bloom -> rest across Beat 3.
+    Animated.sequence([
+      Animated.delay(CONTACT_MS),
+      Animated.timing(glowBloomOpacity, {
+        toValue: 1,
+        duration: IGNITION_MS,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(glowBloomOpacity, {
+        toValue: 0,
+        duration: HONEY.swell,
+        easing: Easing.inOut(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start();
+    Animated.sequence([
+      Animated.delay(CONTACT_MS + IGNITION_MS),
+      Animated.timing(glowRestOpacity, {
+        toValue: 1,
+        duration: HONEY.swell,
+        easing: Easing.inOut(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    // Beat 3 — swell.
+    Animated.sequence([
+      Animated.delay(CONTACT_MS + IGNITION_MS),
+      Animated.timing(beadProgress, {
+        toValue: 1,
+        duration: HONEY.swell,
+        easing: HONEY_EASING.swell,
+        useNativeDriver: false,
+      }),
+    ]).start();
+
+    // Beat 4 — neck.
+    Animated.sequence([
+      Animated.delay(CONTACT_MS + IGNITION_MS + HONEY.swell),
+      Animated.timing(neckProgress, {
+        toValue: 1,
+        duration: HONEY.neck,
+        easing: Easing.in(Easing.quad),
+        useNativeDriver: false,
+      }),
+    ]).start();
+
+    // Beat 5 — fall.
+    Animated.sequence([
+      Animated.delay(CONTACT_MS + IGNITION_MS + HONEY.swell + HONEY.neck),
+      Animated.timing(fallProgress, {
+        toValue: 1,
+        duration: HONEY.fall,
+        easing: HONEY_EASING.fall,
+        useNativeDriver: false,
+      }),
+    ]).start();
+
+    // Beat 6 — pool, with the room's dim/glow releasing on the same window
+    // (§5's open decay question — ruled here: the room goes dark exactly as
+    // the light that was dimming it goes out, one envelope not two).
+    Animated.sequence([
+      Animated.delay(CONTACT_MS + IGNITION_MS + HONEY.swell + HONEY.neck + HONEY.fall),
+      Animated.timing(poolProgress, {
+        toValue: 1,
+        duration: HONEY.pool,
+        easing: HONEY_EASING.pool,
+        useNativeDriver: false,
+      }),
+    ]).start();
+    Animated.sequence([
+      Animated.delay(CONTACT_MS + IGNITION_MS + HONEY.swell + HONEY.neck + HONEY.fall),
+      Animated.timing(honeyDecay, {
+        toValue: 0,
+        duration: HONEY.pool,
+        easing: HONEY_EASING.pool,
+        useNativeDriver: true,
+      }),
+    ]).start();
   };
 
   const requestPollination = (member, tap) => {
@@ -352,9 +525,9 @@ export const HoneycombGrid = ({
     const cell = layout.cells.find((c) => c.member && personKey(c.member) === personKey(member));
     if (!cell) return;
     // Cell centres sit at (x + cellSize, y + cellSize) in cluster space — the
-    // same offset `hitTest` undoes before inverting, stated once in
-    // `combLattice`.
-    const centre = { x: cell.x + cellSize, y: cell.y + cellSize };
+    // same offset `hitTest` undoes before inverting, one expression shared
+    // with the scrim's centre calc in `handleSelect` (`combLattice.cellCentre`).
+    const centre = cellCentre(cell, cellSize);
     // The tap hands us BOTH coordinate systems for one physical point:
     // `locationX/Y` in cluster space (what `hitTest` reads) and `pageX/Y` in
     // window space (what the flight needs). Subtracting gives the cluster's
@@ -406,10 +579,18 @@ export const HoneycombGrid = ({
   // travel — under Reduce Motion the cluster simply fades up in place.
   const cameraScale = cameraProgress.interpolate({ inputRange: [0, 1], outputRange: [reduced ? 1 : 1.8, 1] });
 
+  // Ruling 3(a): container's own box, for the SVG overlay's `width`/`height`
+  // — `StyleSheet.absoluteFill` covers a View for free, but an `<Svg>` needs
+  // its canvas size stated, and this is the only container-space size the
+  // component doesn't already have from `layout`.
+  const centreForOverlay =
+    clusterOrigin && tapCentre ? { x: clusterOrigin.x + tapCentre.x, y: clusterOrigin.y + tapCentre.y } : null;
+
   return (
-    <View style={styles.container}>
+    <View style={styles.container} onLayout={(e) => setContainerSize(e.nativeEvent.layout)}>
       <View style={[styles.stage, { height: layout.height + 24 }]}>
         <Animated.View
+          onLayout={(e) => setClusterOrigin({ x: e.nativeEvent.layout.x, y: e.nativeEvent.layout.y })}
           style={{
             width: layout.width,
             height: layout.height,
@@ -428,6 +609,7 @@ export const HoneycombGrid = ({
               delay={index * STAGGER_MS}
               selected={!!member && selectedId !== null && personKey(member) === selectedId}
               reduced={reduced}
+              pressDepth={pressDepth}
             />
           ))}
           <Pressable
@@ -443,6 +625,24 @@ export const HoneycombGrid = ({
           />
         </Animated.View>
       </View>
+
+      {/* Ruling 4 — container-level, between stage and the reveal card, so
+          the card lands inside the dimmed region (Option A's continuity). */}
+      <HexTapOverlay
+        width={containerSize.width}
+        height={containerSize.height}
+        center={centreForOverlay}
+        cellSize={cellSize}
+        cameraProgress={cameraProgress}
+        revealProgress={revealProgress}
+        honeyDecay={honeyDecay}
+        glowBloomOpacity={glowBloomOpacity}
+        glowRestOpacity={glowRestOpacity}
+        beadProgress={beadProgress}
+        neckProgress={neckProgress}
+        fallProgress={fallProgress}
+        poolProgress={poolProgress}
+      />
 
       {selected && (
         <Animated.View
