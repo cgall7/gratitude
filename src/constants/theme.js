@@ -161,6 +161,35 @@ const gradients = {
   // honey may never borrow the keepsake's pigment. `accentBurst`'s own token
   // comment already restricts it to motion, which is exactly what this is.
   honey: [colors.accentBurst, colors.accent, colors.accentDeep],
+  // SHEEN — light falling across a material, as an overlay rather than a
+  // recolour. Laid over any fill, corner to corner, it makes a flat swatch read
+  // as a surface catching light. One sheen serves every hive cover and every
+  // cover nobody has invented yet, which is the property worth having: nothing
+  // here is tuned per-cover, so a fifth cover cannot arrive mis-lit.
+  //
+  // ZERO NEW HEX — two alphas of pigments already in the palette, which keeps
+  // §1's "no new hex values introduced" intact for the covers.
+  //
+  // FOUR STOPS, not three, and the two middle ones are deliberately both fully
+  // transparent: a single transparent midpoint would force the renderer to
+  // interpolate from white straight to ink and put a faint grey band through
+  // the middle of every card. Between two alpha-0 stops there is nothing to
+  // see, whatever their RGB.
+  //
+  // THE LIT ALPHA IS A CEILING, NOT A TASTE. A white sheen lightens a cover
+  // TOWARD the white card it sits on, so the lit corner — not the flat base —
+  // is the worst case for the cover-legibility floor. Measured against
+  // `surface`: at 0.20 the four covers sit at 12.91 / 8.78 / 5.76 / 5.87 ΔE00,
+  // clearing a floor of 5 with the thinnest margin on `starlight`. At 0.35 the
+  // minimum falls to 4.77 and two covers breach it. Anything raising this alpha
+  // must re-run that measurement, and must run it on the composited lit corner.
+  // The shaded stop is free in that direction: it only moves away from white.
+  sheen: [
+    withAlpha(pigment.surface, 0.2),
+    withAlpha(pigment.surface, 0),
+    withAlpha(pigment.inkVeil, 0),
+    withAlpha(pigment.inkVeil, 0.06),
+  ],
 };
 
 export const theme = {
