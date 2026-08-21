@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Alert, Switch } from 'react-native';
+import { StyleSheet, View, Text, ScrollView, Alert, Switch } from 'react-native';
 // react-native's own SafeAreaView is deprecated and warns on every render
 // (confirmed on device — it's what raises the LogBox toast over Legal.js).
 // react-native-safe-area-context is already a dependency, and React
@@ -25,8 +25,6 @@ import { NUDGE_DECLINED_LINE } from '../constants/nudgeCopy';
 // this app (it's only a transitive dep of `expo` and isn't installed at the
 // top level), and adding a package to print one string isn't worth it.
 import appConfig from '../../app.json';
-
-const HIT_SLOP = { top: 12, bottom: 12, left: 12, right: 12 };
 
 // What the account door opens (Option C, Colin 2026-08-11). This screen
 // exists because three things were unreachable without it, not because a
@@ -155,9 +153,13 @@ export const AccountScreen = ({ navigation }) => {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.topBar}>
-        <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={HIT_SLOP} accessibilityLabel="Close">
+        <PressableScale
+          onPress={() => navigation.goBack()}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          accessibilityLabel="Close"
+        >
           <Ionicons name="chevron-down" size={26} color={theme.colors.ink} />
-        </TouchableOpacity>
+        </PressableScale>
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>

@@ -4,7 +4,6 @@ import {
   View,
   Text,
   TextInput,
-  TouchableOpacity,
   Animated,
   ScrollView,
   KeyboardAvoidingView,
@@ -14,6 +13,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../constants/theme';
 import { PressableScale } from '../components/PressableScale';
+import { BackButton } from '../components/BackButton';
 import { StaggeredItem } from '../components/StaggeredItem';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { GlowOrb } from '../components/GlowOrb';
@@ -42,8 +42,6 @@ import {
   NUDGE_GRANTED_LINE,
   NUDGE_DECLINED_LINE,
 } from '../constants/nudgeCopy';
-
-const HIT_SLOP = { top: 12, bottom: 12, left: 12, right: 12 };
 
 // ONE DOOR — five beats, no forks (PLANS/ONBOARDING_ONE_DOOR_SPEC.md,
 // Lumen 2026-08-17, amended the same day for the Who beat).
@@ -89,9 +87,7 @@ const StepShell = ({ step, stage, wash, onBack, showMap = true, children }) => {
     <View style={[styles.container, { backgroundColor: wash }]}>
       <View style={styles.topBar}>
         {onBack ? (
-          <TouchableOpacity onPress={onBack} hitSlop={HIT_SLOP}>
-            <Ionicons name="chevron-back" size={24} color={theme.colors.ink} />
-          </TouchableOpacity>
+          <BackButton onPress={onBack} />
         ) : (
           <View style={styles.backSpacer} />
         )}
@@ -900,7 +896,9 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   backSpacer: {
-    width: 24,
+    // Matches `BackButton`'s 40pt circle so the row beside it (the journey
+    // map) doesn't shift depending on whether a back button is present.
+    width: 40,
   },
   stepBody: {
     flex: 1,

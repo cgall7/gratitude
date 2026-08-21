@@ -3,6 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { theme } from '../constants/theme';
 import { hiveCoverTheme } from '../constants/hiveThemes';
 import { PressableScale } from './PressableScale';
+import { GradientCard } from './GradientCard';
 
 // One Private Hives cover card for the Today shelf (Design Language §9).
 // No gold-register/sealed treatment yet — this PR doesn't build sealing
@@ -18,13 +19,24 @@ export const HiveCard = ({ hive, onPress }) => {
   return (
     <PressableScale
       onPress={onPress}
-      style={[styles.card, { backgroundColor: cover.base }]}
+      style={styles.card}
       accessibilityLabel={`Open the hive for ${hive.subjectName}, ${memoryLabel}`}
     >
-      <Text style={[styles.name, { color: cover.textColor }]} numberOfLines={2}>
-        {hive.subjectName}
-      </Text>
-      <Text style={[styles.count, { color: cover.textColor }]}>{memoryLabel}</Text>
+      {/* Same ruling as the cover picker: the cover never touches the page.
+          It's an inset fill inside this `surface` mat, so separation is
+          cover-vs-white regardless of which ground the shelf underneath
+          happens to use — the ghost that used to follow the hive around
+          the app can't reappear here either. */}
+      <GradientCard
+        style={styles.material}
+        contentStyle={[styles.fill, { backgroundColor: cover.base }]}
+        colors={theme.gradients.sheen}
+      >
+        <Text style={[styles.name, { color: cover.textColor }]} numberOfLines={2}>
+          {hive.subjectName}
+        </Text>
+        <Text style={[styles.count, { color: cover.textColor }]}>{memoryLabel}</Text>
+      </GradientCard>
     </PressableScale>
   );
 };
@@ -36,9 +48,20 @@ const styles = StyleSheet.create({
     width: CARD_WIDTH,
     height: CARD_WIDTH,
     borderRadius: theme.borderRadius.medium,
-    padding: 16,
-    justifyContent: 'space-between',
+    backgroundColor: theme.colors.surface,
+    padding: 6,
     ...theme.shadows.card,
+  },
+  material: {
+    flex: 1,
+  },
+  fill: {
+    flex: 1,
+    borderRadius: theme.borderRadius.medium - 6,
+    borderWidth: 1,
+    borderColor: theme.colors.surfaceBorderStrong,
+    padding: 10,
+    justifyContent: 'space-between',
   },
   name: {
     ...theme.type.h3,

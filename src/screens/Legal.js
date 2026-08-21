@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { StyleSheet, View, Text, ScrollView, TouchableOpacity, SafeAreaView } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { StyleSheet, View, Text, ScrollView, TouchableOpacity } from 'react-native';
+// react-native's own SafeAreaView is deprecated and warns on every render —
+// react-native-safe-area-context is already a dependency (see Account.js).
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { theme } from '../constants/theme';
 import { LEGAL_LAST_UPDATED, PRIVACY_POLICY, TERMS_OF_SERVICE } from '../constants/legalCopy';
-
-const HIT_SLOP = { top: 12, bottom: 12, left: 12, right: 12 };
+import { BackButton } from '../components/BackButton';
 
 const DOCS = { privacy: PRIVACY_POLICY, terms: TERMS_OF_SERVICE };
 
@@ -21,9 +22,7 @@ export const LegalScreen = ({ route, navigation }) => {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.topBar}>
-        <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={HIT_SLOP} accessibilityLabel="Back">
-          <Ionicons name="chevron-back" size={24} color={theme.colors.ink} />
-        </TouchableOpacity>
+        <BackButton onPress={() => navigation.goBack()} accessibilityLabel="Back" />
         <View style={styles.tabRow}>
           {[
             { key: 'privacy', label: 'Privacy Policy' },

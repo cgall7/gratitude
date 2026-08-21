@@ -62,6 +62,11 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.ink,
     alignItems: 'center',
     justifyContent: 'center',
+    // C7 — the app's one CTA was a flat ink slab despite `shadows.floating`
+    // existing for exactly this ("anything that should feel pressable/
+    // afloat"). `floating`, not `card`: this is the button, not a resting
+    // surface.
+    ...theme.shadows.floating,
   },
   text: {
     ...theme.type.button,

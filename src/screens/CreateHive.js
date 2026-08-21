@@ -17,6 +17,9 @@ import { tagEntry } from '../utils/themeTagger';
 import { HIVE_COVER_THEMES, REVIEW_CADENCE_OPTIONS } from '../constants/hiveThemes';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { PressableScale } from '../components/PressableScale';
+import { GradientCard } from '../components/GradientCard';
+import { BackButton } from '../components/BackButton';
+import { LinkButton } from '../components/LinkButton';
 import { SPRINGS } from '../constants/motion';
 
 // E6 — the checkmark used to pop in with no transition, simultaneous with
@@ -96,13 +99,11 @@ export const CreateHiveFlow = ({ navigation }) => {
 
   return (
     <KeyboardAvoidingView
-      style={[styles.container, step !== 'who' && styles.containerCream]}
+      style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <View style={styles.header}>
-        <PressableScale onPress={goBack} style={styles.backButton} accessibilityLabel="Go back">
-          <Ionicons name="chevron-back" size={22} color={theme.colors.ink} />
-        </PressableScale>
+        <BackButton onPress={goBack} />
       </View>
 
       {/* E9 — four steps, no way to see how much of this you've committed
@@ -142,17 +143,26 @@ export const CreateHiveFlow = ({ navigation }) => {
                 <PressableScale
                   key={themeOption.id}
                   onPress={() => setCoverTheme(themeOption.id)}
-                  style={[
-                    styles.themeCard,
-                    { backgroundColor: themeOption.base },
-                    selected && styles.themeCardSelected,
-                  ]}
+                  style={[styles.themeCard, selected && styles.themeCardSelected]}
                   accessibilityLabel={`${themeOption.label} cover${selected ? ', selected' : ''}`}
                 >
-                  {selected && <SelectedCheck />}
-                  <Text style={[styles.themeLabel, { color: themeOption.textColor }]}>
-                    {themeOption.label}
-                  </Text>
+                  {/* E2/E3 — the cover never touches the page. It's an inset
+                      fill inside this `surface` mat (the mat is what
+                      `themeCard`'s own background renders), so separation is
+                      always cover-vs-white regardless of which ground the
+                      picker sits on, or which cover gets added next. The
+                      hairline rim + sheen are the material; the mat is the
+                      frame. */}
+                  <GradientCard
+                    style={styles.themeMaterial}
+                    contentStyle={[styles.themeFill, { backgroundColor: themeOption.base }]}
+                    colors={theme.gradients.sheen}
+                  >
+                    {selected && <SelectedCheck />}
+                    <Text style={[styles.themeLabel, { color: themeOption.textColor }]}>
+                      {themeOption.label}
+                    </Text>
+                  </GradientCard>
                 </PressableScale>
               );
             })}
@@ -220,14 +230,14 @@ export const CreateHiveFlow = ({ navigation }) => {
             <PrimaryButton onPress={() => finish(true)} loading={saving}>
               Save & Start Writing
             </PrimaryButton>
-            <PressableScale
+            <LinkButton
               onPress={() => finish(false)}
               disabled={saving}
               style={styles.skipLink}
               accessibilityLabel="Skip writing an entry and open the new hive"
             >
-              <Text style={styles.skipLinkText}>Skip for Now</Text>
-            </PressableScale>
+              Skip for Now
+            </LinkButton>
           </>
         )}
       </View>
@@ -238,23 +248,15 @@ export const CreateHiveFlow = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    // E8 — one ground for all four steps. `washYellow` is `theme.js`'s own
+    // "activation staging included" wash; a creation flow is exactly that.
+    // The old per-step swap (`background` on steps 2-4) was too small a
+    // shift to read as intent and just large enough to read as a glitch.
     backgroundColor: theme.colors.washYellow,
-  },
-  containerCream: {
-    backgroundColor: theme.colors.background,
   },
   header: {
     paddingTop: 60,
     paddingHorizontal: 24,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: theme.borderRadius.full,
-    backgroundColor: theme.colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...theme.shadows.card,
   },
   progressRow: {
     flexDirection: 'row',
@@ -314,9 +316,13 @@ const styles = StyleSheet.create({
     aspectRatio: 1,
     marginBottom: 12,
     borderRadius: theme.borderRadius.medium,
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    padding: 10,
+    // E2/E3 — this is the mat, not the cover. `surface` white is the frame
+    // every cover material insets into, so cover-vs-ground separation is
+    // always cover-vs-white and never depends on which page ground a cover
+    // happens to share a value with.
+    backgroundColor: theme.colors.surface,
+    padding: 6,
+    ...theme.shadows.card,
     // E5 — border width is constant at 3 whether selected or not, so
     // selecting a card never shifts its contents. Unselected sits at
     // transparent; the visible rim is a colour change, not a layout change.
@@ -328,6 +334,21 @@ const styles = StyleSheet.create({
     // edge. `ink` also reads at higher contrast against these near-white
     // covers than `accent` ever did.
     borderColor: theme.colors.ink,
+  },
+  themeMaterial: {
+    flex: 1,
+  },
+  themeFill: {
+    flex: 1,
+    borderRadius: theme.borderRadius.medium - 6,
+    // The hairline rim Lumen's ruling calls for on every cover surface —
+    // separation is guaranteed by the rim regardless of the base value,
+    // rather than depending on anyone re-checking ΔE00 by eye forever.
+    borderWidth: 1,
+    borderColor: theme.colors.surfaceBorderStrong,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    padding: 10,
   },
   themeCheck: {
     position: 'absolute',
@@ -393,12 +414,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   skipLink: {
-    alignItems: 'center',
+    alignSelf: 'center',
     marginTop: 16,
-    padding: 12,
-  },
-  skipLinkText: {
-    ...theme.type.bodySm,
-    color: theme.colors.inkSoft,
   },
 });

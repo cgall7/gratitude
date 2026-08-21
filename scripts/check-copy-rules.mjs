@@ -335,7 +335,7 @@ const NOT_COPY_ATTRS = new Set([
   'accessibilityRole', 'autoCapitalize', 'icon', 'id', 'importantForAccessibility',
   'key', 'keyboardShouldPersistTaps', 'keyboardType', 'mode', 'name', 'on',
   'pointerEvents', 'preset', 'resizeMode', 'returnKeyType', 'size', 'stage',
-  'tint', 'tone',
+  'tint', 'tone', 'variant',
   // SVG geometry and paint
   'cx', 'cy', 'fill', 'fillRule', 'height', 'offset', 'patternTransform',
   'patternUnits', 'preserveAspectRatio', 'r', 'stopOpacity', 'strokeLinecap',

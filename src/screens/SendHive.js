@@ -8,6 +8,7 @@ import { HiveStore } from '../services/HiveStore';
 import { hiveCoverTheme } from '../constants/hiveThemes';
 import { PressableScale } from '../components/PressableScale';
 import { PrimaryButton } from '../components/PrimaryButton';
+import { BackButton } from '../components/BackButton';
 import { SPRINGS, DURATIONS, useReducedMotion } from '../constants/motion';
 
 // §6 Screen 2 (Review Before Sending) + Screen 3 (Sent Confirmation), per
@@ -117,9 +118,7 @@ export const SendHiveScreen = ({ navigation, route }) => {
   return (
     <View style={styles.container}>
       <View style={[styles.banner, { backgroundColor: cover.base }]}>
-        <PressableScale onPress={() => navigation.goBack()} style={styles.backButton} accessibilityLabel="Go back">
-          <Ionicons name="chevron-back" size={22} color={cover.textColor} />
-        </PressableScale>
+        <BackButton onPress={() => navigation.goBack()} variant="glass" color={cover.textColor} style={styles.backButton} />
         <Text style={[styles.bannerTitle, { color: cover.textColor }]}>Sending to {subjectName}</Text>
         <Text style={[styles.bannerSubtitle, { color: cover.textColor }]}>
           They'll see your memories one by one.
@@ -169,12 +168,6 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
   },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: theme.borderRadius.full,
-    backgroundColor: theme.colors.glassFill,
-    alignItems: 'center',
-    justifyContent: 'center',
     marginBottom: 16,
   },
   bannerTitle: {

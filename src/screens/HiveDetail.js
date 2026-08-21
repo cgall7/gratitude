@@ -8,6 +8,7 @@ import { HoneycombStore } from '../services/HoneycombStore';
 import { hiveCoverTheme } from '../constants/hiveThemes';
 import { PressableScale } from '../components/PressableScale';
 import { PrimaryButton } from '../components/PrimaryButton';
+import { BackButton } from '../components/BackButton';
 
 const longDate = (isoDate) => {
   // entry_date is a plain 'YYYY-MM-DD' — parsing it as local midnight
@@ -85,9 +86,7 @@ export const HiveDetailScreen = ({ navigation, route }) => {
   if (error || !hive) {
     return (
       <View style={[styles.container, styles.centered]}>
-        <PressableScale onPress={() => navigation.goBack()} style={styles.backButtonFloating}>
-          <Ionicons name="chevron-back" size={22} color={theme.colors.ink} />
-        </PressableScale>
+        <BackButton onPress={() => navigation.goBack()} style={styles.backButtonFloating} />
         <Text style={styles.emptyTitle}>We couldn't reach this hive.</Text>
         <Text style={styles.emptyBody}>Check your connection and try again.</Text>
       </View>
@@ -100,9 +99,7 @@ export const HiveDetailScreen = ({ navigation, route }) => {
   return (
     <View style={styles.container}>
       <View style={[styles.banner, { backgroundColor: cover.base }]}>
-        <PressableScale onPress={() => navigation.goBack()} style={styles.backButton} accessibilityLabel="Go back">
-          <Ionicons name="chevron-back" size={22} color={cover.textColor} />
-        </PressableScale>
+        <BackButton onPress={() => navigation.goBack()} variant="glass" color={cover.textColor} style={styles.backButton} />
         <Text style={[styles.bannerName, { color: cover.textColor }]}>{hive.subjectName}</Text>
         <Text style={[styles.bannerCount, { color: cover.textColor }]}>{memoryLabel}</Text>
       </View>
@@ -225,25 +222,12 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
   },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: theme.borderRadius.full,
-    backgroundColor: theme.colors.glassFill,
-    alignItems: 'center',
-    justifyContent: 'center',
     marginBottom: 16,
   },
   backButtonFloating: {
     position: 'absolute',
     top: 60,
     left: 24,
-    width: 40,
-    height: 40,
-    borderRadius: theme.borderRadius.full,
-    backgroundColor: theme.colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...theme.shadows.card,
   },
   bannerName: {
     ...theme.type.h1,

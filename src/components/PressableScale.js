@@ -37,6 +37,7 @@ export const PressableScale = ({
   // consumer's announcement changes. The §18 hive knob is the first caller
   // that needs a stateful stop ("selected") rather than a plain button.
   accessibilityState,
+  hitSlop,
 }) => {
   const scale = useRef(new Animated.Value(1)).current;
 
@@ -67,6 +68,7 @@ export const PressableScale = ({
       accessibilityLabel={accessibilityLabel}
       accessibilityRole={accessibilityRole}
       accessibilityState={accessibilityState}
+      hitSlop={hitSlop}
     >
       <Animated.View style={[style, { opacity: disabled ? disabledOpacity : 1, transform: [{ scale }] }]}>
         {children}

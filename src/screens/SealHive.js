@@ -1,13 +1,13 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { StyleSheet, View, Text, TextInput, ScrollView, ActivityIndicator, Animated, Pressable } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { theme } from '../constants/theme';
 import { HiveStore } from '../services/HiveStore';
 import { hiveCoverTheme } from '../constants/hiveThemes';
 import { PressableScale } from '../components/PressableScale';
 import { PrimaryButton } from '../components/PrimaryButton';
+import { BackButton } from '../components/BackButton';
 import { KeepsakeBee } from '../components/KeepsakeBee';
 import { CelebrationRays } from '../components/CelebrationRays';
 import { SPRINGS, DURATIONS, useReducedMotion } from '../constants/motion';
@@ -133,9 +133,7 @@ export const SealHiveScreen = ({ navigation, route }) => {
   return (
     <View style={styles.container}>
       <View style={[styles.banner, { backgroundColor: cover.base }]}>
-        <PressableScale onPress={() => navigation.goBack()} style={styles.backButton} accessibilityLabel="Go back">
-          <Ionicons name="chevron-back" size={22} color={cover.textColor} />
-        </PressableScale>
+        <BackButton onPress={() => navigation.goBack()} variant="glass" color={cover.textColor} style={styles.backButton} />
         <Text style={[styles.bannerTitle, { color: cover.textColor }]}>Here's what you're sealing.</Text>
       </View>
 
@@ -196,12 +194,6 @@ const styles = StyleSheet.create({
     paddingBottom: 24,
   },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: theme.borderRadius.full,
-    backgroundColor: theme.colors.glassFill,
-    alignItems: 'center',
-    justifyContent: 'center',
     marginBottom: 16,
   },
   bannerTitle: {

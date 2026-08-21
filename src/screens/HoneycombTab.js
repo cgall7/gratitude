@@ -9,6 +9,7 @@ import { EntryStore } from '../services/EntryStore';
 import { toISODate, daysAgoISO, groupSharesByDay, HIVE_WEEK_DAYS } from '../utils/dateRanges';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { PressableScale } from '../components/PressableScale';
+import { PillButton } from '../components/PillButton';
 import { FeedCard } from '../components/FeedCard';
 import { SendEventCard } from '../components/SendEventCard';
 import { HoneycombGrid, HIVE_SLOTS, personKey } from '../components/HoneycombGrid';
@@ -210,12 +211,12 @@ const RequestRow = ({ request, onRespond, onBlock }) => {
         </PressableScale>
       </View>
       <View style={styles.requestActions}>
-        <PressableScale onPress={() => onRespond(request.id, false)} style={styles.declineButton}>
-          <Text style={styles.declineText}>Not now</Text>
-        </PressableScale>
-        <PressableScale onPress={() => onRespond(request.id, true)} style={styles.acceptButton}>
-          <Text style={styles.acceptText}>Accept</Text>
-        </PressableScale>
+        <PillButton variant="outline" onPress={() => onRespond(request.id, false)}>
+          Not now
+        </PillButton>
+        <PillButton variant="filled" onPress={() => onRespond(request.id, true)}>
+          Accept
+        </PillButton>
       </View>
     </View>
   );
@@ -625,9 +626,14 @@ const HoneycombFeed = () => {
                 editable={!addBusy}
                 autoFocus
               />
-              <PressableScale onPress={handleAddConnection} disabled={!addEmail.trim() || addBusy} style={styles.addButton}>
-                <Text style={styles.addButtonText}>{addBusy ? '…' : 'Add'}</Text>
-              </PressableScale>
+              <PillButton
+                variant="filled"
+                onPress={handleAddConnection}
+                disabled={!addEmail.trim() || addBusy}
+                style={styles.addButton}
+              >
+                {addBusy ? '…' : 'Add'}
+              </PillButton>
             </View>
             {addMessage && (
               <Text style={[styles.addMessage, addMessage.tone === 'error' && styles.addMessageError]}>
@@ -861,15 +867,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
   },
   addButton: {
-    backgroundColor: theme.colors.ink,
-    borderRadius: theme.borderRadius.full,
     paddingHorizontal: 20,
-    justifyContent: 'center',
-  },
-  addButtonText: {
-    ...theme.type.bodySm,
-    fontFamily: theme.fonts.bodySemiBold,
-    color: theme.colors.backgroundWriting,
   },
   addMessage: {
     ...theme.type.bodySm,
@@ -910,27 +908,6 @@ const styles = StyleSheet.create({
   requestActions: {
     flexDirection: 'row',
     gap: 8,
-  },
-  declineButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: theme.borderRadius.full,
-    backgroundColor: theme.colors.surfaceBorder,
-  },
-  declineText: {
-    ...theme.type.bodySm,
-    color: theme.colors.textSecondary,
-  },
-  acceptButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: theme.borderRadius.full,
-    backgroundColor: theme.colors.accent,
-  },
-  acceptText: {
-    ...theme.type.bodySm,
-    fontFamily: theme.fonts.bodySemiBold,
-    color: theme.colors.textPrimary,
   },
   shareButtonAnchor: {
     marginBottom: 20,

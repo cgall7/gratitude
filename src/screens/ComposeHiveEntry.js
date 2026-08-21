@@ -1,11 +1,10 @@
 import React, { useState } from 'react';
 import { StyleSheet, View, Text, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../constants/theme';
 import { HiveStore } from '../services/HiveStore';
 import { tagEntry } from '../utils/themeTagger';
 import { PrimaryButton } from '../components/PrimaryButton';
-import { PressableScale } from '../components/PressableScale';
+import { BackButton } from '../components/BackButton';
 
 // 8b.3 — compose a new entry into an existing hive (Design Language §3's
 // Compose Entry Screen). Date is always today, read-only, matching the spec
@@ -43,9 +42,7 @@ export const ComposeHiveEntryScreen = ({ navigation, route }) => {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <View style={styles.header}>
-        <PressableScale onPress={() => navigation.goBack()} style={styles.backButton} accessibilityLabel="Go back">
-          <Ionicons name="chevron-back" size={22} color={theme.colors.ink} />
-        </PressableScale>
+        <BackButton onPress={() => navigation.goBack()} />
       </View>
 
       <View style={styles.content}>
@@ -83,15 +80,6 @@ const styles = StyleSheet.create({
   header: {
     paddingTop: 60,
     paddingHorizontal: 24,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: theme.borderRadius.full,
-    backgroundColor: theme.colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...theme.shadows.card,
   },
   content: {
     flex: 1,
