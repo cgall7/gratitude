@@ -30,8 +30,8 @@
 //
 //   INK LADDER. `inkFaint` was read by three call sites for months without
 //   being defined, resolving `undefined` and handing the field to iOS's
-//   system placeholder grey — hue 290.5deg, 199deg around the wheel from every
-//   other piece of text in the product, at 1.68:1. This asserts the token
+//   system placeholder grey. Measured on device, not predicted: #C5C5C7,
+//   hue 290.3deg — 199.4deg around the wheel from `ink` — at 1.72:1. This asserts the token
 //   exists, sits on the ladder's hue, and clears the large-text floor on both
 //   grounds it is actually rendered against.
 

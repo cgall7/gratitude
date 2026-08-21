@@ -59,20 +59,24 @@ const colors = {
   // Third rung of the warm ink ladder — placeholder/hint text only. Read by
   // three `placeholderTextColor` call sites that predate this token and have
   // been resolving `undefined` ever since (CreateHive x2, ComposeHiveEntry),
-  // which hands the field to iOS's system placeholder grey: ~#C7C7CD, hue
-  // 290.5deg, 1.68:1 on white. That is not merely "a cold grey" — it sits 199deg
-  // around the wheel from every other piece of text in the product, and below
-  // every contrast floor there is.
+  // which hands the field to iOS's system placeholder grey. Measured off the
+  // running app rather than predicted: #C5C5C7, hue 290.3deg, 1.72:1 on white
+  // (iPhone 17 Pro / iOS 26.5, Expo Go 57, sampled from a device screenshot of
+  // CreateHive's "who" step with this token removed). That is not merely "a
+  // cold grey" — it sits 199.4deg around the wheel from `ink`, and below every
+  // contrast floor there is.
   //
   // Derived, not picked. `ink` is L*10.0 / h90.9deg, `inkSoft` is L*40.7 / h91.4deg,
   // so the ladder holds one hue and steps dL*=30.6. An evenly-spaced third rung
   // lands at L*71.3 — and only reaches ~2.3:1, so even spacing loses to
   // legibility and legibility wins. This sits at L*54.5, h94.0deg (within 3deg of
   // the ladder), 3.82:1 on `surface` and 3.68:1 on `backgroundWriting`.
+  // Confirmed on device: the placeholder renders exactly #8F8256 at hue
+  // 94.0deg on a #FFFFFF field.
   //
   // Deliberately NOT >=4.5:1: a placeholder that reads as strongly as entered
   // text stops reading as a prompt. 3.82:1 clears the 3:1 large-text floor on
-  // both grounds with margin and is 2.3x what ships today. This holds only
+  // both grounds with margin and is 2.2x the measured 1.72:1 shipping today. This holds only
   // while the placeholder stays SUPPLEMENTARY — both live call sites carry a
   // visible <Text> title stating the question. A placeholder that becomes a
   // field's only label is content, and needs 4.5:1, not this token.
