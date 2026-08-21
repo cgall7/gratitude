@@ -76,16 +76,30 @@ export const HexTapOverlay = ({
 
   if (!center || !width || !height) return null;
 
-  // Ruling 2 (corrected 2026-08-21): `r` is the gradient's own radius, not a
-  // taste number — √3·cellSize, the lattice's seat-to-seat step. Stop 1 is
-  // written as the FRACTION `cellSize / r`, never the literal 0.57735: that
-  // fraction is what makes `stop1 · r === cellSize` hold structurally
-  // instead of by coincidence if `cellSize` ever retunes.
-  const r = ringStepFor(cellSize);
-  const punchStop = cellSize / r;
+  // R7 (First-Build Review): a dim that holds at full strength to the edge
+  // of its own box is a mask, not a light — the container is narrower than
+  // the comb's worst-case reach, so any radius that fully covers the comb
+  // also hits the box edge at full strength. Falloff, not coverage: `R` is
+  // 3 ringsteps out, and a third stop releases back to transparent before
+  // the box edge. `punchStop`/`fullStop` stay fractions of `R`, never
+  // typed, so `punchStop · R === cellSize` and `fullStop · R ===
+  // ringStepFor(cellSize)` hold structurally if `cellSize` ever retunes.
+  const R = 3 * ringStepFor(cellSize);
+  const punchStop = cellSize / R;
+  const fullStop = ringStepFor(cellSize) / R; // = 1/3, independent of cellSize
 
+  // R5 (First-Build Review, BLOCKING): `shadowRadius` is a blur spread
+  // measured outward from a view's EDGE; an SVG `RadialGradient`'s `r` is a
+  // total extent measured from a CENTRE. Used directly, `bloom` (24pt) and
+  // `rest` (12pt) both land inside the punch-out's transparent radius
+  // (`cellSize` = 44pt) — the glow can only ever paint on ground the scrim
+  // already left undimmed, which is why it measured cooler than neutral
+  // on-device instead of reading as light. Converting the frame means the
+  // blur begins at the punch-out's own edge, not at `center`.
   const bloom = theme.shadows.glow(theme.colors.accentBurst, 'bloom');
   const rest = theme.shadows.glow(theme.colors.accentBurst, 'rest');
+  const bloomR = cellSize + bloom.shadowRadius; // 44 + 24 = 68pt
+  const restR = cellSize + rest.shadowRadius; // 44 + 12 = 56pt
   const dim = stopFor(theme.colors.spotlightDim);
 
   // Ruling 3(b): the scrim is exactly as transparent as its geometry is
@@ -131,25 +145,28 @@ export const HexTapOverlay = ({
     <Animated.View style={[StyleSheet.absoluteFill, { opacity: cameraProgress }]} pointerEvents="none">
       <Svg width={width} height={height}>
         <Defs>
-          <RadialGradient id={dimId} cx={center.x} cy={center.y} r={r} gradientUnits="userSpaceOnUse">
+          <RadialGradient id={dimId} cx={center.x} cy={center.y} r={R} gradientUnits="userSpaceOnUse">
             <Stop offset={punchStop} stopColor={dim.rgb} stopOpacity="0" />
-            <Stop offset={1} stopColor={dim.rgb} stopOpacity={dim.alpha} />
+            <Stop offset={fullStop} stopColor={dim.rgb} stopOpacity={dim.alpha} />
+            <Stop offset={1} stopColor={dim.rgb} stopOpacity="0" />
           </RadialGradient>
-          {/* Glow radii/opacity read straight off `shadows.glow()` so a
-              View-shadow retune moves this for free instead of drifting. */}
-          <RadialGradient id={bloomId} cx={center.x} cy={center.y} r={bloom.shadowRadius} gradientUnits="userSpaceOnUse">
+          {/* Glow opacity reads straight off `shadows.glow()` so a
+              View-shadow retune moves this for free; radius is the SAME
+              level converted into the gradient's frame (`bloomR`/`restR`
+              above), never `shadowRadius` directly — see R5. */}
+          <RadialGradient id={bloomId} cx={center.x} cy={center.y} r={bloomR} gradientUnits="userSpaceOnUse">
             <Stop offset="0" stopColor={theme.colors.accentBurst} stopOpacity={bloom.shadowOpacity} />
             <Stop offset="1" stopColor={theme.colors.accentBurst} stopOpacity="0" />
           </RadialGradient>
-          <RadialGradient id={restId} cx={center.x} cy={center.y} r={rest.shadowRadius} gradientUnits="userSpaceOnUse">
+          <RadialGradient id={restId} cx={center.x} cy={center.y} r={restR} gradientUnits="userSpaceOnUse">
             <Stop offset="0" stopColor={theme.colors.accentBurst} stopOpacity={rest.shadowOpacity} />
             <Stop offset="1" stopColor={theme.colors.accentBurst} stopOpacity="0" />
           </RadialGradient>
         </Defs>
 
         <AnimatedRect x={0} y={0} width={width} height={height} fill={`url(#${dimId})`} opacity={dimOpacity} />
-        <AnimatedCircle cx={center.x} cy={center.y} r={bloom.shadowRadius} fill={`url(#${bloomId})`} opacity={bloomOpacity} />
-        <AnimatedCircle cx={center.x} cy={center.y} r={rest.shadowRadius} fill={`url(#${restId})`} opacity={restOpacity} />
+        <AnimatedCircle cx={center.x} cy={center.y} r={bloomR} fill={`url(#${bloomId})`} opacity={bloomOpacity} />
+        <AnimatedCircle cx={center.x} cy={center.y} r={restR} fill={`url(#${restId})`} opacity={restOpacity} />
 
         {/* Beat 3 (swell) — main bead, gathers and grows from the centroid. */}
         <AnimatedCircle
