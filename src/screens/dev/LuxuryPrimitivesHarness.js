@@ -18,10 +18,10 @@ import { PrimaryButton } from '../../components/PrimaryButton';
 // guessed at now (Lumen: "don't guess the choreography, you'll build it
 // twice").
 //
-// shadows.glow() is Lumen's lane in theme.js and not landed yet as of this
-// commit — rather than fork a competing signature, this rig borrows the
-// existing `shadows.tinted()` as a visibly-labelled stand-in and should be
-// re-pointed at `shadows.glow('bloom')` the moment her token branch merges.
+// Repointed onto Lumen's landed `shadows.glow(color, level='bloom')` —
+// zero offset always, throws on an unknown level. The bead sits at 'bloom'
+// (responding to you); 'peak' is reserved for the one frame something is
+// fully alight, which this instrument never claims to be.
 export const LuxuryPrimitivesHarness = () => {
   const reduced = useReducedMotion();
   const [phase, setPhase] = useState('rest');
@@ -113,7 +113,7 @@ export const LuxuryPrimitivesHarness = () => {
           pointerEvents="none"
           style={[
             styles.bead,
-            theme.shadows.tinted(theme.colors.accentBurst), // stand-in for shadows.glow('bloom') — repoint once Lumen's token lands
+            theme.shadows.glow(theme.colors.accentBurst, 'bloom'),
             {
               transform: [
                 { translateY: fallY },
