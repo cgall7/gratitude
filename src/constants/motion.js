@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AccessibilityInfo } from 'react-native';
+import { AccessibilityInfo, Easing } from 'react-native';
 
 // Sunbeam §12.5 Motion QA Standard — single source of truth for every
 // spring/timing curve in the app. Screens/components consume these
@@ -85,6 +85,35 @@ export const DURATIONS = {
 
 // Cascade delay between staggered children (list items, tapestry cells,
 // theme card reveals) — §14.1 "40-60ms cascade."
+// Honey drip register (Lumen, luxury pass 2026-08-20) — the hex-tap
+// centerpiece's timing, and its own law: honey never springs. A spring is
+// elastic; honey is viscous and inelastic — it swells, it necks, it
+// pinches, it falls under gravity, it pools. Eased timings and an
+// accelerating gravity curve only. Banned from `SPRINGS` on purpose: if
+// you're reaching for a spring here, what you're building is water.
+//
+// Total ~3.1s played straight through — deliberately long. Honey is
+// allowed to outlast the tap that triggered it.
+export const HONEY = {
+  swell: 700, // bead gathers at origin — HONEY_EASING.swell
+  neck: 380, // the column thins. THE signature moment — Deezine's storyboard
+  // scores its shape (bead position, minimum neck width, drip count); this
+  // module owns only the duration until that lands.
+  fall: 900, // release — HONEY_EASING.fall. Accelerating. No overshoot, no settle.
+  pool: 1100, // spread + fade at rest — HONEY_EASING.pool
+};
+
+// Per-phase easings for `HONEY`, kept alongside the durations so a caller
+// never has to guess which curve goes with which number.
+export const HONEY_EASING = {
+  swell: Easing.out(Easing.quad),
+  // `neck` has no ratified easing yet — same reason its geometry is
+  // TBD above. Do not default this to something that looks finished;
+  // an unscored phase should read as unscored.
+  fall: Easing.in(Easing.quad),
+  pool: Easing.out(Easing.cubic),
+};
+
 export const STAGGER_MS = 50;
 
 // §14.1 amendment (R24, Pixel). §14.1's per-item step is calibrated for a
