@@ -173,8 +173,8 @@ const styles = StyleSheet.create({
   iconPillActive: {
     backgroundColor: theme.colors.washYellow,
     borderWidth: 1,
-    // Marigold at 60% — the accent is still the thing marking the tab, just
-    // as an edge rather than a fill.
-    borderColor: 'rgba(255, 210, 0, 0.6)',
+    // The accent is still the thing marking the tab, just as an edge rather
+    // than a fill. Alpha lives in the token now, not in this comment.
+    borderColor: theme.colors.accentEdge,
   },
 });

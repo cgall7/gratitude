@@ -60,15 +60,15 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.surface,
   },
   androidFallback: {
-    backgroundColor: theme.colors.surface + 'D9', // 85%
+    backgroundColor: theme.colors.glassVeil,
   },
   // Blur alone reads cold iOS-grey; this keeps the surface inside the
   // Sunbeam palette regardless of what's scrolling underneath.
   creamVeil: {
-    backgroundColor: theme.colors.surface + '8C', // 55%
+    backgroundColor: theme.colors.glassVeilSoft,
   },
   rim: {
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.65)',
+    borderColor: theme.colors.glassRim,
   },
 });

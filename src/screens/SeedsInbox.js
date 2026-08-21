@@ -452,12 +452,13 @@ const styles = StyleSheet.create({
   // 0.86.2 (`StyleSheet.absoluteFill` is the plain object at
   // StyleSheetExports.js:21; there is no `absoluteFillObject` export). Spreading
   // the missing name yields an overlay with no positioning at all, which is the
-  // bug that made FlyingBee invisible and was fixed in d0def1c. Matching
-  // NotesInbox's scrim exactly, because a seed detail and a note detail should
-  // be siblings.
+  // bug that made FlyingBee invisible and was fixed in d0def1c. Shares
+  // `theme.colors.scrim` with NotesInbox, because a seed detail and a note
+  // detail should be siblings — which used to be a hand-matched literal and a
+  // comment promising it stayed matched, and is now the same token.
   detailOverlay: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(26, 21, 0, 0.4)',
+    backgroundColor: theme.colors.scrim,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,

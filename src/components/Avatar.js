@@ -76,7 +76,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.6)',
+    borderColor: theme.colors.glassRim,
   },
   image: {
     backgroundColor: theme.colors.surfaceBorder,

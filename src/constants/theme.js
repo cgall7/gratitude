@@ -56,9 +56,82 @@ const colors = {
   // Text / ink
   ink: '#221B03', // Warm near-black. Text, primary CTA fill, icons.
   inkSoft: '#6B5F3D', // Secondary text — ~6.1:1 on Sunlit Cream, AA-compliant.
+  // Third rung of the warm ink ladder — placeholder/hint text only. Read by
+  // three `placeholderTextColor` call sites that predate this token and have
+  // been resolving `undefined` ever since (CreateHive x2, ComposeHiveEntry),
+  // which hands the field to iOS's system placeholder grey: ~#C7C7CD, hue
+  // 290.5deg, 1.68:1 on white. That is not merely "a cold grey" — it sits 199deg
+  // around the wheel from every other piece of text in the product, and below
+  // every contrast floor there is.
+  //
+  // Derived, not picked. `ink` is L*10.0 / h90.9deg, `inkSoft` is L*40.7 / h91.4deg,
+  // so the ladder holds one hue and steps dL*=30.6. An evenly-spaced third rung
+  // lands at L*71.3 — and only reaches ~2.3:1, so even spacing loses to
+  // legibility and legibility wins. This sits at L*54.5, h94.0deg (within 3deg of
+  // the ladder), 3.82:1 on `surface` and 3.68:1 on `backgroundWriting`.
+  //
+  // Deliberately NOT >=4.5:1: a placeholder that reads as strongly as entered
+  // text stops reading as a prompt. 3.82:1 clears the 3:1 large-text floor on
+  // both grounds with margin and is 2.3x what ships today. This holds only
+  // while the placeholder stays SUPPLEMENTARY — both live call sites carry a
+  // visible <Text> title stating the question. A placeholder that becomes a
+  // field's only label is content, and needs 4.5:1, not this token.
+  inkFaint: '#8F8256',
   textPrimary: '#221B03', // Alias of `ink`, kept for existing call sites.
   textSecondary: '#6B5F3D', // Alias of `inkSoft`, kept for existing call sites.
   textInverse: '#221B03', // Dark text for use on top of bright accent/accentDeep surfaces
+
+  // ---------------------------------------------------------------------
+  // Materials — the alpha register (Luxury Pass, Lane A).
+  //
+  // Every token below was a hand-typed literal at its call sites until now.
+  // ALPHA LIVES IN THE TOKEN, NEVER AT THE CALL SITE: an alpha applied at the
+  // call site has to be documented in a comment to be legible, and then the
+  // comment is a dependency that goes stale the first time the value moves.
+  // Three sites were doing exactly that by string-concatenating a hex pair
+  // onto a token (`surface + 'D9'  // 85%`), which also made them invisible
+  // to any gate keyed on `rgba(` or `#RRGGBB`.
+  //
+  // Each of these collects call sites that were ALREADY consistent with each
+  // other; the audit that found them mistook two roles for one, and the roles
+  // are recorded here so the next reader doesn't repeat it.
+
+  // Modal scrim — the field a detail overlay sits on. NOT the same role as
+  // `trackDim` below, despite both being ink-at-alpha: NotesInbox and
+  // SeedsInbox are `detailOverlay`, and SeedsInbox's own comment says it
+  // matches NotesInbox deliberately, "because a seed detail and a note detail
+  // should be siblings." That was correct, not drift.
+  scrim: 'rgba(26, 21, 0, 0.4)',
+
+  // Unfilled progress-track fill — a 4pt rail, MemoryLane and PackageOpen.
+  // A track is not a scrim; it is read against the filled portion beside it,
+  // not against content floating on top of it.
+  trackDim: 'rgba(34, 27, 3, 0.5)',
+
+  // Glass — translucent white over live content. Two roles, and only the rim
+  // ever actually drifted.
+  //   fill: five sites, every one a 40x40 circular back button, byte-identical.
+  //   rim:  Avatar was 0.6, GlassBackground 0.65. One value now; Avatar moves
+  //         +0.05 on a 1pt border under 40pt. Named rather than buried.
+  glassFill: 'rgba(255, 255, 255, 0.4)',
+  glassRim: 'rgba(255, 255, 255, 0.65)',
+
+  // Frosted veils over the tab bar (GlassBackground). Were `surface + 'D9'`
+  // and `surface + '8C'`; 0xD9/255 = 0.851 and 0x8C/255 = 0.549 round-trip to
+  // the same 8-bit alpha, so these render identically to what shipped.
+  glassVeil: 'rgba(255, 255, 255, 0.851)',
+  glassVeilSoft: 'rgba(255, 255, 255, 0.549)',
+
+  // Marigold as an EDGE, not a fill — the active tab pill's border. Was
+  // `rgba(255, 210, 0, 0.6)` hand-typed at MainTabs, which is `accent`
+  // (#FFD200) retyped by hand, annotated with a comment claiming it was
+  // Marigold. This module's own opening comment warns about precisely that
+  // failure mode; this is the instance it predicted.
+  accentEdge: 'rgba(255, 210, 0, 0.6)',
+
+  // `accentDeep` at 10% — a warm tint wash behind an inline element
+  // (TodayTab). Was `accentDeep + '1A'`; 0x1A/255 = 0.102.
+  accentDeepWash: 'rgba(255, 122, 0, 0.102)',
 };
 
 // Two-stop washes, corner to corner: lit corner to shaded corner, so a
