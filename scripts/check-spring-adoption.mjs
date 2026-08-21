@@ -96,7 +96,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse } from '@babel/parser';
-import { loadBaseline, diffAgainstBaseline } from './lib/ratchet.mjs';
+import { loadBaseline, diffAgainstBaseline, ownerIsNamed } from './lib/ratchet.mjs';
+import { springKeyOf, durationKeyOf } from './lib/ratchet-keys.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SRC = path.join(ROOT, 'src');
@@ -357,22 +358,22 @@ for (const v of durationViolations) {
 // motion.js docstring's own unmet "centralized" claim). Ratchet instead of
 // hard-fail so the suite can pass again while these shrink as tracked debt.
 const springBaseline = loadBaseline(path.join(ROOT, 'scripts', 'baselines', 'spring-adoption-springs.json'));
-const springKeyOf = (v) => `${v.file}:${v.line}`;
 const springDiff = diffAgainstBaseline(springViolations, springBaseline.entries, springKeyOf);
 console.log(`\n${springDiff.stillOpen} already in the baseline (owner: ${springBaseline.owner}) — ${springDiff.added.length} new, ${springDiff.stale.length} baseline rows no longer reproduced`);
 for (const v of springDiff.added) console.log(`  NEW, not in baseline: ${springKeyOf(v)}  {friction: ${v.friction}, tension: ${v.tension}}`);
 for (const v of springDiff.stale) console.log(`  STALE baseline row, run \`npm run ratchet:update\` to retire it: ${springKeyOf(v)}`);
 check('every Animated.spring takes friction/tension from SPRINGS, beyond the ratchet baseline', springDiff.added, []);
 check('every ratchet-baselined spring entry still reproduces (or has been retired via ratchet:update)', springDiff.stale, []);
+check('spring-adoption-springs.json owner names an actual owner, not "unassigned"', ownerIsNamed(springBaseline.owner) ? [] : [springBaseline.owner], []);
 
 const durationBaseline = loadBaseline(path.join(ROOT, 'scripts', 'baselines', 'spring-adoption-durations.json'));
-const durationKeyOf = (v) => `${v.file}:${v.line}`;
 const durationDiff = diffAgainstBaseline(durationViolations, durationBaseline.entries, durationKeyOf);
 console.log(`\n${durationDiff.stillOpen} already in the baseline (owner: ${durationBaseline.owner}) — ${durationDiff.added.length} new, ${durationDiff.stale.length} baseline rows no longer reproduced`);
 for (const v of durationDiff.added) console.log(`  NEW, not in baseline: ${durationKeyOf(v)}  duration: ${v.value}`);
 for (const v of durationDiff.stale) console.log(`  STALE baseline row, run \`npm run ratchet:update\` to retire it: ${durationKeyOf(v)}`);
 check('every Animated.timing duration that duplicates DURATIONS takes it from DURATIONS, beyond the ratchet baseline', durationDiff.added, []);
 check('every ratchet-baselined duration entry still reproduces (or has been retired via ratchet:update)', durationDiff.stale, []);
+check('spring-adoption-durations.json owner names an actual owner, not "unassigned"', ownerIsNamed(durationBaseline.owner) ? [] : [durationBaseline.owner], []);
 
 // scaleTo is NOT ratcheted — it is currently green (zero violations) and
 // stays zero-tolerance. Ratcheting it would silently create a baseline slot

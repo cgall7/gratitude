@@ -105,12 +105,29 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse } from '@babel/parser';
-import { loadBaseline, diffAgainstBaseline } from './lib/ratchet.mjs';
+import { loadBaseline, diffAgainstBaseline, ownerIsNamed } from './lib/ratchet.mjs';
+import { paddingKeyOf, deprecatedImportKeyOf } from './lib/ratchet-keys.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SCREENS_DIR = path.join(ROOT, 'src', 'screens');
 const CHROME_THRESHOLD = 40;
-const TOP_SPACING_KEYS = ['paddingTop', 'padding', 'marginTop', 'margin'];
+// R17 nit (Lumen, 2026-08-21): widen the SHIELDING side only, never the
+// CANDIDATE side. `paddingVertical`/`marginVertical` were missing here —
+// measured live impact is zero in both directions (same 14 violations
+// either way), but the two directions are not symmetric risk. Widening
+// candidate detection (which flags only a literal `paddingTop` key, see
+// `findChromePaddingViolations` below) would treat any >=40 vertical pad
+// as a chrome guess — and the only two `paddingVertical >= 40` sites in
+// src/screens (TodayTab.js:316 `quoteCard`, ReceivedPackages.js:175
+// `emptyState`) are both ordinary interior spacing, not chrome: 40
+// separates chrome from interior on `paddingTop`, not on a symmetric
+// vertical pad. Widening the SHIELDING side (this list, used only by
+// `hasTopSpacing`/`elementContributesTopSpacing` to decide whether an
+// ancestor already accounts for top space) can only ever REMOVE
+// violations, never add a false one — an ancestor with real vertical
+// padding does push its children down regardless of which axis name it
+// used to say so.
+const TOP_SPACING_KEYS = ['paddingTop', 'padding', 'paddingVertical', 'marginTop', 'margin', 'marginVertical'];
 
 // `--dump-json` (ratchet-update.mjs) wants only the final JSON on stdout —
 // silence every console.log from here down; the dump call site below
@@ -519,22 +536,22 @@ for (const v of deprecatedApiFiles) console.log(`  ${v.file}`);
 // this one shrinks as a tracked debt rather than staying invisible behind
 // a permanently red suite.
 const paddingBaseline = loadBaseline(path.join(ROOT, 'scripts', 'baselines', 'safe-area-padding.json'));
-const paddingKeyOf = (v) => `${v.file}:${v.line}`;
 const paddingDiff = diffAgainstBaseline(violations, paddingBaseline.entries, paddingKeyOf);
 console.log(`\n${paddingDiff.stillOpen} already in the baseline (owner: ${paddingBaseline.owner}) — ${paddingDiff.added.length} new, ${paddingDiff.stale.length} baseline rows no longer reproduced`);
 for (const v of paddingDiff.added) console.log(`  NEW, not in baseline: ${paddingKeyOf(v)}  styles.${v.styleKey}.paddingTop = ${v.value}`);
 for (const v of paddingDiff.stale) console.log(`  STALE baseline row, run \`npm run ratchet:update\` to retire it: ${paddingKeyOf(v)}`);
 check('no unshielded chrome paddingTop beyond the checked-in ratchet baseline', paddingDiff.added, []);
 check('every ratchet-baselined paddingTop entry still reproduces (or has been retired via ratchet:update)', paddingDiff.stale, []);
+check('safe-area-padding.json owner names an actual owner, not "unassigned"', ownerIsNamed(paddingBaseline.owner) ? [] : [paddingBaseline.owner], []);
 
 const deprecatedBaseline = loadBaseline(path.join(ROOT, 'scripts', 'baselines', 'safe-area-deprecated-import.json'));
-const deprecatedKeyOf = (v) => v.file;
-const deprecatedDiff = diffAgainstBaseline(deprecatedApiFiles, deprecatedBaseline.entries, deprecatedKeyOf);
+const deprecatedDiff = diffAgainstBaseline(deprecatedApiFiles, deprecatedBaseline.entries, deprecatedImportKeyOf);
 console.log(`\n${deprecatedDiff.stillOpen} already in the baseline (owner: ${deprecatedBaseline.owner}) — ${deprecatedDiff.added.length} new, ${deprecatedDiff.stale.length} baseline rows no longer reproduced`);
-for (const v of deprecatedDiff.added) console.log(`  NEW, not in baseline: ${deprecatedKeyOf(v)}`);
-for (const v of deprecatedDiff.stale) console.log(`  STALE baseline row, run \`npm run ratchet:update\` to retire it: ${deprecatedKeyOf(v)}`);
+for (const v of deprecatedDiff.added) console.log(`  NEW, not in baseline: ${deprecatedImportKeyOf(v)}`);
+for (const v of deprecatedDiff.stale) console.log(`  STALE baseline row, run \`npm run ratchet:update\` to retire it: ${deprecatedImportKeyOf(v)}`);
 check('no screen newly imports the deprecated react-native SafeAreaView beyond the ratchet baseline', deprecatedDiff.added, []);
 check('every ratchet-baselined deprecated-import entry still reproduces (or has been retired via ratchet:update)', deprecatedDiff.stale, []);
+check('safe-area-deprecated-import.json owner names an actual owner, not "unassigned"', ownerIsNamed(deprecatedBaseline.owner) ? [] : [deprecatedBaseline.owner], []);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -45,3 +45,101 @@ export function diffAgainstBaseline(live, baselineEntries, keyOf) {
   const stillOpen = live.length - added.length;
   return { added, stale, stillOpen };
 }
+
+// R16 (Lumen, 2026-08-21): a baseline `owner` field that reads "unassigned"
+// satisfies the FIELD Lumen's R15 ruling required, not the CONDITION it
+// named — a named owner. Callers assert this once per baseline so the
+// suite itself, not a review comment, holds the second of R15's two
+// conditions ("named owner" / "retired only in the fixing commit").
+export function ownerIsNamed(owner) {
+  return typeof owner === 'string' && owner.trim().length > 0 && !/\bunassigned\b/i.test(owner);
+}
+
+// R16b (Lumen, 2026-08-21) — BLOCKING finding: `diffAgainstBaseline`'s
+// `added`/`stale` are the right diagnostic for the GATE (it should red on
+// anything not reproduced verbatim), but `ratchet-update.mjs` used to take
+// that same `stale` list and blindly retire it while writing the ENTIRE
+// live sweep back as the new baseline — including whatever showed up in
+// `added`. A single cosmetic edit (one comment line above a baselined
+// violation) shifts that violation's line, which under a line-sensitive
+// key reads as one retirement + one addition; the "addition" is
+// indistinguishable from a real new violation, and the update script wrote
+// both in unconditionally. Lumen's run: a genuinely new unshielded
+// violation landed in the same commit as a cosmetic shift, and
+// `ratchet:update` absorbed both — 14 -> 15, gate green, real defect
+// laundered through the sanctioned repair.
+//
+// A monotone update may only ever (1) RETIRE a baseline row whose exact
+// key no longer reproduces live, or (2) RE-KEY a row: a live entry that
+// matches no baseline key directly, but whose fields are otherwise
+// IDENTICAL to a retired baseline row in the same file (same everything
+// except whatever the key itself already varies, e.g. `line`) is treated
+// as the same violation, moved, not a new one. Anything left over is
+// genuinely new and is refused unless its key is explicitly named by the
+// caller (`ratchet-update.mjs --accept-new <key>`) — the shape of R16a's
+// stable key one level up, applied to the updater instead of the gate.
+//
+// NAMED RESIDUAL (Lumen): two violations with identical fields in one
+// file, one fixed and one added in the same commit, is still ambiguous —
+// either pairing of "old retired / new re-keyed" is indistinguishable from
+// the other, and this function may pick either. That ambiguity already
+// existed in a plain line-keyed baseline; this fix neither creates nor
+// closes it, it only refuses the case that has no matching shape at all.
+export function computeMonotoneUpdate(live, baselineEntries, keyOf, acceptNewKeys = new Set()) {
+  const shapeOf = (entry) => {
+    const { line, ...rest } = entry;
+    const keys = Object.keys(rest).sort();
+    return `${entry.file}::${keys.map((k) => `${k}=${JSON.stringify(rest[k])}`).join('|')}`;
+  };
+
+  const baselineByKey = new Map(baselineEntries.map((e) => [keyOf(e), e]));
+  const liveByKey = new Map(live.map((e) => [keyOf(e), e]));
+
+  // Baseline rows not directly reproduced, pooled by shape — candidates to
+  // be "the same violation, moved." Each is consumable at most once.
+  const pool = new Map();
+  for (const entry of baselineEntries) {
+    if (liveByKey.has(keyOf(entry))) continue;
+    const shape = shapeOf(entry);
+    if (!pool.has(shape)) pool.set(shape, []);
+    pool.get(shape).push(entry);
+  }
+
+  const next = [];
+  const rekeyed = [];
+  const genuinelyNew = [];
+  const accepted = [];
+  const matchedBaselineKeys = new Set();
+
+  for (const entry of live) {
+    const key = keyOf(entry);
+    const direct = baselineByKey.get(key);
+    if (direct) {
+      // Same key: carry the live entry's fresh fields forward, but keep any
+      // baseline-only annotation (e.g. a `note`) the live sweep can't
+      // produce — see the WalletTab entry in safe-area-padding.json.
+      next.push({ ...direct, ...entry });
+      matchedBaselineKeys.add(key);
+      continue;
+    }
+    const shape = shapeOf(entry);
+    const candidates = pool.get(shape);
+    if (candidates && candidates.length) {
+      const consumed = candidates.shift();
+      matchedBaselineKeys.add(keyOf(consumed));
+      next.push({ ...consumed, ...entry });
+      rekeyed.push({ from: consumed, to: entry });
+      continue;
+    }
+    if (acceptNewKeys.has(key)) {
+      next.push(entry);
+      accepted.push(entry);
+      continue;
+    }
+    genuinelyNew.push(entry);
+  }
+
+  const retired = baselineEntries.filter((e) => !matchedBaselineKeys.has(keyOf(e)));
+
+  return { next, rekeyed, genuinelyNew, accepted, retired };
+}

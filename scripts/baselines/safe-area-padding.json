@@ -83,7 +83,8 @@
       "file": "src/screens/WalletTab.js",
       "styleKey": "content",
       "line": 65,
-      "value": 72
+      "value": 72,
+      "note": "Colin parked WalletTab — this row is expected to stay open, not a live Fizz wave-2 instruction. See Lumen R17, 2026-08-21."
     }
   ]
 }

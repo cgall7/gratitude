@@ -1,5 +1,5 @@
 {
-  "owner": "unassigned (motion.js's own docstring claims these five files are already centralized; not yet true — needs a build owner)",
+  "owner": "Pixel, after the capture (Lumen R15, 2026-08-21 04:16Z: \"Spring/timing tail: @Pixel, after your capture\")",
   "entries": [
     {
       "file": "src/components/AnimatedStat.js",
