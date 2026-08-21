@@ -35,9 +35,10 @@
 // behind those refuses to be skimmed. The rail's COLOUR is checked in section
 // D, but only as token arithmetic — no frame has been rendered.
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { readFile, readdir } from 'node:fs/promises';
 import { parse } from '@babel/parser';
+import { contrastRatio, over, parseColor, calibrate } from './lib/color.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const MODULE = path.join(ROOT, 'src/components/revealSequencer.js');
@@ -544,41 +545,82 @@ console.log('\nD. the rail, and what this gate cannot reach');
 //     is `ink` on `ink@0.5`. This row is a tripwire on the tokens, not on a
 //     frame: if `ink` or `background` is retuned, the rail ruling gets
 //     re-derived instead of inherited.
+//
+//     THE ALPHA IS READ, NOT DECLARED. This row used to open `const TRACK_ALPHA
+//     = 0.5` and check the arithmetic of that constant, which meant it verified
+//     the RULED value and never the SHIPPED one — green by construction, unable
+//     to fail on a screen shipping the wrong alpha. One was: PollinateWrapped's
+//     ProgressSegment ran the unfilled track at 0.15 (1.3558:1, the very value
+//     §23.11 ruled a defect) for as long as this row has been green. It now
+//     reads `trackDim` off the token, so retuning the token re-derives the
+//     ruling and mistyping it goes red.
 {
-  const themeSrc = await readFile(THEME_MODULE, 'utf8');
-  const tok = (name) => {
-    const m = new RegExp(`\\b${name}: '(#[0-9A-Fa-f]{6})'`).exec(themeSrc);
-    return m ? m[1] : null;
-  };
-  const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
-  const lin = (c) => (c / 255 <= 0.03928 ? c / 255 / 12.92 : ((c / 255 + 0.055) / 1.055) ** 2.4);
-  const L = (r) => 0.2126 * lin(r[0]) + 0.7152 * lin(r[1]) + 0.0722 * lin(r[2]);
-  const ratio = (a, b) => (Math.max(L(a), L(b)) + 0.05) / (Math.min(L(a), L(b)) + 0.05);
-  const over = (fg, alpha, bg) => fg.map((c, i) => c * alpha + bg[i] * (1 - alpha));
-  const ink = tok('ink');
-  const background = tok('background');
-  const accent = tok('accent');
-  if (!ink || !background || !accent) {
-    bad('the rail pair clears §23.11', `could not read tokens from theme.js (ink=${ink} background=${background})`);
+  const { theme } = await import(pathToFileURL(THEME_MODULE).href);
+  const trackDim = theme?.colors?.trackDim;
+  const ink = theme?.colors?.ink;
+  const background = theme?.colors?.background;
+  const accent = theme?.colors?.accent;
+  if (!trackDim || !ink || !background || !accent) {
+    bad(
+      'the rail pair clears §23.11',
+      `could not read tokens from theme.js (trackDim=${trackDim} ink=${ink} background=${background})`,
+    );
   } else {
-    const TRACK_ALPHA = 0.5;
-    const track = over(hex(ink), TRACK_ALPHA, hex(background));
-    const trackVsGround = ratio(track, hex(background));
-    const fillVsTrack = ratio(hex(ink), track);
-    const accentVsTrack = ratio(hex(accent), track);
-    if (trackVsGround >= 3 && fillVsTrack >= 3) {
-      ok(
-        `the ruled rail pair clears: ink@${TRACK_ALPHA} track vs background ${trackVsGround.toFixed(4)}:1, ` +
-          `ink fill vs track ${fillVsTrack.toFixed(4)}:1 (accent as the fill would be ${accentVsTrack.toFixed(4)}:1 — ` +
-          'why the fill is ink)',
+    const drift = calibrate().filter((c) => !c.ok);
+    if (drift.length) {
+      bad(
+        'the rail pair clears §23.11',
+        `scripts/lib/color.mjs failed its own calibration (${drift.map((d) => d.label).join(', ')}) — ` +
+          'the instrument is measuring something other than what theme.js publishes, so its verdict is not usable.',
       );
     } else {
-      bad(
-        'the ruled rail pair clears §23.11',
-        `track vs ground ${trackVsGround.toFixed(4)}:1, fill vs track ${fillVsTrack.toFixed(4)}:1 — one is under 3:1. ` +
-          'A progress indicator is a fraction; without a visible denominator it is a different component.',
-      );
+      const alpha = parseColor(trackDim).a;
+      const track = over(trackDim, background);
+      const trackVsGround = contrastRatio(track, background);
+      const fillVsTrack = contrastRatio(ink, track);
+      const accentVsTrack = contrastRatio(accent, track);
+      if (trackVsGround >= 3 && fillVsTrack >= 3) {
+        ok(
+          `the ruled rail pair clears, read off the token: trackDim is ink@${alpha}, track vs background ` +
+            `${trackVsGround.toFixed(4)}:1, ink fill vs track ${fillVsTrack.toFixed(4)}:1 (accent as the fill ` +
+            `would be ${accentVsTrack.toFixed(4)}:1 — why the fill is ink)`,
+        );
+      } else {
+        bad(
+          'the ruled rail pair clears §23.11',
+          `trackDim is ink@${alpha}: track vs ground ${trackVsGround.toFixed(4)}:1, fill vs track ` +
+            `${fillVsTrack.toFixed(4)}:1 — one is under 3:1. A progress indicator is a fraction; without a ` +
+            'visible denominator it is a different component.',
+        );
+      }
     }
+  }
+}
+
+// 15b. Every progress track in src/ uses the token. Row 15 proves the ruled
+//      value is correct; this proves it is the one that shipped. Those are
+//      different claims, and the gap between them is exactly where
+//      PollinateWrapped's 0.15 lived.
+{
+  const files = await jsFiles(SRC);
+  const offenders = [];
+  for (const f of files) {
+    const src = await readFile(f, 'utf8');
+    src.split('\n').forEach((line, i) => {
+      const code = line.replace(/\/\/.*$/, '');
+      if (/rgba\(\s*34\s*,\s*27\s*,\s*3\s*,/.test(code) || /rgba\(\s*26\s*,\s*21\s*,\s*0\s*,/.test(code)) {
+        offenders.push(`${path.relative(ROOT, f)}:${i + 1}`);
+      }
+    });
+  }
+  if (offenders.length === 0) {
+    ok('no raw ink-alpha literal survives in src/ — every track and scrim reads its token');
+  } else {
+    bad(
+      'no raw ink-alpha literal survives in src/',
+      `${offenders.length} raw ink-alpha literal(s), each one a track or scrim that cannot be retuned ` +
+        `from theme.js: ${offenders.join(', ')}`,
+    );
   }
 }
 
