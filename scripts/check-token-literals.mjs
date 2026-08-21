@@ -36,20 +36,27 @@
 //      comment is never in the universe to begin with — nothing to exclude,
 //      because a `//` line was never a candidate.
 //
-// TWO NAMED EXCLUSIONS — CODE, NOT COMMENTS, THAT STILL MATCH THE PATTERN
+// ONE NAMED EXCLUSION — CODE, NOT A COMMENT, THAT STILL MATCHES THE PATTERN
 //
 // A comment is structurally invisible to an AST string-literal walk, so it
-// needs no exclusion. These two do, because they *are* real StringLiteral
-// nodes carrying a real rgba() literal, and the gate cannot tell "scrim" from
-// "not a scrim" from syntax alone (Lumen, thread 6596d9c2):
+// needs no exclusion.
 //
-//   - PollinateWrapped.js:261 — `rgba(34,27,3,0.15)` is one endpoint of an
-//     `outputRange` color interpolation (text fading in), not a background
-//     scrim. There is no token for an interpolation endpoint to reference.
 //   - revealSequencer.js:332 is itself inside a `//` comment (dead code for
 //     the hex sweep per the point above), listed here only so the
 //     self-check below has something to confirm against if that ever
 //     changes.
+//
+// PollinateWrapped.js:261 was excluded here originally, on Lumen's word that
+// `rgba(34,27,3,0.15)` was an interpolation endpoint rather than a scrim. Her
+// own follow-up correction (thread 6596d9c2) reread the call site: it is
+// `ProgressSegment`'s track background, the exact component §23.11 already
+// ruled, shipping the exact alpha §23.11 ruled a defect (1.36:1 against a
+// 3:1 floor) — not a defect-free exclusion at all. Her token commit fixed it
+// to `theme.colors.trackDim`, so the literal is gone from the source and the
+// exclusion has nothing left to be grounded against. Removed rather than
+// left in place: this gate's own "exclusion must still match" self-check
+// caught the staleness the moment her fix landed — proof the check-then-list
+// design was worth having, not a sign to loosen it.
 //
 // Each exclusion is verified present in the raw candidate set before it is
 // subtracted (`EXCLUSIONS not found in the candidate set` below) — an
@@ -196,13 +203,7 @@ for (const file of files) {
 }
 check('every file parsed', parseErrors, []);
 
-const EXCLUSIONS = [
-  {
-    file: 'src/screens/PollinateWrapped.js',
-    line: 261,
-    reason: 'outputRange color-interpolation endpoint, not a scrim — no token exists for an interpolation endpoint',
-  },
-];
+const EXCLUSIONS = [];
 
 for (const ex of EXCLUSIONS) {
   const grounded = candidates.some((c) => c.file === ex.file && c.line === ex.line);
