@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, Text } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { theme } from '../constants/theme';
 import { PressableScale } from './PressableScale';
@@ -29,17 +29,28 @@ export const PrimaryButton = ({
   // retry is the first caller that needs to name what it is retrying — "Try
   // again" is the right thing to read and the wrong thing to hear.
   accessibilityLabel,
+  // Sealing a hive is the emotional peak of the product — it does not get
+  // to answer with a 40% fade. `loading` blocks the press exactly like
+  // `disabled` but swaps the label for a spinner instead of dimming it, so
+  // the button keeps saying something instead of going quiet.
+  loading = false,
 }) => (
   <PressableScale
     style={[styles.button, style]}
     containerStyle={containerStyle}
     onPress={onPress}
-    disabled={disabled}
+    disabled={disabled || loading}
+    disabledOpacity={loading ? 1 : 0.4}
     scaleTo={0.97}
     haptic={haptic}
     accessibilityLabel={accessibilityLabel}
+    accessibilityState={{ busy: loading }}
   >
-    <Text style={styles.text}>{children}</Text>
+    {loading ? (
+      <ActivityIndicator color={theme.colors.backgroundWriting} />
+    ) : (
+      <Text style={styles.text}>{children}</Text>
+    )}
   </PressableScale>
 );
 

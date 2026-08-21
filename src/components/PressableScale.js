@@ -19,6 +19,10 @@ export const PressableScale = ({
   scaleTo = 0.96,
   haptic = Haptics.ImpactFeedbackStyle.Light,
   disabled,
+  // A caller showing its own in-place state (e.g. PrimaryButton's spinner)
+  // needs `disabled` to still block the press without the default 0.4 fade
+  // fighting the thing it's rendering instead of the label.
+  disabledOpacity = 0.4,
   // §17.7 scope note (R36): RN's Pressable is `accessible: true` by
   // default, so every one of these is already a VoiceOver stop — it just
   // announces nothing useful. `accessibilityLabel` is a pure passthrough so
@@ -64,7 +68,7 @@ export const PressableScale = ({
       accessibilityRole={accessibilityRole}
       accessibilityState={accessibilityState}
     >
-      <Animated.View style={[style, { opacity: disabled ? 0.4 : 1, transform: [{ scale }] }]}>
+      <Animated.View style={[style, { opacity: disabled ? disabledOpacity : 1, transform: [{ scale }] }]}>
         {children}
       </Animated.View>
     </Pressable>

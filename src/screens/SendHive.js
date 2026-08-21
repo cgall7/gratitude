@@ -143,8 +143,8 @@ export const SendHiveScreen = ({ navigation, route }) => {
 
       <View style={styles.footer}>
         {error && <Text style={styles.errorText}>{error}</Text>}
-        <PrimaryButton onPress={handleSend} disabled={loading || phase === 'sending'}>
-          {phase === 'sending' ? 'Sending…' : 'Send Keepsake'}
+        <PrimaryButton onPress={handleSend} disabled={loading} loading={phase === 'sending'}>
+          Send Keepsake
         </PrimaryButton>
         <PressableScale onPress={() => navigation.goBack()} style={styles.backLink} accessibilityLabel="Go back">
           <Text style={styles.backLinkText}>Go Back</Text>
