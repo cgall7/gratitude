@@ -98,6 +98,19 @@ const colors = {
   // doing the right thing by hand; this is the same thing with a name on it.
   scrim: withAlpha(pigment.inkVeil, 0.4),
 
+  // THE SPOTLIGHT DIM — the transient dim behind a hex tap. Not `scrim`, and the
+  // gap between them is the whole point: `scrim` means THE PAGE IS INERT, a
+  // modal owns it, tap anywhere to dismiss. This means THE PAGE IS STILL YOURS,
+  // one thing on it is lit, and it releases itself. Same pigment, two meanings,
+  // so they have to be TELLABLE APART — and 0.35 is not. Measured against the
+  // page under `scrim`, ΔE00: 0.25 → 9.64, 0.30 → 6.63, 0.32 → 5.37,
+  // 0.35 → 3.42. The system's ground-pair floor is 5 (§20.7), so 0.32 is the
+  // ceiling and 0.35 is DISQUALIFIED — it would make a tap look like an open
+  // modal. Floor is the spotlight test in `shadows.glow` below. 0.25 clears
+  // both with room, and it is the restrained end: this fires on every tap,
+  // many times a session, and a heavier room-dim is the one that gets tiring.
+  spotlightDim: withAlpha(pigment.inkVeil, 0.25),
+
   // --- Ink tiers ---
   // Placeholder text. DERIVED, not picked: 0.62 is the faintest alpha that still
   // clears 4.5:1 on BOTH grounds a text input actually sits on — 4.70:1 on
@@ -280,6 +293,41 @@ export const theme = {
     //
     // An unknown level throws rather than defaulting: a typo silently rendering
     // at `bloom` is a design decision made by a spelling mistake.
+    //
+    // THE GROUND IS PART OF THE EQUATION, and these three numbers do not carry
+    // it. On this app's cream (`background` #FFF7CC) EVERY yellow at EVERY
+    // level makes the ground DARKER, not lighter — L* delta of ground vs
+    // ground-plus-glow, at `bloom`: `accentBurst` -2.26, `accent` -4.38,
+    // `accentDeep` -12.00. A glow that darkens its ground is a stain. You
+    // cannot make a light ground brighter; the page is already near white, so
+    // there is no luminance left to travel into.
+    //
+    // So the ruling is about DIRECTION, not magnitude, and a colour-difference
+    // number cannot see direction — ΔE00 is a distance, and "further away" on
+    // cream means "further into shadow." Ranking glow colours by ΔE00 picks the
+    // one that stains hardest. It is the wrong instrument for this question and
+    // the right one is L*.
+    //
+    // TWO CONSEQUENCES:
+    //   1. THE DIM IS NOT AN ENHANCEMENT, IT IS A PRECONDITION. Without a
+    //      dimmed surround there is no glow on this page at all — only a warm
+    //      bruise. Light needs somewhere dark to travel.
+    //   2. ONCE THE SURROUND IS DIMMED, THE HOTTEST STOP WINS. The spotlight
+    //      test — lit cell L* minus room L*, `bloom`, room dimmed by
+    //      `spotlightDim`'s pigment:
+    //
+    //        dim    accentBurst      accentDeep
+    //        0.00      -2.26            -12.00     no spotlight either way
+    //        0.15      +9.63             -0.11     accentDeep still invisible
+    //        0.25     +17.75             +8.01     <- ruled
+    //
+    //      `accentBurst` is the honey glow. `accentDeep` stays the bead's
+    //      shaded underside in `gradients.honey`, where it sits on the white
+    //      cell as material and not as light.
+    //
+    // DO NOT COMPENSATE BY RAISING THE ALPHA. These levels are a register
+    // shared with dark surfaces; a `peak` cranked until it reads on cream
+    // blows out on the Wrapped slides and the seal. Dim the room instead.
     glow: (color, level = 'bloom') => {
       const levels = {
         rest: { shadowOpacity: 0.18, shadowRadius: 12, elevation: 4 },
