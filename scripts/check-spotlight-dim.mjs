@@ -4,6 +4,38 @@
 //
 //   npm run check:spotlight-dim
 //
+// FIXED (Lumen, 2026-08-21, same thread): this file crashed on R6's own
+// token. Three defects, not the same size:
+//   1. evalNode() understood `withAlpha(...)` and nothing else. R6 made
+//      `colors.spotlightDim` a `withAlpha(mix(...), alpha)` — a CallExpression
+//      nested inside a CallExpression — and it threw. Taught it `mix()`,
+//      reimplemented from theme.js's own definition, same convention as
+//      `withAlpha` above.
+//   2. Fixing (1) unmasked the real defect: both live floors below composited
+//      `withAlpha(inkVeil, spotlightAlpha)` — pigment hardcoded, only the
+//      alpha read live. `colors.spotlightDim` is a *derived* pigment now
+//      (`mix(accentDeep, inkVeil, 0.25)`), not `inkVeil`. A veil token has
+//      two terms; pinning one and following the other goes stale exactly
+//      like `r` -> `R` did in check:hex-tap-geometry an hour earlier. Fixed
+//      by reading `colors.spotlightDim` whole — it already evaluates to the
+//      resolved `rgba(...)` string once (1) is fixed, so there is nothing
+//      left to reconstruct by hand.
+//   3. The live spotlight floor was composited on `background` (the page).
+//      The token is painted on the cells (`surface`) — see theme.js's own
+//      R6 comment: "the cell is the ground this token is painted on." Moved.
+//      The distinguishability floor stays on `background`/PAGE on purpose —
+//      `scrim` is only ever painted on the page, so "would this be confused
+//      with a modal" is a same-ground comparison against where scrim
+//      actually renders (matches `derive-spotlight-dim.mjs`'s own `onPage`
+//      comment: "modal-confusion test happens on the PAGE"). Two floors,
+//      two grounds, each named at its own assertion — not one shared ground
+//      for both.
+// The calibration block (next section) reproduces Lumen's ORIGINAL published
+// figures, from before R6 existed, when the token really was `inkVeil` at a
+// literal alpha. It is deliberately NOT live — it is the proof that `over`/
+// `rgbToLab`/`withAlpha` reproduce known-good numbers, pinned to history on
+// purpose. Only the two floor checks after it read the shipped token.
+//
 // WHY THIS EXISTS
 //
 // Lumen's own ruling reversed itself twice in two hours on this exact
@@ -100,6 +132,21 @@ const withAlpha = (hex, alpha) => {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 };
 
+// mix(hexA, hexB, t) reimplemented from theme.js's own definition, same
+// convention as withAlpha above — a derived pigment resolves to a hex
+// before anything sees it.
+const mix = (hexA, hexB, t) => {
+  const parseHex = (h) => {
+    const m = /^#([0-9A-Fa-f]{6})$/.exec(h);
+    if (!m) throw new Error(`mix() takes 6-digit hex pigments, got ${h}`);
+    return [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16));
+  };
+  if (!(t >= 0 && t <= 1)) throw new Error(`mix() takes t in [0,1], got ${t}`);
+  const [a, b] = [parseHex(hexA), parseHex(hexB)];
+  const ch = (i) => Math.round(a[i] + (b[i] - a[i]) * t).toString(16).padStart(2, '0');
+  return `#${ch(0)}${ch(1)}${ch(2)}`.toUpperCase();
+};
+
 const evalNode = (n, scope) => {
   if (n.type === 'StringLiteral') return n.value;
   if (n.type === 'NumericLiteral') return n.value;
@@ -132,6 +179,10 @@ const evalNode = (n, scope) => {
     const [hexArg, alphaArg] = n.arguments;
     return withAlpha(evalNode(hexArg, scope), evalNode(alphaArg, scope));
   }
+  if (n.type === 'CallExpression' && n.callee.type === 'Identifier' && n.callee.name === 'mix') {
+    const [hexAArg, hexBArg, tArg] = n.arguments;
+    return mix(evalNode(hexAArg, scope), evalNode(hexBArg, scope), evalNode(tArg, scope));
+  }
   throw new Error(`cannot evaluate node type ${n.type} at line ${n.loc?.start.line}`);
 };
 
@@ -160,15 +211,19 @@ const levels = evalNode(findConst(themeAst, 'levels'), {});
 check('shadows.glow() levels register has rest/bloom/peak', Object.keys(levels).sort(), ['bloom', 'peak', 'rest']);
 
 const BLOOM_OPACITY = levels.bloom.shadowOpacity;
-const background = colors.background;
+const background = colors.background; // PAGE ground — where `scrim` is painted
+const surface = colors.surface; // CELL ground — where `spotlightDim` is painted
 const inkVeil = pigment.inkVeil;
 const L = (c) => rgbToLab(c).L;
 
 // "Lit cell" punches through the dim and keeps full ground; "room" is the
-// ground composited with the dim pigment at the given alpha.
-const spotlight = (glowHex, dimAlpha) => {
-  const room = over(withAlpha(inkVeil, dimAlpha), background);
-  const litCell = over(withAlpha(glowHex, BLOOM_OPACITY), background);
+// ground composited with a pre-resolved dim CSS colour (a caller's `roomCss`,
+// not a pigment+alpha this helper reconstructs) — takes the ground too, since
+// the calibration block below and the live floors below that no longer share
+// one.
+const spotlight = (glowHex, roomCss, ground) => {
+  const room = over(roomCss, ground);
+  const litCell = over(withAlpha(glowHex, BLOOM_OPACITY), ground);
   return L(litCell) - L(room);
 };
 
@@ -197,7 +252,7 @@ const spotlightTable = {
 };
 for (const [dim, expectations] of Object.entries(spotlightTable)) {
   for (const [name, expected] of Object.entries(expectations)) {
-    const actual = Number(spotlight(colors[name], Number(dim)).toFixed(2));
+    const actual = Number(spotlight(colors[name], withAlpha(inkVeil, Number(dim)), background).toFixed(2));
     check(`calibration: spotlight(${name}, dim ${dim}) reproduces ${expected}`, actual, expected);
   }
 }
@@ -210,17 +265,23 @@ for (const [alpha, expected] of Object.entries(distinguishTable)) {
   check(`calibration: dim-alpha ${alpha} vs scrim reproduces ΔE00 ${expected}`, actual, expected);
 }
 
-// --- the real gate: computed off the LIVE colors.spotlightDim, not a typed
-// alpha, so a future retune is re-checked against both floors automatically
-// rather than requiring this file to be edited in step.
-const spotlightAlpha = parseColor(colors.spotlightDim).a;
-console.log(`\n--- colors.spotlightDim is inkVeil @ ${spotlightAlpha} ---`);
+// --- the real gate: computed off the LIVE colors.spotlightDim TOKEN — the
+// resolved `rgba(...)` string mix()+withAlpha() produce, not a hardcoded
+// pigment with only its alpha read live — so a future retune of either term
+// is re-checked against both floors automatically rather than requiring this
+// file to be edited in step.
+console.log(`\n--- colors.spotlightDim (live) = ${colors.spotlightDim} ---`);
 
-const liveSpotlight = Number(spotlight(colors.accentBurst, spotlightAlpha).toFixed(2));
-console.log(`  spotlight(accentBurst, dim ${spotlightAlpha}) = ${liveSpotlight}`);
+// Floor 1: on the CELL (`surface`) — the ground this token is actually
+// painted on, per theme.js's own R6 comment.
+const liveSpotlight = Number(spotlight(colors.accentBurst, colors.spotlightDim, surface).toFixed(2));
+console.log(`  spotlight(accentBurst, spotlightDim) on surface = ${liveSpotlight}`);
 checkGE('honey glow (accentBurst) reads lighter than the dimmed room at bloom', liveSpotlight, 0);
 
-const spotlightDimPage = over(withAlpha(inkVeil, spotlightAlpha), background);
+// Floor 2: on the PAGE (`background`) — `scrim` only ever renders there, so
+// "would this be confused with a modal" composites both on the ground scrim
+// actually uses (matches derive-spotlight-dim.mjs's `onPage` comparison).
+const spotlightDimPage = over(colors.spotlightDim, background);
 const distinguishability = Number(deltaE00(spotlightDimPage, scrimPage).toFixed(2));
 console.log(`  ΔE00(spotlightDim page, scrim page) = ${distinguishability}`);
 checkGE('spotlightDim reads as a distinct thing from the modal scrim (§20.7 floor)', distinguishability, GROUND_PAIR_FLOOR);
