@@ -100,6 +100,15 @@ export const HexTapOverlay = ({
   const rest = theme.shadows.glow(theme.colors.accentBurst, 'rest');
   const bloomR = cellSize + bloom.shadowRadius; // 44 + 24 = 68pt
   const restR = cellSize + rest.shadowRadius; // 44 + 12 = 56pt
+  // R10 (R5/R7 Build Review, BLOCKING): converting `r` alone kept the
+  // gradient's shape a point-emitter cone peaking at `center` — a View
+  // shadow is a blurred COPY OF THE SHAPE, full strength across the whole
+  // view and falling off only past its edge. `plateauStop` restates that
+  // shape: flat at `shadowOpacity` out to the cell's own vertices, then the
+  // `shadowRadius` band falls to 0. Same conversion, one more stop — the
+  // function crossed the frame this time, not just the scalar.
+  const bloomPlateauStop = cellSize / bloomR; // 44 / 68 = 0.64706
+  const restPlateauStop = cellSize / restR; // 44 / 56 = 0.78571
   const dim = stopFor(theme.colors.spotlightDim);
 
   // Ruling 3(b): the scrim is exactly as transparent as its geometry is
@@ -153,13 +162,18 @@ export const HexTapOverlay = ({
           {/* Glow opacity reads straight off `shadows.glow()` so a
               View-shadow retune moves this for free; radius is the SAME
               level converted into the gradient's frame (`bloomR`/`restR`
-              above), never `shadowRadius` directly — see R5. */}
+              above), never `shadowRadius` directly — see R5. Middle stop
+              (`bloomPlateauStop`/`restPlateauStop`) restates the View
+              shadow's flat interior before the blur band falls off — see
+              R10; the cone-vs-plateau distinction is the whole fix. */}
           <RadialGradient id={bloomId} cx={center.x} cy={center.y} r={bloomR} gradientUnits="userSpaceOnUse">
             <Stop offset="0" stopColor={theme.colors.accentBurst} stopOpacity={bloom.shadowOpacity} />
+            <Stop offset={bloomPlateauStop} stopColor={theme.colors.accentBurst} stopOpacity={bloom.shadowOpacity} />
             <Stop offset="1" stopColor={theme.colors.accentBurst} stopOpacity="0" />
           </RadialGradient>
           <RadialGradient id={restId} cx={center.x} cy={center.y} r={restR} gradientUnits="userSpaceOnUse">
             <Stop offset="0" stopColor={theme.colors.accentBurst} stopOpacity={rest.shadowOpacity} />
+            <Stop offset={restPlateauStop} stopColor={theme.colors.accentBurst} stopOpacity={rest.shadowOpacity} />
             <Stop offset="1" stopColor={theme.colors.accentBurst} stopOpacity="0" />
           </RadialGradient>
         </Defs>
