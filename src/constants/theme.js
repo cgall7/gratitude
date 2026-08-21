@@ -140,8 +140,9 @@ const colors = {
   //   C*                                2.83          28.06   <- the whole point
   //   spotlight dL*, PAGE ground       17.75          16.98   <- the one that moves
   //
-  // Reproduce: RESEARCH/R6_SPOTLIGHT_DIM_DERIVATION.mjs (repo root; reads this
-  // file's own source, composites with `scripts/lib/color.mjs`).
+  // Reproduce: `node scripts/derive-spotlight-dim.mjs` — reads this file's own
+  // source and composites with `scripts/lib/color.mjs`. Computed from source;
+  // no pixels from any capture.
   //
   // The last row is the only figure that gives anything up, and it is the one
   // `shadows.glow` below and Sage's `check-spotlight-dim` both publish: -0.77
