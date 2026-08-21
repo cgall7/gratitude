@@ -50,8 +50,9 @@ export const SPRINGS = {
 export const PRESS = {
   // Everything — the tab icon's 0.88 was a toy-grade squash and is retired.
   standard: 0.96,
-  // Full-width elements (>=200pt wide) — PrimaryButton's 0.97 rounds up so
-  // the app's one CTA doesn't collapse.
+  // Selected by component identity, not measured width — there is one CTA
+  // shape in this app (§4), and it is the only thing that gets the
+  // shallow press. PrimaryButton's 0.97 rounds up so it doesn't collapse.
   slab: 0.98,
 };
 
