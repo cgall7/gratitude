@@ -3,14 +3,28 @@
 // only *claims* in a comment to be `accent` goes stale the next time the
 // accent moves — which is exactly how §11's retune got dropped on the floor
 // once already.
-const colors = {
+// The one legal way to write a translucent colour. Alpha lives in the token,
+// never at a call site: `theme.colors.surface + 'D9'` derives from the token but
+// is invisible to any gate keyed on `rgba(`/`#RRGGBB`, and it documents its own
+// alpha in a trailing comment that goes stale the moment the alpha moves. Three
+// such sites shipped before this existed.
+const withAlpha = (hex, alpha) => {
+  const m = /^#([0-9A-Fa-f]{6})$/.exec(hex);
+  if (!m) throw new Error(`withAlpha() takes a 6-digit hex pigment, got ${hex}`);
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16));
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+};
+
+// SOLID PIGMENTS. Every colour in the system is either one of these or an alpha
+// of one of these — there is no third category, which is what makes `withAlpha`
+// the only legal way to write a translucent colour and makes a raw `rgba(...)`
+// anywhere in `src/` a defect by construction rather than by taste.
+const pigment = {
   // Backgrounds
   background: '#FFF7CC', // Sunlit Honey (§12.1 retune) — identity screens: Today, Honeycomb, Recap, Wrapped, ritual gate.
   backgroundWriting: '#FFFBEB', // Sunlit Cream — ritual input step only. Contrast gate (Sage-ratified): read/write surfaces stay cream, never brighten.
   surface: '#FFFFFF', // Card white, pops off the cream backdrop
   surfaceShade: '#FFFAE8', // Surface in shadow. Only ever a gradient's far stop — stays lighter than `background` so a card never dissolves into the page.
-  surfaceBorder: 'rgba(26, 21, 0, 0.08)',
-  surfaceBorderStrong: 'rgba(26, 21, 0, 0.14)', // filled/selected card states need more than a hairline
 
   // Accents — Sunbeam v1 (GUIDES/GRATITUDE_DESIGN_SYSTEM_V1.md §1). Zero green anywhere.
   accent: '#FFD200', // Marigold — THE one accent. Active states, celebration badge, key highlights.
@@ -55,10 +69,72 @@ const colors = {
 
   // Text / ink
   ink: '#221B03', // Warm near-black. Text, primary CTA fill, icons.
+  // THE SECOND NEAR-BLACK, and it is not drift. `#1A1500` already shipped as the
+  // base of `surfaceBorder`/`surfaceBorderStrong` and of both `detailOverlay`
+  // scrims — cooler and deeper than `ink`. The split is by ROLE: `ink` is the
+  // colour of something WRITTEN (text, a fill, a progress rail's fill and its
+  // track — §23.11 names `ink` for that pair explicitly); `inkVeil` is the colour
+  // of something OCCLUDING (a boundary, a scrim). Naming it is what stops the
+  // next scrim being eyeballed against the wrong one.
+  inkVeil: '#1A1500',
   inkSoft: '#6B5F3D', // Secondary text — ~6.1:1 on Sunlit Cream, AA-compliant.
   textPrimary: '#221B03', // Alias of `ink`, kept for existing call sites.
   textSecondary: '#6B5F3D', // Alias of `inkSoft`, kept for existing call sites.
   textInverse: '#221B03', // Dark text for use on top of bright accent/accentDeep surfaces
+};
+
+// THE PALETTE: the pigments, plus every ruled alpha of them. A translucent
+// colour appearing anywhere else in the app is a defect — it has no name, so
+// nothing can retune it and no gate can see it.
+const colors = {
+  ...pigment,
+
+  // --- Boundaries and occlusion (all `inkVeil`) ---
+  surfaceBorder: withAlpha(pigment.inkVeil, 0.08),
+  surfaceBorderStrong: withAlpha(pigment.inkVeil, 0.14), // filled/selected card states need more than a hairline
+  // The modal scrim. Two `detailOverlay` sites shipped this literal, and
+  // SeedsInbox's own comment says it matches NotesInbox *deliberately* —
+  // "a seed detail and a note detail should be siblings." That was someone
+  // doing the right thing by hand; this is the same thing with a name on it.
+  scrim: withAlpha(pigment.inkVeil, 0.4),
+
+  // --- Ink tiers ---
+  // Placeholder text. DERIVED, not picked: 0.62 is the faintest alpha that still
+  // clears 4.5:1 on BOTH grounds a text input actually sits on — 4.70:1 on
+  // `backgroundWriting`, 4.63:1 on `background` (measured, scripts/lib/color.mjs).
+  // It stays 1.29x fainter than `inkSoft`, so ink > inkSoft > inkFaint is a real
+  // visible hierarchy and not three names for the same grey. Three call sites read
+  // this token before it existed; all three resolved `undefined` to the iOS system
+  // grey, which is the one colour in the app that belongs to no palette at all.
+  inkFaint: withAlpha(pigment.ink, 0.62),
+  // The progress-rail track. §23.11 ruled this exact pair — `ink` fill on an
+  // `ink@0.5` track — because the 3:1 floor for `ink` on `background` is alpha
+  // 0.4717. Re-measured here against every ground a rail actually lands on,
+  // including all four hive covers: track-vs-ground 3.19-3.29:1, fill-vs-track
+  // 4.58-5.02:1. Clears everywhere, with the thinnest margin on `washPeach`.
+  trackDim: withAlpha(pigment.ink, 0.5),
+
+  // --- Glass (all `surface`) ---
+  // One material, four ruled thicknesses. `glassFill` shipped byte-identical at
+  // five sites (every one a 40x40 back button) with zero drift; the rim shipped
+  // at two values, 0.60 and 0.65, which measure ΔE00 0.36-0.82 apart over every
+  // ground they appear on — below a just-noticeable difference, so collapsing
+  // them to the glass primitive's own 0.65 moves nothing a person can see.
+  glassFill: withAlpha(pigment.surface, 0.4),
+  glassRim: withAlpha(pigment.surface, 0.65),
+  glassVeil: withAlpha(pigment.surface, 0.85), // was `surface + 'D9'` (0.851)
+  glassSheer: withAlpha(pigment.surface, 0.55), // was `surface + '8C'` (0.549)
+
+  // --- Accent alphas ---
+  // Marigold as an EDGE, not a fill — §4's "yellow never fills it" still holds.
+  // Shipped as a hand-copied `rgba(255, 210, 0, 0.6)` under a comment claiming it
+  // was the accent, which is precisely the failure this file's opening paragraph
+  // warns about, complete with the predicted stale comment.
+  accentEdge: withAlpha(pigment.accent, 0.6),
+  accentDeepWash: withAlpha(pigment.accentDeep, 0.1), // was `accentDeep + '1A'` (0.102)
+  // Pooled honey. Translucent because honey IS translucent — a pool that is
+  // opaque reads as paint. Motion only, like `accentBurst`.
+  honeyPool: withAlpha(pigment.accentDeep, 0.22),
 };
 
 // Two-stop washes, corner to corner: lit corner to shaded corner, so a
@@ -73,6 +149,18 @@ const gradients = {
   // coming back.
   // Icon roundels — the one place accent is allowed to fill a shape.
   badge: [colors.accent, colors.accentDeep],
+  // HONEY — the material, not a colour. Three stops because a drip has three
+  // zones and two stops cannot render the one that matters: `accentBurst` is
+  // the lit crown where light passes through the thin edge, `accent` the body,
+  // `accentDeep` the shaded underside where it is thickest. Zero new hex; this
+  // is the app icon's own ruled drop gradient (§13.1) with its highlight, so the
+  // drip is literally made of the same material as the icon on the home screen.
+  //
+  // NOT `goldField`. §29.1 reserves gold as the KEEPSAKE register — finished,
+  // kept, singular. A drip is transient motion and fails all three tests, so
+  // honey may never borrow the keepsake's pigment. `accentBurst`'s own token
+  // comment already restricts it to motion, which is exactly what this is.
+  honey: [colors.accentBurst, colors.accent, colors.accentDeep],
 };
 
 export const theme = {
@@ -126,14 +214,14 @@ export const theme = {
   // read as soft depth rather than a grey drop-shadow on a cream backdrop.
   shadows: {
     card: {
-      shadowColor: '#221B03',
+      shadowColor: colors.ink,
       shadowOffset: { width: 0, height: 6 },
       shadowOpacity: 0.08,
       shadowRadius: 16,
       elevation: 4,
     },
     floating: {
-      shadowColor: '#221B03',
+      shadowColor: colors.ink,
       shadowOffset: { width: 0, height: 14 },
       shadowOpacity: 0.16,
       shadowRadius: 28,
@@ -142,6 +230,12 @@ export const theme = {
     // Colored glow for accent-tinted elements (CTA buttons, unlock badge) —
     // pass the element's own background color so the shadow reads as a
     // glow of that color rather than a generic dark drop-shadow.
+    //
+    // TINTED FALLS, GLOW RADIATES. This helper carries a 10pt downward offset,
+    // which makes it a drop shadow wearing a colour — correct for a button that
+    // sits above the page, wrong for anything emitting light. That offset is the
+    // whole reason nothing in this app glows despite a tinted-shadow helper
+    // sitting right here. For light, use `glow()` below.
     tinted: (color) => ({
       shadowColor: color,
       shadowOffset: { width: 0, height: 10 },
@@ -149,11 +243,29 @@ export const theme = {
       shadowRadius: 20,
       elevation: 10,
     }),
+    // LIGHT DOES NOT FALL. Zero offset, always — a glow with an offset is a
+    // shadow, and the eye reads the difference instantly even when it cannot
+    // name it. Three levels, and they are a register rather than a scale: `rest`
+    // is a thing that is warm, `bloom` is a thing responding to you, `peak` is
+    // the one frame something is fully alight. Nothing should sit at `peak`.
+    //
+    // An unknown level throws rather than defaulting: a typo silently rendering
+    // at `bloom` is a design decision made by a spelling mistake.
+    glow: (color, level = 'bloom') => {
+      const levels = {
+        rest: { shadowOpacity: 0.18, shadowRadius: 12, elevation: 4 },
+        bloom: { shadowOpacity: 0.35, shadowRadius: 24, elevation: 8 },
+        peak: { shadowOpacity: 0.55, shadowRadius: 40, elevation: 14 },
+      };
+      const l = levels[level];
+      if (!l) throw new Error(`shadows.glow(): unknown level '${level}' — expected rest | bloom | peak`);
+      return { shadowColor: color, shadowOffset: { width: 0, height: 0 }, ...l };
+    },
     // Glass floats because it's translucent, not because it casts a slab
     // shadow — lighter than `floating`, reserved for blurred surfaces
     // (spec §10).
     glass: {
-      shadowColor: '#221B03',
+      shadowColor: colors.ink,
       shadowOffset: { width: 0, height: 8 },
       shadowOpacity: 0.1,
       shadowRadius: 24,
