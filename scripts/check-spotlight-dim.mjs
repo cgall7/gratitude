@@ -4,6 +4,28 @@
 //
 //   npm run check:spotlight-dim
 //
+// FIXED (Lumen, 2026-08-21, R11, same thread): R6 is a CHROMA defect and
+// neither floor below measures chroma. Floor 1 is a lightness difference;
+// floor 2 is ΔE00, a distance that is direction-blind by construction — it
+// catches "too close to scrim," not "no hue." Reverting `colors.spotlightDim`
+// to the exact pre-R6 token (`withAlpha(inkVeil, 0.25)`, the achromatic one
+// R6 exists to replace) passes both floors AND the full suite: 33/33 gates,
+// 836 assertions, exit 0. A gate that cannot fail on the defect its own
+// ruling names is not protecting that ruling.
+//
+// Fixed with one relation, on the axis R6 actually moved, both sides live
+// tokens, no typed literal — refuses in advance the exact staleness class
+// this file's own history (the fixes below) keeps hitting:
+//
+//   C*(over(spotlightDim, surface)) >= C*(background)
+//
+// i.e. the spotlight, composited where it's actually painted, must carry at
+// least as much chroma as the page itself — otherwise five grey hexagons
+// around one yellow one is back. Verified against both known points before
+// trusting it: shipped token = 28.06 vs background's 22.05 (passes, matches
+// theme.js's own R6 comment table exactly); pre-R6 token = 2.83 vs the same
+// 22.05 (fails — this is the mutation above, run for real, not modelled).
+//
 // FIXED (Lumen, 2026-08-21, same thread): this file crashed on R6's own
 // token. Three defects, not the same size:
 //   1. evalNode() understood `withAlpha(...)` and nothing else. R6 made
@@ -90,7 +112,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse } from '@babel/parser';
-import { over, deltaE00, rgbToLab, parseColor } from './lib/color.mjs';
+import { over, deltaE00, rgbToLab, chroma, parseColor } from './lib/color.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const THEME_FILE = path.join(ROOT, 'src', 'constants', 'theme.js');
@@ -257,6 +279,13 @@ for (const [dim, expectations] of Object.entries(spotlightTable)) {
   }
 }
 
+// calibration: mix() has three implementations in this repo (theme.js,
+// derive-spotlight-dim.mjs, here) with no shared calibration row until now —
+// legitimate, since color.mjs's CALIBRATION export is deltaE00-pair-shaped
+// and mix() isn't a distance. Pinned to theme.js's own spotlightDim pigment
+// term so a drift in any of the three copies is caught here first.
+check('calibration: mix(accentDeep, inkVeil, 0.25) reproduces the shipped spotlightDim pigment', mix(pigment.accentDeep, pigment.inkVeil, 0.25), '#C66100');
+
 const distinguishTable = { 0.25: 9.64, 0.3: 6.63, 0.32: 5.37, 0.35: 3.42 };
 const scrimPage = over(withAlpha(inkVeil, parseColor(colors.scrim).a), background);
 for (const [alpha, expected] of Object.entries(distinguishTable)) {
@@ -285,6 +314,18 @@ const spotlightDimPage = over(colors.spotlightDim, background);
 const distinguishability = Number(deltaE00(spotlightDimPage, scrimPage).toFixed(2));
 console.log(`  ΔE00(spotlightDim page, scrim page) = ${distinguishability}`);
 checkGE('spotlightDim reads as a distinct thing from the modal scrim (§20.7 floor)', distinguishability, GROUND_PAIR_FLOOR);
+
+// Floor 3 (R11): the axis R6 actually moved. Floors 1/2 above are lightness
+// and distance respectively — neither can fail on a chroma regression, which
+// is exactly how the pre-R6 achromatic token (C* 2.83) passed both of them.
+// Relation between two LIVE tokens, not a typed target: refuses the staleness
+// class every other fix in this file's history has hit.
+const liveChroma = Number(chroma(over(colors.spotlightDim, surface)).toFixed(2));
+const pageChroma = Number(chroma(background).toFixed(2));
+console.log(`  C*(spotlightDim over surface) = ${liveChroma}, C*(background) = ${pageChroma}`);
+const chromaOk = liveChroma >= pageChroma;
+chromaOk ? (pass += 1) : (fail += 1);
+console.log(`${chromaOk ? 'ok  ' : 'FAIL'} spotlightDim carries at least as much chroma as the page it sits on${chromaOk ? '' : ` — got ${liveChroma}, want >= ${pageChroma}`}`);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -125,6 +125,12 @@ const deg = (rad) => (rad * 180) / Math.PI;
 const rad = (d) => (d * Math.PI) / 180;
 
 // CIEDE2000. Sharma/Wu/Dalal formulation.
+// Chroma. Opaque-only, same convention as rgbToLab — composite first.
+export const chroma = (color) => {
+  const lab = 'L' in Object(color) ? color : rgbToLab(color);
+  return Math.sqrt(lab.a ** 2 + lab.b ** 2);
+};
+
 export const deltaE00 = (colorA, colorB, { kL = 1, kC = 1, kH = 1 } = {}) => {
   const lab1 = 'L' in Object(colorA) ? colorA : rgbToLab(colorA);
   const lab2 = 'L' in Object(colorB) ? colorB : rgbToLab(colorB);
