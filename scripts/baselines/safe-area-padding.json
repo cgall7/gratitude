@@ -1,0 +1,89 @@
+{
+  "owner": "Fizz, wave 2 (Lumen R15, GUIDES/HEX_TAP_SPEC_LUXURY_PASS.md \"R14 Execution Review + Safe-Area Ruling\")",
+  "entries": [
+    {
+      "file": "src/screens/ComposeHiveEntry.js",
+      "styleKey": "header",
+      "line": 84,
+      "value": 60
+    },
+    {
+      "file": "src/screens/ComposeNote.js",
+      "styleKey": "content",
+      "line": 132,
+      "value": 64
+    },
+    {
+      "file": "src/screens/CreateHive.js",
+      "styleKey": "header",
+      "line": 205,
+      "value": 60
+    },
+    {
+      "file": "src/screens/HiveDetail.js",
+      "styleKey": "banner",
+      "line": 223,
+      "value": 60
+    },
+    {
+      "file": "src/screens/HoneycombTab.js",
+      "styleKey": "content",
+      "line": 749,
+      "value": 60
+    },
+    {
+      "file": "src/screens/MemoryLane.js",
+      "styleKey": "entryFrame",
+      "line": 250,
+      "value": 100
+    },
+    {
+      "file": "src/screens/NotesInbox.js",
+      "styleKey": "content",
+      "line": 171,
+      "value": 64
+    },
+    {
+      "file": "src/screens/Onboarding.js",
+      "styleKey": "container",
+      "line": 887,
+      "value": 60
+    },
+    {
+      "file": "src/screens/PlantSeed.js",
+      "styleKey": "content",
+      "line": 303,
+      "value": 64
+    },
+    {
+      "file": "src/screens/RecapTab.js",
+      "styleKey": "content",
+      "line": 360,
+      "value": 72
+    },
+    {
+      "file": "src/screens/SealHive.js",
+      "styleKey": "banner",
+      "line": 190,
+      "value": 60
+    },
+    {
+      "file": "src/screens/SendHive.js",
+      "styleKey": "banner",
+      "line": 167,
+      "value": 60
+    },
+    {
+      "file": "src/screens/TodayTab.js",
+      "styleKey": "content",
+      "line": 281,
+      "value": 72
+    },
+    {
+      "file": "src/screens/WalletTab.js",
+      "styleKey": "content",
+      "line": 65,
+      "value": 72
+    }
+  ]
+}

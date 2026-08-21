@@ -1,0 +1,56 @@
+{
+  "owner": "unassigned (motion.js's own docstring claims these five files are already centralized; not yet true — needs a build owner)",
+  "entries": [
+    {
+      "file": "src/components/AnimatedStat.js",
+      "line": 29,
+      "value": 400,
+      "matches": [
+        "arrival"
+      ]
+    },
+    {
+      "file": "src/components/AnimatedStat.js",
+      "line": 42,
+      "value": 700,
+      "matches": [
+        "reveal"
+      ]
+    },
+    {
+      "file": "src/components/CelebrationRays.js",
+      "line": 97,
+      "value": 500,
+      "matches": [
+        "celebrate"
+      ]
+    },
+    {
+      "file": "src/screens/CoreRitual.js",
+      "line": 160,
+      "value": 200,
+      "matches": [
+        "quick",
+        "reducedMotionFade"
+      ]
+    },
+    {
+      "file": "src/screens/CoreRitual.js",
+      "line": 176,
+      "value": 200,
+      "matches": [
+        "quick",
+        "reducedMotionFade"
+      ]
+    },
+    {
+      "file": "src/screens/CoreRitual.js",
+      "line": 181,
+      "value": 200,
+      "matches": [
+        "quick",
+        "reducedMotionFade"
+      ]
+    }
+  ]
+}

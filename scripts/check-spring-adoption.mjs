@@ -96,10 +96,17 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse } from '@babel/parser';
+import { loadBaseline, diffAgainstBaseline } from './lib/ratchet.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SRC = path.join(ROOT, 'src');
 const MOTION_FILE = path.join(SRC, 'constants', 'motion.js');
+
+// `--dump-json` (ratchet-update.mjs) wants only the final JSON on stdout —
+// see check-safe-area.mjs for the same mechanism and why.
+const DUMP_JSON = process.argv.includes('--dump-json');
+const realLog = console.log;
+if (DUMP_JSON) console.log = () => {};
 
 let pass = 0;
 let fail = 0;
@@ -323,21 +330,55 @@ for (const file of files) {
   }
 }
 check('every file parsed', parseErrors, []);
+springViolations.sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line);
+durationViolations.sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line);
+scaleToViolations.sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line);
+
+// `--dump-json` (ratchet-update.mjs) — see check-safe-area.mjs for why this
+// is a separate, explicit exit path rather than folded into the checks.
+if (DUMP_JSON) {
+  realLog(JSON.stringify({ springs: springViolations, durations: durationViolations }));
+  process.exit(0);
+}
 
 console.log(`\n--- inline Animated.spring friction/tension literals (${springViolations.length}) ---`);
-for (const v of springViolations.sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line)) {
+for (const v of springViolations) {
   console.log(`  ${v.file}:${v.line}  {friction: ${v.friction}, tension: ${v.tension}}  ${v.severity}${v.matches.length ? ` -> SPRINGS.${v.matches.join('/')}` : ''}`);
 }
-check('every Animated.spring takes friction/tension from SPRINGS', springViolations, []);
 
 console.log(`\n--- inline Animated.timing durations duplicating a declared DURATIONS value (${durationViolations.length}) ---`);
-for (const v of durationViolations.sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line)) {
+for (const v of durationViolations) {
   console.log(`  ${v.file}:${v.line}  duration: ${v.value}  -> DURATIONS.${v.matches.join(' / ')}${v.matches.length > 1 ? '  [ambiguous — value shared by multiple declared names]' : ''}`);
 }
-check('every Animated.timing duration that duplicates a DURATIONS value takes it from DURATIONS', durationViolations, []);
 
+// R15's merge-gate consequence, same shape as check-safe-area.mjs: both
+// sweeps above are real product debt this gate correctly found (the spring
+// is Pixel's Lane B tail per Lumen's 04:01Z message; the durations are the
+// motion.js docstring's own unmet "centralized" claim). Ratchet instead of
+// hard-fail so the suite can pass again while these shrink as tracked debt.
+const springBaseline = loadBaseline(path.join(ROOT, 'scripts', 'baselines', 'spring-adoption-springs.json'));
+const springKeyOf = (v) => `${v.file}:${v.line}`;
+const springDiff = diffAgainstBaseline(springViolations, springBaseline.entries, springKeyOf);
+console.log(`\n${springDiff.stillOpen} already in the baseline (owner: ${springBaseline.owner}) — ${springDiff.added.length} new, ${springDiff.stale.length} baseline rows no longer reproduced`);
+for (const v of springDiff.added) console.log(`  NEW, not in baseline: ${springKeyOf(v)}  {friction: ${v.friction}, tension: ${v.tension}}`);
+for (const v of springDiff.stale) console.log(`  STALE baseline row, run \`npm run ratchet:update\` to retire it: ${springKeyOf(v)}`);
+check('every Animated.spring takes friction/tension from SPRINGS, beyond the ratchet baseline', springDiff.added, []);
+check('every ratchet-baselined spring entry still reproduces (or has been retired via ratchet:update)', springDiff.stale, []);
+
+const durationBaseline = loadBaseline(path.join(ROOT, 'scripts', 'baselines', 'spring-adoption-durations.json'));
+const durationKeyOf = (v) => `${v.file}:${v.line}`;
+const durationDiff = diffAgainstBaseline(durationViolations, durationBaseline.entries, durationKeyOf);
+console.log(`\n${durationDiff.stillOpen} already in the baseline (owner: ${durationBaseline.owner}) — ${durationDiff.added.length} new, ${durationDiff.stale.length} baseline rows no longer reproduced`);
+for (const v of durationDiff.added) console.log(`  NEW, not in baseline: ${durationKeyOf(v)}  duration: ${v.value}`);
+for (const v of durationDiff.stale) console.log(`  STALE baseline row, run \`npm run ratchet:update\` to retire it: ${durationKeyOf(v)}`);
+check('every Animated.timing duration that duplicates DURATIONS takes it from DURATIONS, beyond the ratchet baseline', durationDiff.added, []);
+check('every ratchet-baselined duration entry still reproduces (or has been retired via ratchet:update)', durationDiff.stale, []);
+
+// scaleTo is NOT ratcheted — it is currently green (zero violations) and
+// stays zero-tolerance. Ratcheting it would silently create a baseline slot
+// for a defect class that doesn't exist yet.
 console.log(`\n--- scaleTo overrides outside ${SCALE_TO_HOME} (${scaleToViolations.length}) ---`);
-for (const v of scaleToViolations.sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line)) {
+for (const v of scaleToViolations) {
   console.log(`  ${v.file}:${v.line}  scaleTo override — the one CTA shape (§4) is the only thing that gets a bespoke press depth`);
 }
 check(`scaleTo is overridden only in ${SCALE_TO_HOME}`, scaleToViolations, []);

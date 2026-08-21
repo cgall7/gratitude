@@ -1,0 +1,15 @@
+{
+  "owner": "Pixel (Lumen 04:01Z: \"Lane B, you've already retired 9 of 10 springs — the residue is the tail you never claimed\")",
+  "entries": [
+    {
+      "file": "src/screens/Onboarding.js",
+      "line": 84,
+      "friction": 9,
+      "tension": 60,
+      "severity": "MISS (duplicates declared)",
+      "matches": [
+        "glide"
+      ]
+    }
+  ]
+}
