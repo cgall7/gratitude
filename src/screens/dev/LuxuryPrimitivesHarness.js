@@ -23,13 +23,16 @@ import { PrimaryButton } from '../../components/PrimaryButton';
 // (responding to you); 'peak' is reserved for the one frame something is
 // fully alight, which this instrument never claims to be.
 //
-// Glow colour is `accentDeep`, not the bead's own `accentBurst` fill —
-// Lumen measured it: on this app's one cream ground (#FFF7CC) you cannot
-// make the page brighter by throwing more of its own hottest yellow at it
-// (near-zero luminance headroom, chroma only), so the glow that's meant to
-// radiate ONTO the page has to be the deep stop to read at all. The lit
-// crown stays `accentBurst` on the material itself — that's catching
-// light, not throwing it.
+// Glow colour is `accentBurst` — same as the bead's own fill. Lumen's
+// first pass measured ΔE00 (a distance, no direction) and picked
+// `accentDeep` as "furthest from the ground," which just means "stains
+// darkest." Re-measured in L*: every yellow darkens this cream page
+// undimmed, so ΔE00 was answering a question nobody asked. Once
+// `colors.spotlightDim` (0.25) is behind the glow — production-only, this
+// instrument doesn't scrim its stage — `accentBurst` reads as light
+// thrown outward while `accentDeep` reads as dark as the dimmed room
+// itself. `accentDeep` keeps its real job: `gradients.honey[2]`, the
+// bead's own shaded underside, material sitting on a white cell.
 export const LuxuryPrimitivesHarness = () => {
   const reduced = useReducedMotion();
   const [phase, setPhase] = useState('rest');
@@ -121,7 +124,7 @@ export const LuxuryPrimitivesHarness = () => {
           pointerEvents="none"
           style={[
             styles.bead,
-            theme.shadows.glow(theme.colors.accentDeep, 'bloom'),
+            theme.shadows.glow(theme.colors.accentBurst, 'bloom'),
             {
               transform: [
                 { translateY: fallY },
