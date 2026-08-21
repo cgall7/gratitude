@@ -41,7 +41,8 @@
     "test": "node scripts/run-checks.mjs",
     "deploy:migrations": "bash scripts/deploy-migrations.sh",
     "check:legal-consent-gate": "node scripts/check-legal-consent-gate.mjs",
-    "preflight:prod-schema": "node scripts/prod-schema-check.mjs"
+    "preflight:prod-schema": "node scripts/prod-schema-check.mjs",
+    "check:cover-legibility": "node scripts/check-cover-legibility.mjs"
   },
   "dependencies": {
     "@expo-google-fonts/dancing-script": "^0.4.2",
