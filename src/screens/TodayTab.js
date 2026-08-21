@@ -320,7 +320,7 @@ const styles = StyleSheet.create({
   themeBadge: {
     ...theme.type.label,
     color: theme.colors.accentDeep,
-    backgroundColor: theme.colors.accentDeep + '1A',
+    backgroundColor: theme.colors.accentDeepWash,
     paddingVertical: 6,
     paddingHorizontal: 14,
     borderRadius: theme.borderRadius.full,

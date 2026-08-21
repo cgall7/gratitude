@@ -249,7 +249,7 @@ const styles = StyleSheet.create({
   },
   detailOverlay: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(26, 21, 0, 0.4)',
+    backgroundColor: theme.colors.scrim,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,

@@ -256,9 +256,15 @@ const ProgressSegment = ({ filled }) => {
     }).start();
   }, [filled, reduced]);
 
+  // The unfilled track is `trackDim`, not the 0.15 this shipped with. §23.11
+  // ruled this exact component — a progress track on `background` — and ruled
+  // 0.15 a DEFECT: it measures 1.36:1 against its own ground where the floor is
+  // 3:1, i.e. very nearly invisible. `trackDim` is the ratified 0.5 (3.25:1).
+  // A progress indicator is a fraction; without a visible denominator it is a
+  // different component.
   const backgroundColor = fill.interpolate({
     inputRange: [0, 1],
-    outputRange: ['rgba(34,27,3,0.15)', theme.colors.ink],
+    outputRange: [theme.colors.trackDim, theme.colors.ink],
   });
 
   return <Animated.View style={[styles.progressBar, { backgroundColor }]} />;
