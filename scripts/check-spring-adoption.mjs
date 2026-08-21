@@ -67,6 +67,31 @@
 // declared curve), one undeclared inline pair, one compliant spread, and
 // one inline duration literal — the detector must classify all four
 // correctly.
+//
+// PART C — scaleTo. Lumen's amended ruling on the `PRESS` press-depth law
+// (thread 6596d9c2, second message): the width-keyed form she originally
+// asked Sage to red-team ("absolute 200pt, or a ratio of screen width?") is
+// unenforceable by construction — width in this app is inherited from flex
+// layout, not declared, so no width-keyed grep can see `IdeasAccordion`'s
+// `cardHeader` (the widest non-CTA press surface, no `width` key at all) and
+// a `width: '100%'` grep returns three container Views, none of them a press
+// target. A heuristic over values cannot enumerate a role.
+//
+// Her replacement is structural instead of dimensional: `scaleTo` (the prop
+// `PressableScale` reads for its press-depth override, default 0.96) may
+// only be overridden at exactly one call site in the whole tree —
+// `PrimaryButton.js`, the app's one CTA shape (§4). Not "the widest button,"
+// the CTA — by component identity, not by measuring anything. Verified
+// against `motion.js:53-54`'s stale "(>=200pt wide)" comment: it computes
+// nothing, so this assertion cannot inherit its brittleness.
+//
+// Walks every JSX `<PressableScale ...>` opening element and flags any
+// `scaleTo` attribute outside `src/components/PrimaryButton.js`. Deliberately
+// blind to the VALUE `scaleTo` is set to — Lumen's ruling is about WHERE an
+// override is allowed to exist, not what number lives there once it does;
+// a gate that also asserted the number would be reading a constant the
+// designer might legitimately retune, which is exactly the "constant I
+// typed vs. a value the app ships" trap she flagged in her own audit.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -219,6 +244,27 @@ const scanDurations = (ast, rel) => {
   return violations;
 };
 
+// --- Part C: scaleTo override site ----------------------------------------
+const SCALE_TO_HOME = path.join('src', 'components', 'PrimaryButton.js');
+
+const scanScaleTo = (ast, rel) => {
+  const violations = [];
+  walk(ast, (n) => {
+    if (
+      n.type !== 'JSXOpeningElement' ||
+      n.name?.type !== 'JSXIdentifier' ||
+      n.name.name !== 'PressableScale'
+    ) return;
+    const attr = n.attributes.find(
+      (a) => a.type === 'JSXAttribute' && a.name?.type === 'JSXIdentifier' && a.name.name === 'scaleTo'
+    );
+    if (!attr) return;
+    if (rel === SCALE_TO_HOME) return;
+    violations.push({ file: rel, line: n.loc.start.line });
+  });
+  return violations;
+};
+
 // --- calibration ---------------------------------------------------------
 const [firstSpringName, firstSpring] = Object.entries(SPRINGS)[0];
 const [firstDurationName, firstDurationValue] = Object.entries(DURATIONS)[0];
@@ -237,6 +283,19 @@ check('calibration: recall fixture classifies the matching literal as MISS', rec
 check('calibration: recall fixture classifies the non-matching literal as STRAY CURVE', recallSprings[1]?.severity, 'STRAY CURVE (matches no SPRINGS entry)');
 check('calibration: recall fixture finds exactly 2 duration violations (bare + ternary alternate)', recallDurations.length, 2);
 
+// scaleTo recall: one override inside the home file (compliant, must not be
+// flagged), one identical override at an unrelated path (must be flagged),
+// one PressableScale with no scaleTo at all (not a candidate either way).
+const SCALE_TO_FIXTURE = `
+const A = () => <PressableScale scaleTo={0.97} onPress={x} />;
+const B = () => <PressableScale onPress={x} />;
+`;
+const scaleToAst = parse(SCALE_TO_FIXTURE, { sourceType: 'module', plugins: ['jsx'] });
+const recallScaleToHome = scanScaleTo(scaleToAst, SCALE_TO_HOME);
+const recallScaleToElsewhere = scanScaleTo(scaleToAst, path.join('src', 'components', 'SomeOtherFile.js'));
+check('calibration: scaleTo override inside PrimaryButton.js is not flagged', recallScaleToHome.length, 0);
+check('calibration: identical scaleTo override outside PrimaryButton.js is flagged', recallScaleToElsewhere.length, 1);
+
 // --- the real sweep ---------------------------------------------------------
 const files = [];
 (function walkDir(dir) {
@@ -250,6 +309,7 @@ check('source files found under src/ (motion.js excluded)', files.length > 0, tr
 
 const springViolations = [];
 const durationViolations = [];
+const scaleToViolations = [];
 const parseErrors = [];
 for (const file of files) {
   const rel = path.relative(ROOT, file);
@@ -257,6 +317,7 @@ for (const file of files) {
     const ast = parse(fs.readFileSync(file, 'utf8'), { sourceType: 'module', plugins: ['jsx'] });
     springViolations.push(...scanSprings(ast, rel));
     durationViolations.push(...scanDurations(ast, rel));
+    scaleToViolations.push(...scanScaleTo(ast, rel));
   } catch (e) {
     parseErrors.push(`${rel}: ${e.message}`);
   }
@@ -274,6 +335,12 @@ for (const v of durationViolations.sort((a, b) => a.file.localeCompare(b.file) |
   console.log(`  ${v.file}:${v.line}  duration: ${v.value}  -> DURATIONS.${v.matches.join(' / ')}${v.matches.length > 1 ? '  [ambiguous — value shared by multiple declared names]' : ''}`);
 }
 check('every Animated.timing duration that duplicates a DURATIONS value takes it from DURATIONS', durationViolations, []);
+
+console.log(`\n--- scaleTo overrides outside ${SCALE_TO_HOME} (${scaleToViolations.length}) ---`);
+for (const v of scaleToViolations.sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line)) {
+  console.log(`  ${v.file}:${v.line}  scaleTo override — the one CTA shape (§4) is the only thing that gets a bespoke press depth`);
+}
+check(`scaleTo is overridden only in ${SCALE_TO_HOME}`, scaleToViolations, []);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
