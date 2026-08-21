@@ -37,6 +37,14 @@
 // edits here — matching check-spring-adoption.mjs's `loadConstObject`
 // pattern for the same reason.
 //
+// R12 (Lumen, check-spotlight-dim.mjs, thread 6596d9c2): the FUNCTIONS that
+// build the palette (`withAlpha`, `mix`) are ADOPTED from theme.js's own
+// source below, not hand-reimplemented — the same doctrine above applied to
+// the palette's data has to apply to the arithmetic that produces it, or a
+// hand-copy can go stale next to a `colors` object that stays live. This
+// file crashed on `theme.js:163`'s `mix(...)` before this fix, the same
+// defect check-spotlight-dim.mjs had before R12.
+//
 // THE FLOOR — ΔE00 >= 5, Lumen's ruling (thread 6596d9c2): "beneath notice as
 // a colour, plainly visible as a cut" is roughly where §8's 1.77 sits; 5 is
 // the value she measured her covers against and ruled by. Not derived here;
@@ -79,14 +87,11 @@ const walk = (node, visit) => {
   }
 };
 
-// withAlpha(hex, alpha) reimplemented from theme.js's own definition — the
-// gate needs to *evaluate* the call, not just recognise its shape.
-const withAlpha = (hex, alpha) => {
-  const m = /^#([0-9A-Fa-f]{6})$/.exec(hex);
-  if (!m) throw new Error(`withAlpha() takes a 6-digit hex pigment, got ${hex}`);
-  const [r, g, b] = [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16));
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-};
+// withAlpha/mix are ADOPTED from theme.js's own source below, not
+// reimplemented — declared now so evalNode can close over them, assigned
+// once theme.js is parsed, before either is first called.
+let withAlpha;
+let mix;
 
 // Partial evaluator over a fixed scope chain (outer -> inner). Recognises
 // exactly the shapes theme.js/hiveThemes.js use for these three constants;
@@ -123,6 +128,10 @@ const evalNode = (n, scope) => {
     const [hexArg, alphaArg] = n.arguments;
     return withAlpha(evalNode(hexArg, scope), evalNode(alphaArg, scope));
   }
+  if (n.type === 'CallExpression' && n.callee.type === 'Identifier' && n.callee.name === 'mix') {
+    const [hexAArg, hexBArg, tArg] = n.arguments;
+    return mix(evalNode(hexAArg, scope), evalNode(hexBArg, scope), evalNode(tArg, scope));
+  }
   throw new Error(`cannot evaluate node type ${n.type} at line ${n.loc?.start.line}`);
 };
 
@@ -140,6 +149,18 @@ const findConst = (ast, name) => {
 // --- theme.js: pigment -> colors -> gradients.sheen -------------------------
 const themeSrc = fs.readFileSync(THEME_FILE, 'utf8');
 const themeAst = parse(themeSrc, { sourceType: 'module', plugins: ['jsx'] });
+
+// Adopt withAlpha/mix from theme.js's own source (R12) rather than
+// reimplementing them — both are self-contained (params + built-ins only,
+// no closure over theme.js's outer scope), so extracting each declarator's
+// exact source text and building the real function from it executes
+// theme.js's own definition, not a model of it.
+const adopt = (name) => {
+  const node = findConst(themeAst, name);
+  return new Function(`return (${themeSrc.slice(node.start, node.end)});`)();
+};
+withAlpha = adopt('withAlpha');
+mix = adopt('mix');
 
 const pigment = evalNode(findConst(themeAst, 'pigment'), {});
 check('pigment loaded from theme.js has entries', Object.keys(pigment).length > 0, true);
